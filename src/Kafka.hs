@@ -19,7 +19,7 @@ import Data.Text (Text)
 import Data.Text.Encoding
 import GHC.Conc
 import Net.IPv4 (IPv4(..))
-import Socket.Stream.IPv4 
+import Socket.Stream.IPv4
 import System.Endian
 --import Socket.Stream.Interruptible.MutableBytes
 
@@ -27,6 +27,8 @@ import qualified Data.Attoparsec.ByteString as AT
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 import qualified Data.Text as T
+
+import Varint
 
 newtype Kafka = Kafka { getKafka :: Connection }
 
@@ -61,18 +63,23 @@ produceRequestData ::
   -> Topic -- Topic
   -> ByteArray -- Payload
   -> ByteArray
-produceRequestData timeout topic payload = fold
-  [ byteArrayFromList [toBE16 $ -1] -- transactional_id length
-  , byteArrayFromList [toBE16 $ 1] -- acks
-  , byteArrayFromList [toBE32 $ fromIntegral timeout] -- timeout in ms
-  , byteArrayFromList [toBE32 $ 1] -- following array length
-  , byteArrayFromList [toBE16 $ 4] -- following string length
-  , topicName -- topic_data topic
-  , byteArrayFromList [toBE32 $ 1] -- following array [data] length
-  , byteArrayFromList [toBE32 $ 0] -- partition
-  , byteArrayFromList [toBE32 (payloadSize + topicNameSize + 0x40)] -- record_set length
-  , recordBatch (mkRecord payload)
-  ]
+produceRequestData timeout topic payload =
+  let
+    batchSize = size32 batch
+    batch = recordBatch (mkRecord payload)
+  in
+    fold
+      [ byteArrayFromList [toBE16 $ -1] -- transactional_id length
+      , byteArrayFromList [toBE16 $ 1] -- acks
+      , byteArrayFromList [toBE32 $ fromIntegral timeout] -- timeout in ms
+      , byteArrayFromList [toBE32 $ 1] -- following array length
+      , byteArrayFromList [toBE16 $ size16 topicName] -- following string length
+      , topicName -- topic_data topic
+      , byteArrayFromList [toBE32 $ 1] -- following array [data] length
+      , byteArrayFromList [toBE32 $ 0] -- partition
+      , byteArrayFromList [toBE32 $ batchSize] -- record_set length
+      ]
+      <> batch
   where
     Topic topicName _ _ = topic
     payloadSize = size32 payload
@@ -81,39 +88,52 @@ produceRequestData timeout topic payload = fold
 size8 :: ByteArray -> Word8
 size8 = fromIntegral . sizeofByteArray
 
+size16 :: ByteArray -> Word16
+size16 = fromIntegral . sizeofByteArray
+
 size32 :: ByteArray -> Word32
 size32 = fromIntegral . sizeofByteArray
 
 mkRecord :: ByteArray -> ByteArray
-mkRecord content = fold
-  [ byteArrayFromList [20 :: Word8] -- length
-  , byteArrayFromList [0 :: Word8] -- attributes
-  , byteArrayFromList [0 :: Word8] -- timestampdelta varint
-  , byteArrayFromList [0 :: Word8] -- offsetDelta varint
-  , byteArrayFromList [1 :: Word8] -- key length varint
-  -- no key because key length is -1
-  , byteArrayFromList [8 :: Word8] -- value length varint
-  , content -- value
-  , byteArrayFromList [0 :: Word8] --headers
-  ]
+mkRecord content =
+  let
+    recordLength = zigzag (sizeofByteArray recordBody)
+    recordBody = fold
+      [ byteArrayFromList [0 :: Word8] -- attributes
+      , zigzag 0 -- timestampdelta varint
+      , zigzag 0 -- offsetDelta varint
+      , zigzag (-1) -- key length varint
+      -- no key because key length is -1
+      , zigzag (sizeofByteArray content) -- value length varint
+      , content -- value
+      , byteArrayFromList [0 :: Word8] --headers
+      ]
+  in
+    recordLength <> recordBody
+  where
+    timestampDelta = zigzag 0
+    offsetDelta = zigzag 0
+    keyLength = zigzag (-1)
+    valueLength = zigzag (sizeofByteArray content)
 
 recordBatch :: ByteArray -> ByteArray
 recordBatch records =
-  let 
+  let
+    batchLength = 5 + size32 crc + size32 post
     pre = fold
       [ byteArrayFromList [toBE64 $ 0] -- baseOffset
-      , byteArrayFromList [toBE32 $ 0x3c] -- batchLength
+      , byteArrayFromList [toBE32 $ batchLength] -- batchLength
       , byteArrayFromList [toBE32 $ 0] -- partitionLeaderEpoch
       , byteArrayFromList [2 :: Word8] -- magic
       ]
-    crc = byteArrayFromList 
+    crc = byteArrayFromList
       [ toBE32 . crc32c . BS.pack $ foldrByteArray (:) [] post
       ]
     post = fold
       [ byteArrayFromList [toBE16 $ 0] -- attributes
       , byteArrayFromList [toBE32 $ 0] -- lastOffsetDelta
-      , byteArrayFromList [toBE64 $ 0x0000016bc2515549] -- firstTimestamp
-      , byteArrayFromList [toBE64 $ 0x0000016bc2515549] -- lastTimestamp
+      , byteArrayFromList [toBE64 $ 0] -- firstTimestamp
+      , byteArrayFromList [toBE64 $ 0] -- lastTimestamp
       , byteArrayFromList [toBE64 $ -1] -- producerId
       , byteArrayFromList [toBE16 $ -1] -- producerEpoch
       , byteArrayFromList [toBE32 $ -1] -- baseSequence
@@ -123,25 +143,23 @@ recordBatch records =
   in
     pre <> crc <> post
 
-testMessage :: 
+testMessage ::
      Int
   -> Topic
   -> ByteArray
   -> IO ByteArray
 testMessage timeout topic payload =
   let
-    size = byteArrayFromList [toBE32 $ len $ msghdr <> msgdata]
+    size = byteArrayFromList [toBE32 $ size32 $ msghdr <> msgdata]
     msghdr = produceRequestHeader "ruko"
     msgdata = produceRequestData 30000 topic payload
-  in 
+  in
     pure $ size <> msghdr <> msgdata
-  where
-  len = foldrByteArray (\(e::Word8) a -> a + 1) 0
 
 byteArrayFromByteString :: ByteString -> ByteArray
 byteArrayFromByteString = byteArrayFromList . unpack
 
-data ProduceResponse = ProduceResponse 
+data ProduceResponse = ProduceResponse
   { produceResponseMessages :: [ProduceResponseMessage]
   , throttleTimeMs :: Int32
   } deriving Show
@@ -183,12 +201,12 @@ int64 = do
   f <- fromIntegral <$> AT.anyWord8
   g <- fromIntegral <$> AT.anyWord8
   h <- fromIntegral <$> AT.anyWord8
-  pure (h 
-    + 0x100 * g 
-    + 0x10000 * f 
-    + 0x1000000 * e 
-    + 0x100000000 * d 
-    + 0x10000000000 * c 
+  pure (h
+    + 0x100 * g
+    + 0x10000 * f
+    + 0x1000000 * e
+    + 0x100000000 * d
+    + 0x10000000000 * c
     + 0x1000000000000 * b
     + 0x100000000000000 * a)
 
@@ -229,7 +247,9 @@ doStuff = do
     Right k -> do
       a <- newIORef (0 :: Int)
       let topic = Topic (byteArrayFromByteString "test") 0 a
-      msg <- testMessage 30000 topic (byteArrayFromByteString "awoo")
+      msg <- testMessage 30000 topic (byteArrayFromByteString $
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" <>
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
       arr <- newUnliftedArray 1 msg
       farr <- freezeUnliftedArray arr 0 1
       v <- produce k topic 10000000 farr
@@ -261,11 +281,11 @@ produce kafka topic waitTime payloads = do
     (getKafka kafka)
     barr
   mba <- newByteArray 100
-  response <- first toKafkaException <$> 
+  response <- first toKafkaException <$>
     interruptibleReceiveBoundedMutableByteArraySlice
       interrupt
       (getKafka kafka)
-      100
+      1000
       mba
       0
   print =<< unsafeFreezeByteArray mba
