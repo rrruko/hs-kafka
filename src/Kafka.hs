@@ -247,16 +247,18 @@ parseProducePartitionResponse = ProducePartitionResponse
 doStuff :: IO ()
 doStuff = do
   kefka <- newKafka (Peer (IPv4 0) 9092)
+  let thirtySecondsMs = 30000
+      thirtySecondsUs = 30000000
   case kefka of
     Right k -> do
-      a <- newIORef (0 :: Int)
-      let topic = Topic (byteArrayFromByteString "test") 0 a
-      msg <- testMessage 30000 topic (byteArrayFromByteString $
+      partitionIndex <- newIORef (0 :: Int)
+      let topic = Topic (byteArrayFromByteString "test") 0 partitionIndex
+      msg <- testMessage thirtySecondsMs topic (byteArrayFromByteString $
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" <>
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
       arr <- newUnliftedArray 1 msg
       farr <- freezeUnliftedArray arr 0 1
-      v <- produce k topic 10000000 farr
+      v <- produce k topic thirtySecondsUs farr
       case v of
         Right (_, Right response) -> do
           print response
@@ -283,7 +285,7 @@ produce kafka topic waitTime payloads = do
   let msg = foldByteArrays payloads
       len = sizeofByteArray msg
   messageBuffer <- newByteArray len
-  copyByteArray messageBuffer 0 (msg) 0 (sizeofByteArray msg)
+  copyByteArray messageBuffer 0 msg 0 (sizeofByteArray msg)
   let messageBufferSlice = MutableBytes messageBuffer 0 len
   print =<< unsafeFreezeByteArray (getArray messageBufferSlice)
   send
