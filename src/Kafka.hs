@@ -8,12 +8,11 @@ import Control.Monad.Primitive
 import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Bifunctor
 import Data.Bits
-import Data.Bytes.Types
 import Data.ByteString (ByteString, unpack)
+import Data.Bytes.Types
 import Data.Digest.CRC32C
 import Data.Foldable
 import Data.Int
-import Data.Word
 import Data.IORef
 import Data.Map.Strict (Map)
 import Data.Primitive
@@ -21,10 +20,11 @@ import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 import Data.Text (Text)
 import Data.Text.Encoding
+import Data.Word
 import GHC.Conc
 import Net.IPv4 (IPv4(..))
-import Socket.Stream.IPv4
 import Socket.Stream.Interruptible.MutableBytes
+import Socket.Stream.IPv4
 import System.Endian
 
 import qualified Data.Attoparsec.ByteString as AT
