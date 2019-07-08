@@ -63,7 +63,7 @@ produceRequestHeader :: ByteString -> ByteArray
 produceRequestHeader name = fold
   [ byteArrayFromList [toBE16 produceApiKey]
   , byteArrayFromList [toBE16 produceApiVersion]
-  , byteArrayFromList [toBE32 0]
+  , byteArrayFromList [toBE32 0xbeef]
   , byteArrayFromList [toBE16 $ fromIntegral $ BS.length name]
   , byteArrayFromList (unpack name)
   ]
@@ -215,7 +215,6 @@ int64 = do
 
 parseProduceResponse :: Parser ProduceResponse
 parseProduceResponse = do
-  _lengthBytes <- int32 <?> "length bytes"
   _correlationId <- int32 <?> "correlation id"
   responsesCount <- int32 <?> "responses count"
   ProduceResponse
@@ -259,9 +258,9 @@ doStuff = do
       farr <- freezeUnliftedArray arr 0 1
       v <- produce k topic thirtySecondsUs farr
       case v of
-        Right (_, Right response) -> do
+        Right (Right response) -> do
           print response
-        Right (_, Left errorMsg) -> do
+        Right (Left errorMsg) -> do
           putStrLn "Parsing failed"
           print errorMsg
         Left exception -> do
@@ -278,7 +277,7 @@ produce ::
   -> Topic
   -> Int -- number of microseconds to wait for response
   -> UnliftedArray ByteArray -- payloads
-  -> IO (Either KafkaException (Int, Either String ProduceResponse))
+  -> IO (Either KafkaException (Either String ProduceResponse))
 produce kafka _ waitTime payloads = do
   interrupt <- registerDelay waitTime
   let msg = foldByteArrays payloads
@@ -291,19 +290,29 @@ produce kafka _ waitTime payloads = do
     interrupt
     (getKafka kafka)
     messageBufferSlice
-  responseBuffer <- newByteArray 1000
-  let responseBufferSlice = MutableBytes responseBuffer 0 1000
+  responseSizeBuf <- newByteArray 4
+  _ <- first toKafkaException <$>
+    receiveExactly
+      interrupt
+      (getKafka kafka)
+      (MutableBytes responseSizeBuf 0 4)
+
+  responseByteCount <- fromIntegral . byteSwap32 <$> readByteArray responseSizeBuf 0
+  putStrLn $ "Expecting "  <> show responseByteCount <> " bytes from kafka"
+  print =<< unsafeFreezeByteArray responseSizeBuf
+  responseBuffer <- newByteArray responseByteCount
+  let responseBufferSlice = MutableBytes responseBuffer 0 responseByteCount
   responseStatus <- first toKafkaException <$>
-    receiveBetween
+    receiveExactly
       interrupt
       (getKafka kafka)
       responseBufferSlice
-      0
   responseBytes <- BS.pack . foldrByteArray (:) [] <$>
     unsafeFreezeByteArray responseBuffer
+  print =<< unsafeFreezeByteArray responseBuffer
   pure $
     fmap
-      (flip (,) (AT.parseOnly parseProduceResponse responseBytes))
+      (const (AT.parseOnly parseProduceResponse responseBytes))
       responseStatus
 
 toKafkaException :: ReceiveException 'Interruptible -> KafkaException
