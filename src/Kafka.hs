@@ -48,16 +48,16 @@ produceApiKey :: Int16
 produceApiKey = 0
 
 toBE16 :: Int16 -> Int16
-toBE16 = fromIntegral . byteSwap16 . fromIntegral 
+toBE16 = fromIntegral . byteSwap16 . fromIntegral
 
 toBE32 :: Int32 -> Int32
-toBE32 = fromIntegral . byteSwap32 . fromIntegral 
+toBE32 = fromIntegral . byteSwap32 . fromIntegral
 
 toBEW32 :: Word32 -> Word32
 toBEW32 = byteSwap32
 
 toBE64 :: Int64 -> Int64
-toBE64 = fromIntegral . byteSwap64 . fromIntegral 
+toBE64 = fromIntegral . byteSwap64 . fromIntegral
 
 produceRequestHeader :: ByteString -> ByteArray
 produceRequestHeader name = fold
@@ -130,7 +130,7 @@ recordBatch records =
       , byteArrayFromList [2 :: Word8] -- magic
       ]
     crc = byteArrayFromList
-      [ toBEW32 . crc32c . BS.pack $ foldrByteArray (:) [] post
+      [ toBEW32 . crc32c . toByteString $ post
       ]
     post = fold
       [ byteArrayFromList [toBE16 $ 0] -- attributes
@@ -146,18 +146,18 @@ recordBatch records =
   in
     pre <> crc <> post
 
-testMessage ::
+produceRequest ::
      Int
   -> Topic
   -> ByteArray
-  -> IO ByteArray
-testMessage timeout topic payload =
+  -> ByteArray
+produceRequest timeout topic payload =
   let
     size = byteArrayFromList [toBE32 $ size32 $ msghdr <> msgdata]
     msghdr = produceRequestHeader "ruko"
     msgdata = produceRequestData timeout topic payload
   in
-    pure $ size <> msghdr <> msgdata
+    size <> msghdr <> msgdata
 
 byteArrayFromByteString :: ByteString -> ByteArray
 byteArrayFromByteString = byteArrayFromList . unpack
@@ -251,9 +251,9 @@ doStuff = do
     Right k -> do
       partitionIndex <- newIORef (0 :: Int)
       let topic = Topic (byteArrayFromByteString "test") 0 partitionIndex
-      msg <- testMessage thirtySecondsMs topic (byteArrayFromByteString $
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" <>
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+      let msg = produceRequest thirtySecondsMs topic $ byteArrayFromByteString $
+            "\"im not owned! im not owned!!\", i continue to insist as i slowly" <>
+            "shrink and transform into a corn cob"
       arr <- newUnliftedArray 1 msg
       farr <- freezeUnliftedArray arr 0 1
       v <- produce k topic thirtySecondsUs farr
@@ -278,28 +278,34 @@ produce ::
   -> Int -- number of microseconds to wait for response
   -> UnliftedArray ByteArray -- payloads
   -> IO (Either KafkaException (Either String ProduceResponse))
-produce kafka _ waitTime payloads = do
+produce kafka topic waitTime payloads = do
   interrupt <- registerDelay waitTime
+  _ <- sendProduceRequest kafka interrupt topic payloads
+  getProduceResponse kafka interrupt
+
+sendProduceRequest ::
+     Kafka
+  -> TVar Bool
+  -> Topic
+  -> UnliftedArray ByteArray
+  -> IO (Either (SendException 'Interruptible) ())
+sendProduceRequest kafka interrupt _ payloads = do
   let msg = foldByteArrays payloads
       len = sizeofByteArray msg
   messageBuffer <- newByteArray len
   copyByteArray messageBuffer 0 msg 0 (sizeofByteArray msg)
   let messageBufferSlice = MutableBytes messageBuffer 0 len
-  print =<< unsafeFreezeByteArray (getArray messageBufferSlice)
-  _ <- send
+  send
     interrupt
     (getKafka kafka)
     messageBufferSlice
-  responseSizeBuf <- newByteArray 4
-  _ <- first toKafkaException <$>
-    receiveExactly
-      interrupt
-      (getKafka kafka)
-      (MutableBytes responseSizeBuf 0 4)
 
-  responseByteCount <- fromIntegral . byteSwap32 <$> readByteArray responseSizeBuf 0
-  putStrLn $ "Expecting "  <> show responseByteCount <> " bytes from kafka"
-  print =<< unsafeFreezeByteArray responseSizeBuf
+getProduceResponse ::
+     Kafka
+  -> TVar Bool
+  -> IO (Either KafkaException (Either String ProduceResponse))
+getProduceResponse kafka interrupt = do
+  Right responseByteCount <- getResponseSizeHeader kafka interrupt
   responseBuffer <- newByteArray responseByteCount
   let responseBufferSlice = MutableBytes responseBuffer 0 responseByteCount
   responseStatus <- first toKafkaException <$>
@@ -307,10 +313,28 @@ produce kafka _ waitTime payloads = do
       interrupt
       (getKafka kafka)
       responseBufferSlice
-  responseBytes <- BS.pack . foldrByteArray (:) [] <$>
-    unsafeFreezeByteArray responseBuffer
-  print =<< unsafeFreezeByteArray responseBuffer
+  responseBytes <- toByteString <$> unsafeFreezeByteArray responseBuffer
   pure $ AT.parseOnly parseProduceResponse responseBytes <$ responseStatus
+
+getResponseSizeHeader ::
+     Kafka
+  -> TVar Bool
+  -> IO (Either KafkaException Int)
+getResponseSizeHeader kafka interrupt = do
+  responseSizeBuf <- newByteArray 4
+  responseStatus <- first toKafkaException <$>
+    receiveExactly
+      interrupt
+      (getKafka kafka)
+      (MutableBytes responseSizeBuf 0 4)
+  byteCount <- fromIntegral . byteSwap32 <$> readByteArray responseSizeBuf 0
+  pure $ byteCount <$ responseStatus
+
+toByteString :: ByteArray -> ByteString
+toByteString = BS.pack . foldrByteArray (:) []
+
+fromByteString :: ByteString -> ByteArray
+fromByteString = byteArrayFromList . BS.unpack
 
 toKafkaException :: ReceiveException 'Interruptible -> KafkaException
 toKafkaException = KafkaException . show
