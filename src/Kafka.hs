@@ -4,9 +4,11 @@
 
 module Kafka where
 
+import Control.Monad.Primitive
 import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Bifunctor
 import Data.Bits
+import Data.Bytes.Types
 import Data.ByteString (ByteString, unpack)
 import Data.Digest.CRC32C
 import Data.Foldable
@@ -15,13 +17,15 @@ import Data.Word
 import Data.IORef
 import Data.Map.Strict (Map)
 import Data.Primitive
+import Data.Primitive.ByteArray
+import Data.Primitive.Unlifted.Array
 import Data.Text (Text)
 import Data.Text.Encoding
 import GHC.Conc
 import Net.IPv4 (IPv4(..))
 import Socket.Stream.IPv4
+import Socket.Stream.Interruptible.MutableBytes
 import System.Endian
---import Socket.Stream.Interruptible.MutableBytes
 
 import qualified Data.Attoparsec.ByteString as AT
 import qualified Data.ByteString as BS
@@ -40,7 +44,7 @@ data Topic = Topic
 data KafkaException = KafkaException String -- change later
   deriving Show
 
-newKafka :: Endpoint -> IO (Either (ConnectException Uninterruptible) Kafka)
+newKafka :: Peer -> IO (Either (ConnectException (Internet V4) Uninterruptible) Kafka)
 newKafka = fmap (fmap Kafka) . connect
 
 produceApiVersion :: Word16
@@ -242,7 +246,7 @@ parseProducePartitionResponse = ProducePartitionResponse
 
 doStuff :: IO ()
 doStuff = do
-  kefka <- newKafka (Endpoint (IPv4 0) 9092)
+  kefka <- newKafka (Peer (IPv4 0) 9092)
   case kefka of
     Right k -> do
       a <- newIORef (0 :: Int)
@@ -265,6 +269,9 @@ doStuff = do
       print bad
       fail "Couldn't connect to kafka"
 
+getArray :: MutableBytes s -> MutableByteArray s
+getArray (MutableBytes a o l) = a
+
 produce ::
      Kafka
   -> Topic
@@ -273,24 +280,30 @@ produce ::
   -> IO (Either KafkaException (Int, Either String ProduceResponse))
 produce kafka topic waitTime payloads = do
   interrupt <- registerDelay waitTime
-  arr <- newByteArray 100
-  let barr = foldByteArrays payloads
-  print barr
-  interruptibleSendByteArray
+  let msg = foldByteArrays payloads
+      len = sizeofByteArray msg
+  messageBuffer <- newByteArray len
+  copyByteArray messageBuffer 0 (msg) 0 (sizeofByteArray msg)
+  let messageBufferSlice = MutableBytes messageBuffer 0 len
+  print =<< unsafeFreezeByteArray (getArray messageBufferSlice)
+  send
     interrupt
     (getKafka kafka)
-    barr
-  mba <- newByteArray 100
-  response <- first toKafkaException <$>
-    interruptibleReceiveBoundedMutableByteArraySlice
+    messageBufferSlice
+  responseBuffer <- newByteArray 1000
+  let responseBufferSlice = MutableBytes responseBuffer 0 1000
+  responseStatus <- first toKafkaException <$>
+    receiveBetween
       interrupt
       (getKafka kafka)
-      1000
-      mba
+      responseBufferSlice
       0
-  print =<< unsafeFreezeByteArray mba
-  bytes <- BS.pack . foldrByteArray (:) [] <$> unsafeFreezeByteArray mba
-  pure $ fmap (flip (,) (AT.parseOnly parseProduceResponse bytes)) response
+  responseBytes <- BS.pack . foldrByteArray (:) [] <$>
+    unsafeFreezeByteArray responseBuffer
+  pure $
+    fmap
+      (flip (,) (AT.parseOnly parseProduceResponse responseBytes))
+      responseStatus
 
 toKafkaException :: ReceiveException 'Interruptible -> KafkaException
 toKafkaException = KafkaException . show

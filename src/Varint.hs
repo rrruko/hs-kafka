@@ -8,7 +8,7 @@ import Data.Word (Word8)
 
 varint :: Int -> ByteArray
 varint n =
-  let 
+  let
     chunks = setMsb $ chunk n
     setMsb [x] = [x]
     setMsb (x:xs) = (128 .|. x) : setMsb xs
@@ -22,10 +22,10 @@ zigzag n
 
 chunk :: Int -> [Word8]
 chunk 0 = [0]
-chunk m = 
-  unfoldr 
+chunk m =
+  unfoldr
     (\n ->
-      if n == 0 
+      if n == 0
         then Nothing
-        else Just (swap . fmap fromIntegral $ divMod n 128)) 
+        else Just (swap . fmap fromIntegral $ divMod n 128))
     m
