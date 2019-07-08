@@ -130,7 +130,7 @@ recordBatch records =
       , byteArrayFromList [2 :: Word8] -- magic
       ]
     crc = byteArrayFromList
-      [ crc32c . BS.pack $ foldrByteArray (:) [] post
+      [ toBEW32 . crc32c . BS.pack $ foldrByteArray (:) [] post
       ]
     post = fold
       [ byteArrayFromList [toBE16 $ 0] -- attributes
@@ -310,10 +310,7 @@ produce kafka _ waitTime payloads = do
   responseBytes <- BS.pack . foldrByteArray (:) [] <$>
     unsafeFreezeByteArray responseBuffer
   print =<< unsafeFreezeByteArray responseBuffer
-  pure $
-    fmap
-      (const (AT.parseOnly parseProduceResponse responseBytes))
-      responseStatus
+  pure $ AT.parseOnly parseProduceResponse responseBytes <$ responseStatus
 
 toKafkaException :: ReceiveException 'Interruptible -> KafkaException
 toKafkaException = KafkaException . show
