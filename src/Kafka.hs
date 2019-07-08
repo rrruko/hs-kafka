@@ -4,10 +4,8 @@
 
 module Kafka where
 
-import Control.Monad.Primitive
 import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Bifunctor
-import Data.Bits
 import Data.ByteString (ByteString, unpack)
 import Data.Bytes.Types
 import Data.Digest.CRC32C
@@ -16,21 +14,17 @@ import Data.Int
 import Data.IORef
 import Data.Map.Strict (Map)
 import Data.Primitive
-import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 import Data.Text (Text)
-import Data.Text.Encoding
 import Data.Word
 import GHC.Conc
 import Net.IPv4 (IPv4(..))
 import Socket.Stream.Interruptible.MutableBytes
 import Socket.Stream.IPv4
-import System.Endian
 
 import qualified Data.Attoparsec.ByteString as AT
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
-import qualified Data.Text as T
 
 import Varint
 
@@ -44,14 +38,26 @@ data Topic = Topic
 data KafkaException = KafkaException String -- change later
   deriving Show
 
-newKafka :: Peer -> IO (Either (ConnectException (Internet V4) Uninterruptible) Kafka)
+newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
 newKafka = fmap (fmap Kafka) . connect
 
-produceApiVersion :: Word16
+produceApiVersion :: Int16
 produceApiVersion = 7
 
-produceApiKey :: Word16
+produceApiKey :: Int16
 produceApiKey = 0
+
+toBE16 :: Int16 -> Int16
+toBE16 = fromIntegral . byteSwap16 . fromIntegral 
+
+toBE32 :: Int32 -> Int32
+toBE32 = fromIntegral . byteSwap32 . fromIntegral 
+
+toBEW32 :: Word32 -> Word32
+toBEW32 = byteSwap32
+
+toBE64 :: Int64 -> Int64
+toBE64 = fromIntegral . byteSwap64 . fromIntegral 
 
 produceRequestHeader :: ByteString -> ByteArray
 produceRequestHeader name = fold
@@ -86,16 +92,14 @@ produceRequestData timeout topic payload =
       <> batch
   where
     Topic topicName _ _ = topic
-    payloadSize = size32 payload
-    topicNameSize = size32 topicName
 
-size8 :: ByteArray -> Word8
+size8 :: ByteArray -> Int8
 size8 = fromIntegral . sizeofByteArray
 
-size16 :: ByteArray -> Word16
+size16 :: ByteArray -> Int16
 size16 = fromIntegral . sizeofByteArray
 
-size32 :: ByteArray -> Word32
+size32 :: ByteArray -> Int32
 size32 = fromIntegral . sizeofByteArray
 
 mkRecord :: ByteArray -> ByteArray
@@ -114,11 +118,6 @@ mkRecord content =
       ]
   in
     recordLength <> recordBody
-  where
-    timestampDelta = zigzag 0
-    offsetDelta = zigzag 0
-    keyLength = zigzag (-1)
-    valueLength = zigzag (sizeofByteArray content)
 
 recordBatch :: ByteArray -> ByteArray
 recordBatch records =
@@ -131,7 +130,7 @@ recordBatch records =
       , byteArrayFromList [2 :: Word8] -- magic
       ]
     crc = byteArrayFromList
-      [ toBE32 . crc32c . BS.pack $ foldrByteArray (:) [] post
+      [ crc32c . BS.pack $ foldrByteArray (:) [] post
       ]
     post = fold
       [ byteArrayFromList [toBE16 $ 0] -- attributes
@@ -156,7 +155,7 @@ testMessage timeout topic payload =
   let
     size = byteArrayFromList [toBE32 $ size32 $ msghdr <> msgdata]
     msghdr = produceRequestHeader "ruko"
-    msgdata = produceRequestData 30000 topic payload
+    msgdata = produceRequestData timeout topic payload
   in
     pure $ size <> msghdr <> msgdata
 
@@ -216,13 +215,13 @@ int64 = do
 
 parseProduceResponse :: Parser ProduceResponse
 parseProduceResponse = do
-  lengthBytes <- int32 <?> "length bytes"
-  correlationId <- int32 <?> "correlation id"
+  _lengthBytes <- int32 <?> "length bytes"
+  _correlationId <- int32 <?> "correlation id"
   responsesCount <- int32 <?> "responses count"
-  produceResponseMessages <- count responsesCount parseProduceResponseMessage
-    <?> "response messages"
-  throttleTimeMs <- int32 <?> "throttle time"
-  pure (ProduceResponse produceResponseMessages throttleTimeMs)
+  ProduceResponse
+    <$> (count responsesCount parseProduceResponseMessage
+          <?> "response messages")
+    <*> (int32 <?> "throttle time")
 
 parseProduceResponseMessage :: Parser ProduceResponseMessage
 parseProduceResponseMessage = do
@@ -263,7 +262,7 @@ doStuff = do
         Right (_, Right response) -> do
           print response
         Right (_, Left errorMsg) -> do
-          print "Parsing failed"
+          putStrLn "Parsing failed"
           print errorMsg
         Left exception -> do
           print exception
@@ -272,7 +271,7 @@ doStuff = do
       fail "Couldn't connect to kafka"
 
 getArray :: MutableBytes s -> MutableByteArray s
-getArray (MutableBytes a o l) = a
+getArray (MutableBytes a _ _) = a
 
 produce ::
      Kafka
@@ -280,7 +279,7 @@ produce ::
   -> Int -- number of microseconds to wait for response
   -> UnliftedArray ByteArray -- payloads
   -> IO (Either KafkaException (Int, Either String ProduceResponse))
-produce kafka topic waitTime payloads = do
+produce kafka _ waitTime payloads = do
   interrupt <- registerDelay waitTime
   let msg = foldByteArrays payloads
       len = sizeofByteArray msg
@@ -288,7 +287,7 @@ produce kafka topic waitTime payloads = do
   copyByteArray messageBuffer 0 msg 0 (sizeofByteArray msg)
   let messageBufferSlice = MutableBytes messageBuffer 0 len
   print =<< unsafeFreezeByteArray (getArray messageBufferSlice)
-  send
+  _ <- send
     interrupt
     (getKafka kafka)
     messageBufferSlice
