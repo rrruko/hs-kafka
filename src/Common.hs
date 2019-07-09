@@ -20,7 +20,7 @@ data Topic = Topic
   Int -- Number of partitions
   (IORef Int) -- incrementing number
 
-data KafkaException = KafkaException String -- change later
+data KafkaException = KafkaException String
   deriving Show
 
 newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
@@ -59,7 +59,7 @@ toByteString = BS.pack . foldrByteArray (:) []
 fromByteString :: ByteString -> ByteArray
 fromByteString = byteArrayFromList . BS.unpack
 
-toKafkaException :: ReceiveException 'Interruptible -> KafkaException
+toKafkaException :: Show a => a -> KafkaException
 toKafkaException = KafkaException . show
 
 foldByteArrays :: UnliftedArray ByteArray -> ByteArray

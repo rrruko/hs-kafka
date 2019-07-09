@@ -27,11 +27,8 @@ main = do
             ]
       v <- produce kafka topic thirtySecondsUs msg
       case v of
-        Right (Right response) -> do
-          print response
-        Right (Left errorMsg) -> do
-          putStrLn "Parsing failed"
-          print errorMsg
+        Right () -> do
+          print "ok"
         Left exception -> do
           print exception
     Left bad -> do
