@@ -20,15 +20,14 @@ main = do
   let thirtySecondsUs = 30000000
   newKafka (Peer (IPv4 0) 9092) >>= \case
     Right kafka -> do
-      partitionIndex <- newIORef (0 :: Int)
+      partitionIndex <- newIORef 0
       let topic = Topic (fromByteString "test") 0 partitionIndex
       let msg = unliftedArrayFromList
             [ fromByteString "aaaaa"
             , fromByteString "bbbbb"
             , fromByteString "ccccc"
             ]
-      v <- produce kafka topic thirtySecondsUs msg
-      case v of
+      produce kafka topic thirtySecondsUs msg >>= \case
         Right () -> do
           interrupt <- registerDelay thirtySecondsUs
           response <- getProduceResponse kafka interrupt
