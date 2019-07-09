@@ -64,37 +64,19 @@ parseProducePartitionResponse = ProducePartitionResponse
   <*> int64
 
 int16 :: Parser Int16
-int16 = do
-  a <- fromIntegral <$> AT.anyWord8
-  b <- fromIntegral <$> AT.anyWord8
-  pure (b + 0x100 * a)
+int16 = networkByteOrder . map fromIntegral <$> AT.count 2 AT.anyWord8
 
 int32 :: Parser Int32
-int32 = do
-  a <- fromIntegral <$> AT.anyWord8
-  b <- fromIntegral <$> AT.anyWord8
-  c <- fromIntegral <$> AT.anyWord8
-  d <- fromIntegral <$> AT.anyWord8
-  pure (d + 0x100 * c + 0x10000 * b + 0x1000000 * a)
+int32 = networkByteOrder . map fromIntegral <$> AT.count 4 AT.anyWord8
 
 int64 :: Parser Int64
-int64 = do
-  a <- fromIntegral <$> AT.anyWord8
-  b <- fromIntegral <$> AT.anyWord8
-  c <- fromIntegral <$> AT.anyWord8
-  d <- fromIntegral <$> AT.anyWord8
-  e <- fromIntegral <$> AT.anyWord8
-  f <- fromIntegral <$> AT.anyWord8
-  g <- fromIntegral <$> AT.anyWord8
-  h <- fromIntegral <$> AT.anyWord8
-  pure (h
-    + 0x100 * g
-    + 0x10000 * f
-    + 0x1000000 * e
-    + 0x100000000 * d
-    + 0x10000000000 * c
-    + 0x1000000000000 * b
-    + 0x100000000000000 * a)
+int64 = networkByteOrder . map fromIntegral <$> AT.count 8 AT.anyWord8
+
+networkByteOrder :: Integral a => [Word] -> a
+networkByteOrder = 
+  fst . foldr 
+    (\byte (acc, i) -> (acc + fromIntegral byte * i, i * 0x100))
+    (0, 1)
 
 count :: Integral n => n -> Parser a -> Parser [a]
 count = AT.count . fromIntegral

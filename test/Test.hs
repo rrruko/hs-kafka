@@ -10,19 +10,24 @@ import Test.Tasty.Ingredients.ConsoleReporter
 import Test.Tasty.Golden
 import Test.Tasty.HUnit
 
+import qualified Data.Attoparsec.ByteString as AT
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 
 import Common
 import Kafka
 import ProduceRequest
+import ProduceResponse
 import Varint
 
 main :: IO ()
 main = defaultMain (testGroup "Tests" [unitTests, goldenTests])
 
 unitTests :: TestTree
-unitTests = testGroup "unit tests"
+unitTests = testGroup "Unit tests" [zigzagTests, parserTests]
+
+zigzagTests :: TestTree
+zigzagTests = testGroup "zigzag"
   [ testCase
       "zigzag 0 is 0"
       (zigzag 0 @=? byteArrayFromList [0 :: Word8])
@@ -40,8 +45,18 @@ unitTests = testGroup "unit tests"
       (zigzag 100 @?= byteArrayFromList [200, 1 :: Word8])
   ]
 
+parserTests :: TestTree
+parserTests = testGroup "Parsers"
+  [ testCase
+      "int32 [0, 0, 0, 255] is 255"
+      (AT.parseOnly int32 (B.pack [0,0,0,255]) @?= Right 255)
+  , testCase
+      "int32 [0x12, 0x34, 0x56, 0x78] is 305419896"
+      (AT.parseOnly int32 (B.pack [0x12, 0x34, 0x56, 0x78]) @?= Right 305419896)
+  ]
+
 goldenTests :: TestTree
-goldenTests = testGroup "golden tests"
+goldenTests = testGroup "Golden tests"
   [ goldenVsString
       "generate well-formed requests"
       "test/kafka-request-bytes"
