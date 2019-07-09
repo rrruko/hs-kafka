@@ -13,7 +13,9 @@ import Test.Tasty.HUnit
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 
+import Common
 import Kafka
+import ProduceRequest
 import Varint
 
 main :: IO ()
