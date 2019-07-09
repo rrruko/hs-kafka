@@ -3,7 +3,7 @@
 
 module Main where
 
-import Data.ByteString (ByteString)
+import Data.ByteString (ByteString, unpack)
 import Data.IORef
 import Data.Primitive
 import Data.Primitive.Unlifted.Array
@@ -21,7 +21,7 @@ main = do
   newKafka (Peer (IPv4 0) 9092) >>= \case
     Right kafka -> do
       partitionIndex <- newIORef (0 :: Int)
-      let topic = Topic (byteArrayFromByteString "test") 0 partitionIndex
+      let topic = Topic (fromByteString "test") 0 partitionIndex
       let msg = unliftedArrayFromList
             [ fromByteString "aaaaa"
             , fromByteString "bbbbb"
@@ -38,3 +38,5 @@ main = do
     Left bad -> do
       print bad
       fail "Couldn't connect to kafka"
+  where
+    fromByteString = byteArrayFromList . unpack

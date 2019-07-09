@@ -2,7 +2,7 @@
 
 module Common where
 
-import Data.ByteString (ByteString, unpack)
+import Data.ByteString (ByteString)
 import Data.Bytes.Types
 import Data.Int
 import Data.IORef
@@ -46,9 +46,6 @@ size16 = fromIntegral . sizeofByteArray
 
 size32 :: ByteArray -> Int32
 size32 = fromIntegral . sizeofByteArray
-
-byteArrayFromByteString :: ByteString -> ByteArray
-byteArrayFromByteString = byteArrayFromList . unpack
 
 getArray :: MutableBytes s -> MutableByteArray s
 getArray (MutableBytes a _ _) = a
