@@ -28,11 +28,17 @@ produceApiVersion = 7
 produceApiKey :: Int16
 produceApiKey = 0
 
+clientId :: ByteString
+clientId = "ruko"
+
+correlationId :: Int32
+correlationId = 0xbeef
+
 produceRequestHeader :: ByteString -> ByteArray
 produceRequestHeader name = fold
   [ byteArrayFromList [toBE16 produceApiKey]
   , byteArrayFromList [toBE16 produceApiVersion]
-  , byteArrayFromList [toBE32 0xbeef]
+  , byteArrayFromList [toBE32 correlationId]
   , byteArrayFromList [toBE16 $ fromIntegral $ BS.length name]
   , byteArrayFromList (unpack name)
   ]
@@ -120,7 +126,7 @@ produceRequest ::
 produceRequest timeout topic payloads =
   let
     size = byteArrayFromList [toBE32 $ size32 $ msghdr <> msgdata]
-    msghdr = produceRequestHeader "ruko"
+    msghdr = produceRequestHeader clientId
     msgdata = produceRequestData timeout topic payloads
   in
     size <> msghdr <> msgdata
