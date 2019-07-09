@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -71,12 +72,12 @@ produceRequestHeader name = fold
 produceRequestData ::
      Int -- Timeout
   -> Topic -- Topic
-  -> ByteArray -- Payload
+  -> UnliftedArray ByteArray -- Payload
   -> ByteArray
-produceRequestData timeout topic payload =
+produceRequestData timeout topic payloads =
   let
     batchSize = size32 batch
-    batch = recordBatch (mkRecord payload)
+    batch = recordBatch $ mkRecordBatch payloads
   in
     fold
       [ byteArrayFromList [toBE16 $ -1] -- transactional_id length
@@ -93,6 +94,11 @@ produceRequestData timeout topic payload =
   where
     Topic topicName _ _ = topic
 
+mkRecordBatch :: UnliftedArray ByteArray -> UnliftedArray ByteArray
+mkRecordBatch payloads =
+  unliftedArrayFromList $
+    zipWith mkRecord (unliftedArrayToList payloads) [0..]
+
 size8 :: ByteArray -> Int8
 size8 = fromIntegral . sizeofByteArray
 
@@ -102,14 +108,14 @@ size16 = fromIntegral . sizeofByteArray
 size32 :: ByteArray -> Int32
 size32 = fromIntegral . sizeofByteArray
 
-mkRecord :: ByteArray -> ByteArray
-mkRecord content =
+mkRecord :: ByteArray -> Int -> ByteArray
+mkRecord content index =
   let
     recordLength = zigzag (sizeofByteArray recordBody)
     recordBody = fold
       [ byteArrayFromList [0 :: Word8] -- attributes
       , zigzag 0 -- timestampdelta varint
-      , zigzag 0 -- offsetDelta varint
+      , zigzag index -- offsetDelta varint
       , zigzag (-1) -- key length varint
       -- no key because key length is -1
       , zigzag (sizeofByteArray content) -- value length varint
@@ -119,9 +125,10 @@ mkRecord content =
   in
     recordLength <> recordBody
 
-recordBatch :: ByteArray -> ByteArray
+recordBatch :: UnliftedArray ByteArray -> ByteArray
 recordBatch records =
   let
+    recordsCount = fromIntegral $ sizeofUnliftedArray records
     batchLength = 5 + size32 crc + size32 post
     pre = fold
       [ byteArrayFromList [toBE64 $ 0] -- baseOffset
@@ -134,28 +141,28 @@ recordBatch records =
       ]
     post = fold
       [ byteArrayFromList [toBE16 $ 0] -- attributes
-      , byteArrayFromList [toBE32 $ 0] -- lastOffsetDelta
+      , byteArrayFromList [toBE32 $ recordsCount - 1] -- lastOffsetDelta
       , byteArrayFromList [toBE64 $ 0] -- firstTimestamp
       , byteArrayFromList [toBE64 $ 0] -- lastTimestamp
       , byteArrayFromList [toBE64 $ -1] -- producerId
       , byteArrayFromList [toBE16 $ -1] -- producerEpoch
       , byteArrayFromList [toBE32 $ -1] -- baseSequence
-      , byteArrayFromList [toBE32 $ 1] -- records array length
+      , byteArrayFromList [toBE32 $ recordsCount] -- records array length
       ]
-      <> records
+      <> foldrUnliftedArray (<>) mempty records
   in
     pre <> crc <> post
 
 produceRequest ::
      Int
   -> Topic
+  -> UnliftedArray ByteArray
   -> ByteArray
-  -> ByteArray
-produceRequest timeout topic payload =
+produceRequest timeout topic payloads =
   let
     size = byteArrayFromList [toBE32 $ size32 $ msghdr <> msgdata]
     msghdr = produceRequestHeader "ruko"
-    msgdata = produceRequestData timeout topic payload
+    msgdata = produceRequestData timeout topic payloads
   in
     size <> msghdr <> msgdata
 
@@ -244,19 +251,17 @@ parseProducePartitionResponse = ProducePartitionResponse
 
 doStuff :: IO ()
 doStuff = do
-  kefka <- newKafka (Peer (IPv4 0) 9092)
-  let thirtySecondsMs = 30000
-      thirtySecondsUs = 30000000
-  case kefka of
-    Right k -> do
+  let thirtySecondsUs = 30000000
+  newKafka (Peer (IPv4 0) 9092) >>= \case
+    Right kafka -> do
       partitionIndex <- newIORef (0 :: Int)
       let topic = Topic (byteArrayFromByteString "test") 0 partitionIndex
-      let msg = produceRequest thirtySecondsMs topic $ byteArrayFromByteString $
-            "\"im not owned! im not owned!!\", i continue to insist as i slowly" <>
-            "shrink and transform into a corn cob"
-      arr <- newUnliftedArray 1 msg
-      farr <- freezeUnliftedArray arr 0 1
-      v <- produce k topic thirtySecondsUs farr
+      let msg = unliftedArrayFromList
+            [ fromByteString "aaaaa"
+            , fromByteString "bbbbb"
+            , fromByteString "ccccc"
+            ]
+      v <- produce kafka topic thirtySecondsUs msg
       case v of
         Right (Right response) -> do
           print response
@@ -280,20 +285,27 @@ produce ::
   -> IO (Either KafkaException (Either String ProduceResponse))
 produce kafka topic waitTime payloads = do
   interrupt <- registerDelay waitTime
-  _ <- sendProduceRequest kafka interrupt topic payloads
+  let message = produceRequest (waitTime `div` 1000) topic payloads
+  print message
+  _ <- sendProduceRequest kafka interrupt message
   getProduceResponse kafka interrupt
+
+produce' :: UnliftedArray ByteArray -> ByteString -> IO ()
+produce' bytes topicName = do
+  topic <- Topic (fromByteString topicName) 0 <$> newIORef 0
+  Right k <- newKafka (Peer (IPv4 0) 9092)
+  _ <- produce k topic 30000000 bytes
+  pure ()
 
 sendProduceRequest ::
      Kafka
   -> TVar Bool
-  -> Topic
-  -> UnliftedArray ByteArray
+  -> ByteArray
   -> IO (Either (SendException 'Interruptible) ())
-sendProduceRequest kafka interrupt _ payloads = do
-  let msg = foldByteArrays payloads
-      len = sizeofByteArray msg
+sendProduceRequest kafka interrupt message = do
+  let len = sizeofByteArray message
   messageBuffer <- newByteArray len
-  copyByteArray messageBuffer 0 msg 0 (sizeofByteArray msg)
+  copyByteArray messageBuffer 0 message 0 (sizeofByteArray message)
   let messageBufferSlice = MutableBytes messageBuffer 0 len
   send
     interrupt
@@ -314,6 +326,7 @@ getProduceResponse kafka interrupt = do
       (getKafka kafka)
       responseBufferSlice
   responseBytes <- toByteString <$> unsafeFreezeByteArray responseBuffer
+  print =<< unsafeFreezeByteArray responseBuffer
   pure $ AT.parseOnly parseProduceResponse responseBytes <$ responseStatus
 
 getResponseSizeHeader ::
