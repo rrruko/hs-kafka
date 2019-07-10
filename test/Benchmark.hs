@@ -17,7 +17,7 @@ data RequestData =
     , payloads :: UnliftedArray ByteArray
     }
 
-produceRequest' :: RequestData -> ByteArray
+produceRequest' :: RequestData -> UnliftedArray ByteArray
 produceRequest' (RequestData timeout topic payloads) =
   produceRequest timeout topic payloads
 

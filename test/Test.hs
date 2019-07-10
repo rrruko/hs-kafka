@@ -67,6 +67,8 @@ goldenTests = testGroup "Golden tests"
       (BL.fromStrict <$> multiplePayloadTest)
   ]
 
+unChunks = foldrUnliftedArray (<>) mempty
+
 requestTest = do
   ref <- newIORef 0
   let payload = fromByteString $
@@ -76,7 +78,7 @@ requestTest = do
   payloadsf <- freezeUnliftedArray payloads 0 1
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
-      req = toByteString $ produceRequest 30000 topic payloadsf
+      req = toByteString $ unChunks $ produceRequest 30000 topic payloadsf
   pure req
 
 multiplePayloadTest = do
@@ -89,5 +91,5 @@ multiplePayloadTest = do
         ]
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
-      req = toByteString $ produceRequest 30000 topic payloads
+      req = toByteString $ unChunks $ produceRequest 30000 topic payloads
   pure req

@@ -1,1 +1,6 @@
-packages: . ../sockets
+packages: . ../sockets ../castagnoli
+
+source-repository-package
+  type: git
+  location: https://github.com/haskell-primitive/primitive-slice
+  tag: 554f1f0cf00d0c445b4210ce8367be5269e6ce64

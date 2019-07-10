@@ -19,14 +19,16 @@ library
                      , ProduceRequest
                      , ProduceResponse
                      , Varint
-  ghc-options: -Wall -Werror -O2
+  ghc-options: -Wall -O2
   -- other-modules:
   -- other-extensions:
   build-depends:       base ^>=4.12.0.0
+                     , castagnoli
                      , sockets >= 0.4.0.0 && < 0.5.0.0
                      , primitive >= 0.7.0.0 && < 0.8.0.0
                      , primitive-unaligned >= 0.1.1.0 && < 0.2.0.0
                      , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
+                     , primitive-slice >= 0.1.0.0 && < 0.2.0.0
                      , byteslice >= 0.1.1.0 && < 0.2.0.0
                      , ip >= 1.5.0
                      , cpu >= 0.1.2 && < 0.2
@@ -52,6 +54,7 @@ executable kafka-client-exe
                      , bytestring
   hs-source-dirs:      app
   default-language:    Haskell2010
+  ghc-options: -Wall -O2 -threaded -rtsopts -with-rtsopts=-N1
 
 test-suite tests
   type:                exitcode-stdio-1.0

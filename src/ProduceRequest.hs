@@ -6,17 +6,18 @@ module ProduceRequest where
 import Control.Monad.ST
 import Data.ByteString (ByteString)
 import Data.Bytes.Types
-import Data.Digest.CRC32C
 import Data.Foldable
 import Data.Int
 import Data.Primitive.Unlifted.Array
 import Data.Primitive.ByteArray
 import Data.Primitive.ByteArray.Unaligned
+import Data.Primitive.Slice (UnliftedVector(UnliftedVector))
 import Data.Word
 import GHC.Conc
 import Socket.Stream.Interruptible.MutableBytes
 import Socket.Stream.IPv4
 
+import qualified Crc32c as CRC
 import qualified Data.ByteString as BS
 
 import Common
@@ -34,6 +35,9 @@ clientId = "ruko"
 correlationId :: Int32
 correlationId = 0xbeef
 
+magic :: Word8
+magic = 2
+
 produceRequestHeader :: ByteString -> ByteArray
 produceRequestHeader name = runST $ do
   arr <- newByteArray 10
@@ -46,12 +50,10 @@ produceRequestHeader name = runST $ do
 produceRequestData ::
      Int -- Timeout
   -> Topic -- Topic
-  -> UnliftedArray ByteArray -- Payload
+  -> Int -- Size of record batch
   -> ByteArray
-produceRequestData timeout topic payloads =
+produceRequestData timeout topic batchSize =
   let
-    batchSize = size32 batch
-    batch = recordBatch $ mkRecordBatch payloads
     topicNameSize = sizeofByteArray topicName
     prefix = runST $ do
       arr <- newByteArray (26 + topicNameSize)
@@ -63,91 +65,140 @@ produceRequestData timeout topic payloads =
       copyByteArray arr 14 topicName 0 (topicNameSize) -- topic_data topic
       writeUnalignedByteArray arr (14 + topicNameSize) (toBE32 1) -- following array [data] length
       writeUnalignedByteArray arr (18 + topicNameSize) (toBE32 0) -- partition
-      writeUnalignedByteArray arr (22 + topicNameSize) (toBE32 batchSize) -- record_set length
+      writeUnalignedByteArray arr (22 + topicNameSize) (toBE32 $ fromIntegral batchSize) -- record_set length
       unsafeFreezeByteArray arr
     in
-      prefix <> batch
+      prefix
   where
     Topic topicName _ _ = topic
 
-mkRecordBatch :: UnliftedArray ByteArray -> UnliftedArray ByteArray
-mkRecordBatch payloads = runUnliftedArray $ do
-  arr <- newUnliftedArray (sizeofUnliftedArray payloads) mempty
+imapUnliftedArray :: 
+     (Int -> ByteArray -> ByteArray)
+  -> UnliftedArray ByteArray
+  -> UnliftedArray ByteArray
+imapUnliftedArray f a = runUnliftedArray $ do
+  arr <- newUnliftedArray (sizeofUnliftedArray a) mempty
   itraverseUnliftedArray_
-    (\i ba ->
-      writeUnliftedArray arr i (mkRecord ba i))
-    payloads
+    (\i element ->
+      writeUnliftedArray arr i (f i element))
+    a 
   pure arr
 
-mkRecord :: ByteArray -> Int -> ByteArray
-mkRecord content index =
+makeRecordMetadata :: Int -> ByteArray -> ByteArray
+makeRecordMetadata index content =
   let
-    recordLength = zigzag (sizeofByteArray recordBody)
-    dynamicContent = fold
-      [ zigzag 0
-      , zigzag index
-      , zigzag (-1)
-      , zigzag (sizeofByteArray content)
-      , content
+    -- plus one is for the trailing null byte
+    recordLength = zigzag (sizeofByteArray metadataContent + sizeofByteArray content + 1)
+    metadataContent = fold
+      [ byteArrayFromList [0 :: Word8]
+      , zigzag 0 -- timestampDelta
+      , zigzag index -- offsetDelta
+      , zigzag (-1) -- keyLength
+      , zigzag (sizeofByteArray content) -- valueLen
       ]
-    dynamicContentSize = sizeofByteArray dynamicContent
-    recordBody = runST $ do
-      arr <- newByteArray (2 + dynamicContentSize)
-      writeUnalignedByteArray arr 0 (0 :: Word8) -- attributes
-      copyByteArray arr 1 dynamicContent 0 dynamicContentSize
-      writeUnalignedByteArray arr (1 + dynamicContentSize) (0 :: Word8) --headers
-      unsafeFreezeByteArray arr
+    metadataContentSize = sizeofByteArray metadataContent
   in
-    recordLength <> recordBody
+    recordLength <> metadataContent
 
-recordBatch :: UnliftedArray ByteArray -> ByteArray
-recordBatch records =
+sumSizes :: UnliftedArray ByteArray -> Int
+sumSizes = foldrUnliftedArray (\e acc -> acc + sizeofByteArray e) 0
+
+produceRequestRecordBatchMetadata ::
+     UnliftedArray ByteArray
+  -> Int
+  -> Int
+  -> ByteArray
+produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSectionSize = 
   let
-    recordsCount = fromIntegral $ sizeofUnliftedArray records
-    batchLength = 5 + size32 crc + size32 post
-    pre = runST $ do
-      arr <- newByteArray 17
-      writeUnalignedByteArray arr 0 (toBE64 0) -- baseOffset
-      writeUnalignedByteArray arr 8 (toBE32 batchLength) -- batchLength
-      writeUnalignedByteArray arr 12 (toBE32 0) -- partitionLeaderEpoch
-      writeUnalignedByteArray arr 16 (2 :: Word8) -- magic
+    crc =
+      CRC.chunks
+        (CRC.bytes 0 (Bytes postCrc 0 40))
+        (UnliftedVector payloadsSectionChunks 0 (3*payloadCount))
+    batchLength = 9 + 40 + fromIntegral payloadsSectionSize
+    preCrc = runST $ do
+      arr <- newByteArray 21
+      writeUnalignedByteArray arr 0 (toBE64 0)
+      writeUnalignedByteArray arr 8 (toBE32 batchLength)
+      writeUnalignedByteArray arr 12 (toBE32 0)
+      writeUnalignedByteArray arr 16 magic
+      writeUnalignedByteArray arr 17 (toBE32 $ fromIntegral $ crc)
       unsafeFreezeByteArray arr
-    crc = byteArrayFromList
-      [ toBEW32 . crc32c . toByteString $ post
-      ]
-    post' = runST $ do
+    postCrc = runST $ do
       arr <- newByteArray 40
-      writeUnalignedByteArray arr 0 (toBE16 0) -- attributes
-      writeUnalignedByteArray arr 2 (toBE32 $ recordsCount - 1) -- lastOffsetDelta
-      writeUnalignedByteArray arr 6 (toBE64 0) -- firstTimestamp
-      writeUnalignedByteArray arr 14 (toBE64 0) -- lastTimestamp
-      writeUnalignedByteArray arr 22 (toBE64 (-1)) -- producerId
-      writeUnalignedByteArray arr 30 (toBE16 (-1)) -- producerEpoch
-      writeUnalignedByteArray arr 32 (toBE32 (-1)) -- baseSequence
-      writeUnalignedByteArray arr 36 (toBE32 recordsCount) -- records array length
+      writeUnalignedByteArray arr 0 (toBE16 0)
+      writeUnalignedByteArray arr 2 (toBE32 $ fromIntegral $ payloadCount - 1)
+      writeUnalignedByteArray arr 6 (toBE64 0)
+      writeUnalignedByteArray arr 14 (toBE64 0)
+      writeUnalignedByteArray arr 22 (toBE64 (-1))
+      writeUnalignedByteArray arr 30 (toBE16 (-1))
+      writeUnalignedByteArray arr 32 (toBE32 (-1))
+      writeUnalignedByteArray arr 36 (toBE32 $ fromIntegral payloadCount)
       unsafeFreezeByteArray arr
-    post = post' <> foldrUnliftedArray (<>) mempty records
   in
-    pre <> crc <> post
+    preCrc <> postCrc
+
+makeRequestMetadata :: 
+     Int
+  -> Int
+  -> Topic 
+  -> ByteArray
+makeRequestMetadata recordBatchSectionSize timeout topic =
+     produceRequestHeader clientId
+  <> produceRequestData timeout topic recordBatchSectionSize 
 
 produceRequest ::
      Int
   -> Topic
   -> UnliftedArray ByteArray
-  -> ByteArray
+  -> UnliftedArray ByteArray
 produceRequest timeout topic payloads =
   let
-    msghdr = produceRequestHeader clientId
-    msgdata = produceRequestData timeout topic payloads
-    hdrSize = sizeofByteArray msghdr
-    dataSize = sizeofByteArray msgdata
+    payloadCount = sizeofUnliftedArray payloads
+    zero = runST $ do
+      ba <- newByteArray 1
+      writeByteArray ba 0 (0 :: Word8)
+      unsafeFreezeByteArray ba
+    payloadMetadatas = imapUnliftedArray makeRecordMetadata payloads
+    recordBatchSectionSize =
+        sumSizes payloadsSectionChunks 
+      + sizeofByteArray recordBatchMetadata
+    requestMetadata = makeRequestMetadata
+      recordBatchSectionSize
+      timeout
+      topic
+    recordBatchMetadata =
+      produceRequestRecordBatchMetadata
+        payloadsSectionChunks
+        payloadCount
+        (sumSizes payloadsSectionChunks)
+    payloadsSectionChunks = runUnliftedArray $ do
+      arr <- newUnliftedArray (3 * payloadCount) zero
+      itraverseUnliftedArray_
+        (\i payload -> do
+          let payloadMeta = indexUnliftedArray payloadMetadatas i
+          writeUnliftedArray arr (i * 3)     payloadMeta
+          writeUnliftedArray arr (i * 3 + 1) payload
+          writeUnliftedArray arr (i * 3 + 2) zero)
+        payloads
+      pure arr
+    totalRequestSizeHeader = 
+      byteArrayFromList
+        [ 0 :: Word8
+        , 0
+        , 0
+        , fromIntegral $
+              sizeofByteArray requestMetadata
+            + sizeofByteArray recordBatchMetadata
+            + sumSizes payloadsSectionChunks
+        ]
   in
-    runST $ do
-      buf <- newByteArray (4 + hdrSize + dataSize)
-      writeUnalignedByteArray buf 0 (toBE32 $ fromIntegral $ hdrSize + dataSize)
-      copyByteArray buf 4 msghdr 0 hdrSize
-      copyByteArray buf (4 + hdrSize) msgdata 0 dataSize
-      unsafeFreezeByteArray buf
+    runUnliftedArray $ do
+      arr <- newUnliftedArray (3 * payloadCount + 3) zero
+      writeUnliftedArray arr 0 totalRequestSizeHeader
+      writeUnliftedArray arr 1 requestMetadata
+      writeUnliftedArray arr 2 recordBatchMetadata
+      copyUnliftedArray arr 3 payloadsSectionChunks 0 (3 * payloadCount)
+      pure arr
 
 sendProduceRequest ::
      Kafka
