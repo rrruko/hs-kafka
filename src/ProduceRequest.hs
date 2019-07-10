@@ -52,17 +52,18 @@ produceRequestData timeout topic payloads =
   let
     batchSize = size32 batch
     batch = recordBatch $ mkRecordBatch payloads
+    topicNameSize = sizeofByteArray topicName
     prefix = runST $ do
-      arr <- newByteArray (26 + sizeofByteArray topicName)
+      arr <- newByteArray (26 + topicNameSize)
       writeUnalignedByteArray arr 0 (toBE16 (-1)) -- transactional_id length
       writeUnalignedByteArray arr 2 (toBE16 1) -- acks
       writeUnalignedByteArray arr 4 (toBE32 $ fromIntegral timeout) -- timeout in ms
       writeUnalignedByteArray arr 8 (toBE32 1) -- following array length
       writeUnalignedByteArray arr 12 (toBE16 $ size16 topicName) -- following string length
-      copyByteArray arr 14 topicName 0 (sizeofByteArray topicName) -- topic_data topic
-      writeUnalignedByteArray arr (14 + sizeofByteArray topicName) (toBE32 $ 1) -- following array [data] length
-      writeUnalignedByteArray arr (18 + sizeofByteArray topicName) (toBE32 $ 0) -- partition
-      writeUnalignedByteArray arr (22 + sizeofByteArray topicName) (toBE32 $ batchSize) -- record_set length
+      copyByteArray arr 14 topicName 0 (topicNameSize) -- topic_data topic
+      writeUnalignedByteArray arr (14 + topicNameSize) (toBE32 1) -- following array [data] length
+      writeUnalignedByteArray arr (18 + topicNameSize) (toBE32 0) -- partition
+      writeUnalignedByteArray arr (22 + topicNameSize) (toBE32 batchSize) -- record_set length
       unsafeFreezeByteArray arr
     in
       prefix <> batch
@@ -85,11 +86,12 @@ mkRecord content index =
       , zigzag (sizeofByteArray content)
       , content
       ]
+    dynamicContentSize = sizeofByteArray dynamicContent
     recordBody = runST $ do
-      arr <- newByteArray (2 + sizeofByteArray dynamicContent)
+      arr <- newByteArray (2 + dynamicContentSize)
       writeUnalignedByteArray arr 0 (0 :: Word8) -- attributes
-      copyByteArray arr 1 dynamicContent 0 (sizeofByteArray dynamicContent)
-      writeUnalignedByteArray arr (1 + sizeofByteArray dynamicContent) (0 :: Word8) --headers
+      copyByteArray arr 1 dynamicContent 0 dynamicContentSize
+      writeUnalignedByteArray arr (1 + dynamicContentSize) (0 :: Word8) --headers
       unsafeFreezeByteArray arr
   in
     recordLength <> recordBody
