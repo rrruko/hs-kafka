@@ -71,9 +71,13 @@ produceRequestData timeout topic payloads =
     Topic topicName _ _ = topic
 
 mkRecordBatch :: UnliftedArray ByteArray -> UnliftedArray ByteArray
-mkRecordBatch payloads =
-  unliftedArrayFromList $
-    zipWith mkRecord (unliftedArrayToList payloads) [0..]
+mkRecordBatch payloads = runUnliftedArray $ do
+  arr <- newUnliftedArray (sizeofUnliftedArray payloads) mempty
+  itraverseUnliftedArray_
+    (\i ba ->
+      writeUnliftedArray arr i (mkRecord ba i))
+    payloads
+  pure arr
 
 mkRecord :: ByteArray -> Int -> ByteArray
 mkRecord content index =
