@@ -78,16 +78,19 @@ mkRecord :: ByteArray -> Int -> ByteArray
 mkRecord content index =
   let
     recordLength = zigzag (sizeofByteArray recordBody)
-    recordBody = fold
-      [ byteArrayFromList [0 :: Word8] -- attributes
-      , zigzag 0 -- timestampdelta varint
-      , zigzag index -- offsetDelta varint
-      , zigzag (-1) -- key length varint
-      -- no key because key length is -1
-      , zigzag (sizeofByteArray content) -- value length varint
-      , content -- value
-      , byteArrayFromList [0 :: Word8] --headers
+    dynamicContent = fold
+      [ zigzag 0
+      , zigzag index
+      , zigzag (-1)
+      , zigzag (sizeofByteArray content)
+      , content
       ]
+    recordBody = runST $ do
+      arr <- newByteArray (2 + sizeofByteArray dynamicContent)
+      writeUnalignedByteArray arr 0 (0 :: Word8) -- attributes
+      copyByteArray arr 1 dynamicContent 0 (sizeofByteArray dynamicContent)
+      writeUnalignedByteArray arr (1 + sizeofByteArray dynamicContent) (0 :: Word8) --headers
+      unsafeFreezeByteArray arr
   in
     recordLength <> recordBody
 
