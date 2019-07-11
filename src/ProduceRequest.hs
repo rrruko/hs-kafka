@@ -1,9 +1,13 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module ProduceRequest where
 
 import Control.Monad.ST
+import Control.Monad.Reader
+import Control.Monad.State
+import Control.Monad.Primitive
 import Data.ByteString (ByteString)
 import Data.Bytes.Types
 import Data.Foldable
@@ -38,20 +42,69 @@ clientIdLength = BS.length clientId
 correlationId :: Int32
 correlationId = 0xbeef
 
-magic :: Word8
+magic :: Int8
 magic = 2
 
-imapUnliftedArray :: 
-     (Int -> ByteArray -> ByteArray)
-  -> UnliftedArray ByteArray
-  -> UnliftedArray ByteArray
-imapUnliftedArray f a = runUnliftedArray $ do
-  arr <- newUnliftedArray (sizeofUnliftedArray a) mempty
-  itraverseUnliftedArray_
-    (\i element ->
-      writeUnliftedArray arr i (f i element))
-    a 
-  pure arr
+write8 ::
+     (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
+  => Int8
+  -> m ()
+write8 n = do
+  arr <- ask
+  index <- get
+  writeUnalignedByteArray arr index n
+  modify (+1)
+
+writeBE16 ::
+     (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
+  => Int16
+  -> m ()
+writeBE16 n = do
+  arr <- ask
+  index <- get
+  writeUnalignedByteArray arr index (toBE16 n)
+  modify (+2)
+
+writeBE32 ::
+     (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
+  => Int32
+  -> m ()
+writeBE32 n = do
+  arr <- ask
+  index <- get
+  writeUnalignedByteArray arr index (toBE32 n)
+  modify (+4)
+
+writeBE64 ::
+     (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
+  => Int64
+  -> m ()
+writeBE64 n = do
+  arr <- ask
+  index <- get
+  writeUnalignedByteArray arr index (toBE64 n)
+  modify (+8)
+
+writeArray ::
+      (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
+  => ByteArray
+  -> Int
+  -> m ()
+writeArray src len = do
+  arr <- ask
+  index <- get
+  copyByteArray arr index src 0 len
+  modify (+len)
+
+runByteArray ::
+     (PrimMonad m)
+  => Int
+  -> ReaderT (MutableByteArray (PrimState m)) (StateT Int m) ()
+  -> m ByteArray
+runByteArray size builder = do
+  arr <- newByteArray size
+  runStateT (runReaderT builder arr) 0
+  unsafeFreezeByteArray arr
 
 makeRecordMetadata :: Int -> ByteArray -> ByteArray
 makeRecordMetadata index content =
@@ -65,7 +118,6 @@ makeRecordMetadata index content =
       , zigzag (-1) -- keyLength
       , zigzag (sizeofByteArray content) -- valueLen
       ]
-    metadataContentSize = sizeofByteArray metadataContent
   in
     recordLength <> metadataContent
 
@@ -84,25 +136,21 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
         (CRC.bytes 0 (Bytes postCrc 0 40))
         (UnliftedVector payloadsSectionChunks 0 (3*payloadCount))
     batchLength = 9 + 40 + fromIntegral payloadsSectionSize
-    preCrc = runST $ do
-      arr <- newByteArray 21
-      writeUnalignedByteArray arr 0 (toBE64 0)
-      writeUnalignedByteArray arr 8 (toBE32 batchLength)
-      writeUnalignedByteArray arr 12 (toBE32 0)
-      writeUnalignedByteArray arr 16 magic
-      writeUnalignedByteArray arr 17 (toBE32 $ fromIntegral $ crc)
-      unsafeFreezeByteArray arr
-    postCrc = runST $ do
-      arr <- newByteArray 40
-      writeUnalignedByteArray arr 0 (toBE16 0)
-      writeUnalignedByteArray arr 2 (toBE32 $ fromIntegral $ payloadCount - 1)
-      writeUnalignedByteArray arr 6 (toBE64 0)
-      writeUnalignedByteArray arr 14 (toBE64 0)
-      writeUnalignedByteArray arr 22 (toBE64 (-1))
-      writeUnalignedByteArray arr 30 (toBE16 (-1))
-      writeUnalignedByteArray arr 32 (toBE32 (-1))
-      writeUnalignedByteArray arr 36 (toBE32 $ fromIntegral payloadCount)
-      unsafeFreezeByteArray arr
+    preCrc = runST $ runByteArray 21 $ do
+      writeBE64 0
+      writeBE32 batchLength
+      writeBE32 0
+      write8 magic
+      writeBE32 $ fromIntegral $ crc
+    postCrc = runST $ runByteArray 40 $ do
+      writeBE16 0
+      writeBE32 $ fromIntegral $ payloadCount - 1
+      writeBE64 0
+      writeBE64 0
+      writeBE64 (-1)
+      writeBE16 (-1)
+      writeBE32 (-1)
+      writeBE32 $ fromIntegral payloadCount
   in
     preCrc <> postCrc
 
@@ -111,26 +159,26 @@ makeRequestMetadata ::
   -> Int
   -> Topic 
   -> ByteArray
-makeRequestMetadata recordBatchSectionSize timeout topic = runST $ do
-  let topicNameSize = sizeofByteArray topicName
-  arr <- newByteArray (36 + clientIdLength + topicNameSize)
-  writeUnalignedByteArray arr 0 (toBE16 produceApiKey)
-  writeUnalignedByteArray arr 2 (toBE16 produceApiVersion)
-  writeUnalignedByteArray arr 4 (toBE32 correlationId)
-  writeUnalignedByteArray arr 8 (toBE16 (fromIntegral clientIdLength))
-  copyByteArray arr 10 (fromByteString clientId) 0 clientIdLength
-  writeUnalignedByteArray arr (10 + clientIdLength) (toBE16 (-1)) -- transactional_id length
-  writeUnalignedByteArray arr (12 + clientIdLength) (toBE16 1) -- acks
-  writeUnalignedByteArray arr (14 + clientIdLength) (toBE32 $ fromIntegral timeout) -- timeout in ms
-  writeUnalignedByteArray arr (18 + clientIdLength) (toBE32 1) -- following array length
-  writeUnalignedByteArray arr (22 + clientIdLength) (toBE16 $ size16 topicName) -- following string length
-  copyByteArray arr (24 + clientIdLength) topicName 0 (topicNameSize) -- topic_data topic
-  writeUnalignedByteArray arr (24 + clientIdLength + topicNameSize) (toBE32 1) -- following array [data] length
-  writeUnalignedByteArray arr (28 + clientIdLength + topicNameSize) (toBE32 0) -- partition
-  writeUnalignedByteArray arr (32 + clientIdLength + topicNameSize) (toBE32 $ fromIntegral recordBatchSectionSize) -- record_set length
-  unsafeFreezeByteArray arr
+makeRequestMetadata recordBatchSectionSize timeout topic =
+  runST $ runByteArray (40 + clientIdLength + topicNameSize) $ do
+    writeBE32 (fromIntegral $ 36 + clientIdLength + topicNameSize + recordBatchSectionSize)
+    writeBE16 produceApiKey
+    writeBE16 produceApiVersion
+    writeBE32 correlationId
+    writeBE16 (fromIntegral clientIdLength)
+    writeArray (fromByteString clientId) clientIdLength
+    writeBE16 (-1) -- transactional_id length
+    writeBE16 1 -- acks
+    writeBE32 (fromIntegral timeout) -- timeout in ms
+    writeBE32 1 -- following array length
+    writeBE16 (size16 topicName) -- following string length
+    writeArray topicName topicNameSize -- topic_data topic
+    writeBE32 1 -- following array [data] length
+    writeBE32 0 -- partition
+    writeBE32 (fromIntegral recordBatchSectionSize) -- record_set length
   where
     Topic topicName _ _ = topic
+    topicNameSize = sizeofByteArray topicName
 
 produceRequest ::
      Int
@@ -144,7 +192,6 @@ produceRequest timeout topic payloads =
       ba <- newByteArray 1
       writeByteArray ba 0 (0 :: Word8)
       unsafeFreezeByteArray ba
-    payloadMetadatas = imapUnliftedArray makeRecordMetadata payloads
     recordBatchSectionSize =
         sumSizes payloadsSectionChunks 
       + sizeofByteArray recordBatchMetadata
@@ -161,26 +208,17 @@ produceRequest timeout topic payloads =
       arr <- newUnliftedArray (3 * payloadCount) zero
       itraverseUnliftedArray_
         (\i payload -> do
-          let payloadMeta = indexUnliftedArray payloadMetadatas i
-          writeUnliftedArray arr (i * 3)     payloadMeta
+          writeUnliftedArray arr (i * 3)     (makeRecordMetadata i payload)
           writeUnliftedArray arr (i * 3 + 1) payload
           writeUnliftedArray arr (i * 3 + 2) zero)
         payloads
       pure arr
-    totalRequestSizeHeader =
-      byteArrayFromList
-        [ toBE32 $ fromIntegral $
-              sizeofByteArray requestMetadata
-            + sizeofByteArray recordBatchMetadata
-            + sumSizes payloadsSectionChunks
-        ]
   in
     runUnliftedArray $ do
-      arr <- newUnliftedArray (3 * payloadCount + 3) zero
-      writeUnliftedArray arr 0 totalRequestSizeHeader
-      writeUnliftedArray arr 1 requestMetadata
-      writeUnliftedArray arr 2 recordBatchMetadata
-      copyUnliftedArray arr 3 payloadsSectionChunks 0 (3 * payloadCount)
+      arr <- newUnliftedArray (3 * payloadCount + 2) zero
+      writeUnliftedArray arr 0 requestMetadata
+      writeUnliftedArray arr 1 recordBatchMetadata
+      copyUnliftedArray arr 2 payloadsSectionChunks 0 (3 * payloadCount)
       pure arr
 
 sendProduceRequest ::
