@@ -1,22 +1,22 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module ProduceResponse where
+module ProduceResponse
+  ( getProduceResponse
+  , int32
+  ) where
 
 import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.Bifunctor
 import Data.ByteString (ByteString)
 import Data.Bytes.Types
 import Data.Int
-import Data.Map.Strict (Map)
 import Data.Primitive
-import Data.Text (Text)
 import Data.Word
 import GHC.Conc
 import Socket.Stream.Interruptible.MutableBytes
 
 import qualified Data.Attoparsec.ByteString as AT
-import qualified Data.Map.Strict as Map
 
 import Common
 

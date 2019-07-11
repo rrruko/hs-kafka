@@ -3,9 +3,7 @@
 
 module Main where
 
-import Data.ByteString (ByteString, unpack)
 import Data.IORef
-import Data.Primitive
 import Data.Primitive.Unlifted.Array
 import GHC.Conc
 import Net.IPv4 (IPv4(..))
@@ -37,5 +35,3 @@ main = do
     Left bad -> do
       print bad
       fail "Couldn't connect to kafka"
-  where
-    fromByteString = byteArrayFromList . unpack

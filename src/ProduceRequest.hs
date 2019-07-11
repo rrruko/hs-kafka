@@ -2,7 +2,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module ProduceRequest where
+module ProduceRequest
+  ( produceRequest
+  , sendProduceRequest
+  ) where
 
 import Control.Monad.ST
 import Control.Monad.Reader

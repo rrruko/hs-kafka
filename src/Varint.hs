@@ -1,4 +1,7 @@
-module Varint (varint, zigzag) where
+module Varint
+  ( varint
+  , zigzag
+  ) where
 
 import Data.Bits ((.|.))
 import Data.List.NonEmpty
