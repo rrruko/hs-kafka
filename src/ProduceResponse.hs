@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module ProduceResponse where
@@ -86,16 +87,18 @@ getProduceResponse ::
   -> TVar Bool
   -> IO (Either KafkaException (Either String ProduceResponse))
 getProduceResponse kafka interrupt = do
-  Right responseByteCount <- getResponseSizeHeader kafka interrupt
-  responseBuffer <- newByteArray responseByteCount
-  let responseBufferSlice = MutableBytes responseBuffer 0 responseByteCount
-  responseStatus <- first toKafkaException <$>
-    receiveExactly
-      interrupt
-      (getKafka kafka)
-      responseBufferSlice
-  responseBytes <- toByteString <$> unsafeFreezeByteArray responseBuffer
-  pure $ AT.parseOnly parseProduceResponse responseBytes <$ responseStatus
+  getResponseSizeHeader kafka interrupt >>= \case
+    Right responseByteCount -> do
+      responseBuffer <- newByteArray responseByteCount
+      let responseBufferSlice = MutableBytes responseBuffer 0 responseByteCount
+      responseStatus <- first toKafkaException <$>
+        receiveExactly
+          interrupt
+          (getKafka kafka)
+          responseBufferSlice
+      responseBytes <- toByteString <$> unsafeFreezeByteArray responseBuffer
+      pure $ AT.parseOnly parseProduceResponse responseBytes <$ responseStatus
+    Left e -> pure $ Left e
 
 getResponseSizeHeader ::
      Kafka
