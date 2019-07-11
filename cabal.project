@@ -1,4 +1,4 @@
-packages: . ../sockets ../castagnoli
+packages: .
 
 source-repository-package
   type: git
@@ -9,3 +9,13 @@ source-repository-package
   type: git
   location: https://github.com/andrewthad/posix-api
   tag: 6344f841b969cb70195e49093be1504b4a84f7c5
+
+source-repository-package
+  type: git
+  location: https://github.com/andrewthad/sockets
+  tag: 8f772de4c089820129d52aaf33bd6f862a3a9eb8
+
+source-repository-package
+  type: git
+  location: https://github.com/andrewthad/castagnoli
+  tag: 08e2ceb5a88ccca7b3b56c3758be1d3942c2de49
