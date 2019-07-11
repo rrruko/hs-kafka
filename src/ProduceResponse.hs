@@ -113,14 +113,3 @@ getResponseSizeHeader kafka interrupt = do
       (MutableBytes responseSizeBuf 0 4)
   byteCount <- fromIntegral . byteSwap32 <$> readByteArray responseSizeBuf 0
   pure $ byteCount <$ responseStatus
-
-errorCode :: Map Int Text
-errorCode = Map.fromList
-  [ (-1, "UNKNOWN_SERVER_ERROR")
-  , (0, "NONE")
-  , (1, "OFFSET_OUT_OF_RANGE")
-  , (2, "CORRUPT_MESSAGE")
-  , (3, "UNKNOWN_TOPIC_OR_PARTITION")
-  , (4, "INVALID_FETCH_SIZE")
-  , (5, "LEADER_NOT_AVAILABLE")
-  ]
