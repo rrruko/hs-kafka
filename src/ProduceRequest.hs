@@ -19,6 +19,7 @@ import Control.Monad.ST
 import Control.Monad.Reader
 import Control.Monad.State.Strict
 import Control.Monad.Primitive
+import Control.Monad.Primitive.Convenience
 import Data.ByteString (ByteString)
 import Data.Bytes.Types
 import Data.Foldable
@@ -57,7 +58,7 @@ correlationId = 0xbeef
 magic :: Int8
 magic = 2
 
-newtype KafkaWriter m s a = KafkaWriter
+newtype KafkaWriter s m a = KafkaWriter
   { runKafkaWriter :: ReaderT (MutableByteArray s) (StateT Int m) a }
   deriving
     ( Functor, Applicative, Monad
@@ -66,35 +67,36 @@ newtype KafkaWriter m s a = KafkaWriter
     , PrimMonad
     )
 
-withCtx :: Monad m => (Int -> MutableByteArray s -> KafkaWriter m s a) -> KafkaWriter m s a
+withCtx :: Monad m => (Int -> MutableByteArray s -> KafkaWriter s m a) -> KafkaWriter s m a
 withCtx f = do
   index <- get
   arr <- ask
   f index arr
 
-writeNum :: (PrimMonad m, Prim a, PrimUnaligned a) => a -> KafkaWriter m (PrimState m) ()
+writeNum :: (MonadPrim s m, Prim a, PrimUnaligned a)
+  => a -> KafkaWriter s m ()
 writeNum n = withCtx $ \index arr -> do
   writeUnalignedByteArray arr index n
   modify' (+ (alignment n))
 {-# inlineable writeNum #-}
 
-write8 :: (PrimMonad m) => Int8 -> KafkaWriter m (PrimState m) ()
+write8 :: (MonadPrim s m) => Int8 -> KafkaWriter s m ()
 write8 = writeNum
 
-writeBE16 :: (PrimMonad m) => Int16 -> KafkaWriter m (PrimState m) ()
+writeBE16 :: (MonadPrim s m) => Int16 -> KafkaWriter s m ()
 writeBE16 = writeNum . toBE16
 
-writeBE32 :: (PrimMonad m) => Int32 -> KafkaWriter m (PrimState m) ()
+writeBE32 :: (MonadPrim s m) => Int32 -> KafkaWriter s m ()
 writeBE32 = writeNum . toBE32
 
-writeBE64 :: (PrimMonad m) => Int64 -> KafkaWriter m (PrimState m) ()
+writeBE64 :: (MonadPrim s m) => Int64 -> KafkaWriter s m ()
 writeBE64 = writeNum . toBE64
 
 writeArray ::
-     (PrimMonad m)
+     (MonadPrim s m)
   => ByteArray
   -> Int
-  -> KafkaWriter m (PrimState m) ()
+  -> KafkaWriter s m ()
 writeArray src len = withCtx $ \index arr -> do
   copyByteArray arr index src 0 len
   modify' (+len)
@@ -117,7 +119,7 @@ makeRecordMetadata index content =
 sumSizes :: UnliftedArray ByteArray -> Int
 sumSizes = foldrUnliftedArray (\e acc -> acc + sizeofByteArray e) 0
 
-evaluateWriter :: Int -> (forall s. KafkaWriter (ST s) s a) -> ByteArray
+evaluateWriter :: Int -> (forall s. KafkaWriter s (ST s) a) -> ByteArray
 evaluateWriter n kw = runST $ do
   arr <- newByteArray n
   _ <- runStateT (runReaderT (runKafkaWriter kw) arr) 0
@@ -128,7 +130,7 @@ produceRequestRecordBatchMetadata ::
   -> Int
   -> Int
   -> ByteArray
-produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSectionSize = 
+produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSectionSize =
   let
     crc =
       CRC.chunks
@@ -153,10 +155,10 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
   in
     preCrc <> postCrc
 
-makeRequestMetadata :: 
+makeRequestMetadata ::
      Int
   -> Int
-  -> Topic 
+  -> Topic
   -> ByteArray
 makeRequestMetadata recordBatchSectionSize timeout topic =
   evaluateWriter (40 + clientIdLength + topicNameSize) $ do
@@ -192,7 +194,7 @@ produceRequest timeout topic payloads =
       writeByteArray ba 0 (0 :: Word8)
       unsafeFreezeByteArray ba
     recordBatchSectionSize =
-        sumSizes payloadsSectionChunks 
+        sumSizes payloadsSectionChunks
       + sizeofByteArray recordBatchMetadata
     requestMetadata = makeRequestMetadata
       recordBatchSectionSize

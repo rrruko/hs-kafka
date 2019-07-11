@@ -19,3 +19,8 @@ source-repository-package
   type: git
   location: https://github.com/andrewthad/castagnoli
   tag: 08e2ceb5a88ccca7b3b56c3758be1d3942c2de49
+
+source-repository-package
+  type: git
+  location: https://github.com/haskell-primitive/primitive-convenience
+  tag: fde7951620547bad3d3b90b3b56e00a99e8579bc
