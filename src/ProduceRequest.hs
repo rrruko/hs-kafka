@@ -18,7 +18,7 @@ import Data.Primitive.ByteArray.Unaligned
 import Data.Primitive.Slice (UnliftedVector(UnliftedVector))
 import Data.Word
 import GHC.Conc
-import Socket.Stream.Interruptible.MutableBytes
+import Socket.Stream.Uninterruptible.Bytes
 import Socket.Stream.IPv4
 
 import qualified Crc32c as CRC
@@ -224,14 +224,9 @@ produceRequest timeout topic payloads =
 sendProduceRequest ::
      Kafka
   -> TVar Bool
-  -> ByteArray
-  -> IO (Either (SendException 'Interruptible) ())
-sendProduceRequest kafka interrupt message = do
-  let len = sizeofByteArray message
-  messageBuffer <- newByteArray len
-  copyByteArray messageBuffer 0 message 0 (sizeofByteArray message)
-  let messageBufferSlice = MutableBytes messageBuffer 0 len
-  send
-    interrupt
+  -> UnliftedArray ByteArray
+  -> IO (Either (SendException 'Uninterruptible) ())
+sendProduceRequest kafka _ message = do
+  sendMany
     (getKafka kafka)
-    messageBufferSlice
+    message

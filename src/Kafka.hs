@@ -21,7 +21,7 @@ produce ::
 produce kafka topic waitTime payloads = do
   interrupt <- registerDelay waitTime
   let message = produceRequest (waitTime `div` 1000) topic payloads
-  first toKafkaException <$> sendProduceRequest kafka interrupt (foldrUnliftedArray (<>) mempty message)
+  first toKafkaException <$> sendProduceRequest kafka interrupt message
 
 produce' :: UnliftedArray ByteArray -> ByteString -> IO ()
 produce' bytes topicName = do
