@@ -32,45 +32,14 @@ produceApiKey = 0
 clientId :: ByteString
 clientId = "ruko"
 
+clientIdLength :: Int
+clientIdLength = BS.length clientId
+
 correlationId :: Int32
 correlationId = 0xbeef
 
 magic :: Word8
 magic = 2
-
-produceRequestHeader :: ByteString -> ByteArray
-produceRequestHeader name = runST $ do
-  arr <- newByteArray 10
-  writeUnalignedByteArray arr 0 (toBE16 produceApiKey)
-  writeUnalignedByteArray arr 2 (toBE16 produceApiVersion)
-  writeUnalignedByteArray arr 4 (toBE32 correlationId)
-  writeUnalignedByteArray arr 8 (toBE16 (fromIntegral (BS.length name)))
-  unsafeFreezeByteArray arr <> pure (fromByteString name)
-
-produceRequestData ::
-     Int -- Timeout
-  -> Topic -- Topic
-  -> Int -- Size of record batch
-  -> ByteArray
-produceRequestData timeout topic batchSize =
-  let
-    topicNameSize = sizeofByteArray topicName
-    prefix = runST $ do
-      arr <- newByteArray (26 + topicNameSize)
-      writeUnalignedByteArray arr 0 (toBE16 (-1)) -- transactional_id length
-      writeUnalignedByteArray arr 2 (toBE16 1) -- acks
-      writeUnalignedByteArray arr 4 (toBE32 $ fromIntegral timeout) -- timeout in ms
-      writeUnalignedByteArray arr 8 (toBE32 1) -- following array length
-      writeUnalignedByteArray arr 12 (toBE16 $ size16 topicName) -- following string length
-      copyByteArray arr 14 topicName 0 (topicNameSize) -- topic_data topic
-      writeUnalignedByteArray arr (14 + topicNameSize) (toBE32 1) -- following array [data] length
-      writeUnalignedByteArray arr (18 + topicNameSize) (toBE32 0) -- partition
-      writeUnalignedByteArray arr (22 + topicNameSize) (toBE32 $ fromIntegral batchSize) -- record_set length
-      unsafeFreezeByteArray arr
-    in
-      prefix
-  where
-    Topic topicName _ _ = topic
 
 imapUnliftedArray :: 
      (Int -> ByteArray -> ByteArray)
@@ -142,9 +111,26 @@ makeRequestMetadata ::
   -> Int
   -> Topic 
   -> ByteArray
-makeRequestMetadata recordBatchSectionSize timeout topic =
-     produceRequestHeader clientId
-  <> produceRequestData timeout topic recordBatchSectionSize 
+makeRequestMetadata recordBatchSectionSize timeout topic = runST $ do
+  let topicNameSize = sizeofByteArray topicName
+  arr <- newByteArray (36 + clientIdLength + topicNameSize)
+  writeUnalignedByteArray arr 0 (toBE16 produceApiKey)
+  writeUnalignedByteArray arr 2 (toBE16 produceApiVersion)
+  writeUnalignedByteArray arr 4 (toBE32 correlationId)
+  writeUnalignedByteArray arr 8 (toBE16 (fromIntegral clientIdLength))
+  copyByteArray arr 10 (fromByteString clientId) 0 clientIdLength
+  writeUnalignedByteArray arr (10 + clientIdLength) (toBE16 (-1)) -- transactional_id length
+  writeUnalignedByteArray arr (12 + clientIdLength) (toBE16 1) -- acks
+  writeUnalignedByteArray arr (14 + clientIdLength) (toBE32 $ fromIntegral timeout) -- timeout in ms
+  writeUnalignedByteArray arr (18 + clientIdLength) (toBE32 1) -- following array length
+  writeUnalignedByteArray arr (22 + clientIdLength) (toBE16 $ size16 topicName) -- following string length
+  copyByteArray arr (24 + clientIdLength) topicName 0 (topicNameSize) -- topic_data topic
+  writeUnalignedByteArray arr (24 + clientIdLength + topicNameSize) (toBE32 1) -- following array [data] length
+  writeUnalignedByteArray arr (28 + clientIdLength + topicNameSize) (toBE32 0) -- partition
+  writeUnalignedByteArray arr (32 + clientIdLength + topicNameSize) (toBE32 $ fromIntegral recordBatchSectionSize) -- record_set length
+  unsafeFreezeByteArray arr
+  where
+    Topic topicName _ _ = topic
 
 produceRequest ::
      Int
@@ -181,12 +167,9 @@ produceRequest timeout topic payloads =
           writeUnliftedArray arr (i * 3 + 2) zero)
         payloads
       pure arr
-    totalRequestSizeHeader = 
+    totalRequestSizeHeader =
       byteArrayFromList
-        [ 0 :: Word8
-        , 0
-        , 0
-        , fromIntegral $
+        [ toBE32 $ fromIntegral $
               sizeofByteArray requestMetadata
             + sizeofByteArray recordBatchMetadata
             + sumSizes payloadsSectionChunks
