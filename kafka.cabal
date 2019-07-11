@@ -1,6 +1,6 @@
 cabal-version:       2.4
 
-name:                kafka-client
+name:                kafka
 version:             0.1.0.0
 -- synopsis:
 -- description:
@@ -41,12 +41,12 @@ library
   hs-source-dirs:      src
   default-language:    Haskell2010
 
-executable kafka-client-exe
+executable kafka-exe
   main-is:             Main.hs
   -- other-modules:
   -- other-extensions:
   build-depends:       base ^>=4.12.0.0
-                     , kafka-client
+                     , kafka
                      , sockets >= 0.4.1.0 && < 0.5.0.0
                      , primitive >= 0.7.0.0 && < 0.8.0.0
                      , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
@@ -64,7 +64,7 @@ test-suite tests
   build-depends:       attoparsec
                      , base ^>=4.12.0.0
                      , bytestring
-                     , kafka-client
+                     , kafka
                      , primitive >= 0.7.0.0 && < 0.8.0.0
                      , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
                      , tasty
@@ -78,7 +78,7 @@ test-suite benchmark
   build-depends:       base ^>=4.12.0.0
                      , bytestring
                      , gauge
-                     , kafka-client
+                     , kafka
                      , primitive >= 0.7.0.0 && < 0.8.0.0
                      , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
   ghc-options: -Wall -O2 -threaded -rtsopts -with-rtsopts=-N1
