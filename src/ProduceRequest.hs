@@ -6,7 +6,7 @@ module ProduceRequest where
 
 import Control.Monad.ST
 import Control.Monad.Reader
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Monad.Primitive
 import Data.ByteString (ByteString)
 import Data.Bytes.Types
@@ -53,7 +53,7 @@ write8 n = do
   arr <- ask
   index <- get
   writeUnalignedByteArray arr index n
-  modify (+1)
+  modify' (+1)
 
 writeBE16 ::
      (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
@@ -63,7 +63,7 @@ writeBE16 n = do
   arr <- ask
   index <- get
   writeUnalignedByteArray arr index (toBE16 n)
-  modify (+2)
+  modify' (+2)
 
 writeBE32 ::
      (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
@@ -73,7 +73,7 @@ writeBE32 n = do
   arr <- ask
   index <- get
   writeUnalignedByteArray arr index (toBE32 n)
-  modify (+4)
+  modify' (+4)
 
 writeBE64 ::
      (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
@@ -83,7 +83,7 @@ writeBE64 n = do
   arr <- ask
   index <- get
   writeUnalignedByteArray arr index (toBE64 n)
-  modify (+8)
+  modify' (+8)
 
 writeArray ::
       (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
@@ -94,7 +94,7 @@ writeArray src len = do
   arr <- ask
   index <- get
   copyByteArray arr index src 0 len
-  modify (+len)
+  modify' (+len)
 
 runByteArray ::
      (PrimMonad m)
