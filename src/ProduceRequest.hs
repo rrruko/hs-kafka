@@ -1,6 +1,14 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 module ProduceRequest
   ( produceRequest
@@ -15,6 +23,7 @@ import Data.ByteString (ByteString)
 import Data.Bytes.Types
 import Data.Foldable
 import Data.Int
+import Data.Primitive (Prim(..), alignment)
 import Data.Primitive.Unlifted.Array
 import Data.Primitive.ByteArray
 import Data.Primitive.ByteArray.Unaligned
@@ -48,66 +57,47 @@ correlationId = 0xbeef
 magic :: Int8
 magic = 2
 
-write8 ::
-     (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
-  => Int8
-  -> m ()
-write8 n = do
-  arr <- ask
+newtype KafkaWriter m s a = KafkaWriter
+  { runKafkaWriter :: ReaderT (MutableByteArray s) (StateT Int m) a }
+  deriving
+    ( Functor, Applicative, Monad
+    , MonadReader (MutableByteArray s)
+    , MonadState Int
+    , PrimMonad
+    )
+
+withCtx :: Monad m => (Int -> MutableByteArray s -> KafkaWriter m s a) -> KafkaWriter m s a
+withCtx f = do
   index <- get
+  arr <- ask
+  f index arr
+
+writeNum :: (PrimMonad m, Prim a, PrimUnaligned a) => a -> KafkaWriter m (PrimState m) ()
+writeNum n = withCtx $ \index arr -> do
   writeUnalignedByteArray arr index n
-  modify' (+1)
+  modify' (+ (alignment n))
+{-# inlineable writeNum #-}
 
-writeBE16 ::
-     (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
-  => Int16
-  -> m ()
-writeBE16 n = do
-  arr <- ask
-  index <- get
-  writeUnalignedByteArray arr index (toBE16 n)
-  modify' (+2)
+write8 :: (PrimMonad m) => Int8 -> KafkaWriter m (PrimState m) ()
+write8 = writeNum
 
-writeBE32 ::
-     (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
-  => Int32
-  -> m ()
-writeBE32 n = do
-  arr <- ask
-  index <- get
-  writeUnalignedByteArray arr index (toBE32 n)
-  modify' (+4)
+writeBE16 :: (PrimMonad m) => Int16 -> KafkaWriter m (PrimState m) ()
+writeBE16 = writeNum . toBE16
 
-writeBE64 ::
-     (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
-  => Int64
-  -> m ()
-writeBE64 n = do
-  arr <- ask
-  index <- get
-  writeUnalignedByteArray arr index (toBE64 n)
-  modify' (+8)
+writeBE32 :: (PrimMonad m) => Int32 -> KafkaWriter m (PrimState m) ()
+writeBE32 = writeNum . toBE32
+
+writeBE64 :: (PrimMonad m) => Int64 -> KafkaWriter m (PrimState m) ()
+writeBE64 = writeNum . toBE64
 
 writeArray ::
-      (MonadReader (MutableByteArray (PrimState m)) m, MonadState Int m, PrimMonad m)
+     (PrimMonad m)
   => ByteArray
   -> Int
-  -> m ()
-writeArray src len = do
-  arr <- ask
-  index <- get
+  -> KafkaWriter m (PrimState m) ()
+writeArray src len = withCtx $ \index arr -> do
   copyByteArray arr index src 0 len
   modify' (+len)
-
-runByteArray ::
-     (PrimMonad m)
-  => Int
-  -> ReaderT (MutableByteArray (PrimState m)) (StateT Int m) ()
-  -> m ByteArray
-runByteArray size builder = do
-  arr <- newByteArray size
-  _ <- runStateT (runReaderT builder arr) 0
-  unsafeFreezeByteArray arr
 
 makeRecordMetadata :: Int -> ByteArray -> ByteArray
 makeRecordMetadata index content =
@@ -127,6 +117,12 @@ makeRecordMetadata index content =
 sumSizes :: UnliftedArray ByteArray -> Int
 sumSizes = foldrUnliftedArray (\e acc -> acc + sizeofByteArray e) 0
 
+evaluateWriter :: Int -> (forall s. KafkaWriter (ST s) s a) -> ByteArray
+evaluateWriter n kw = runST $ do
+  arr <- newByteArray n
+  _ <- runStateT (runReaderT (runKafkaWriter kw) arr) 0
+  unsafeFreezeByteArray arr
+
 produceRequestRecordBatchMetadata ::
      UnliftedArray ByteArray
   -> Int
@@ -139,15 +135,15 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
         (CRC.bytes 0 (Bytes postCrc 0 40))
         (UnliftedVector payloadsSectionChunks 0 (3*payloadCount))
     batchLength = 9 + 40 + fromIntegral payloadsSectionSize
-    preCrc = runST $ runByteArray 21 $ do
+    preCrc = evaluateWriter 21 $ do
       writeBE64 0
       writeBE32 batchLength
       writeBE32 0
       write8 magic
-      writeBE32 $ fromIntegral $ crc
-    postCrc = runST $ runByteArray 40 $ do
+      writeBE32 (fromIntegral crc)
+    postCrc = evaluateWriter 40 $ do
       writeBE16 0
-      writeBE32 $ fromIntegral $ payloadCount - 1
+      writeBE32 (fromIntegral (payloadCount - 1))
       writeBE64 0
       writeBE64 0
       writeBE64 (-1)
@@ -163,7 +159,7 @@ makeRequestMetadata ::
   -> Topic 
   -> ByteArray
 makeRequestMetadata recordBatchSectionSize timeout topic =
-  runST $ runByteArray (40 + clientIdLength + topicNameSize) $ do
+  evaluateWriter (40 + clientIdLength + topicNameSize) $ do
     writeBE32 (fromIntegral $ 36 + clientIdLength + topicNameSize + recordBatchSectionSize)
     writeBE16 produceApiKey
     writeBE16 produceApiVersion
