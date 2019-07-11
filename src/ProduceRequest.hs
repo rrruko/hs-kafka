@@ -103,7 +103,7 @@ runByteArray ::
   -> m ByteArray
 runByteArray size builder = do
   arr <- newByteArray size
-  runStateT (runReaderT builder arr) 0
+  _ <- runStateT (runReaderT builder arr) 0
   unsafeFreezeByteArray arr
 
 makeRecordMetadata :: Int -> ByteArray -> ByteArray
