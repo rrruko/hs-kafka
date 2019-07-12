@@ -17,6 +17,7 @@ library
   exposed-modules:     Common
                      , Kafka
                      , KafkaWriter
+                     , FetchRequest
                      , ProduceRequest
                      , ProduceResponse
                      , Varint
