@@ -39,8 +39,8 @@ fetchRequest ::
   -> UnliftedArray ByteArray
 fetchRequest fetchSessionId fetchSessionEpoch timeout topic =
   let
-    requestMetadata = evaluateWriter 10 $ do
-      writeBE32 10 -- size
+    requestMetadata = evaluateWriter (57 + 28 * partitionCount + topicNameSize + clientIdLength) $ do
+      writeBE32 (fromIntegral $ 53 + 28 * partitionCount + topicNameSize + clientIdLength) -- size
 
       -- common request headers
       writeBE16 fetchApiKey
@@ -64,7 +64,7 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic =
       writeArray topicName topicNameSize
       writeBE32 (fromIntegral partitionCount) -- number of following partitions
 
-      forM_ [0..fromIntegral partitionCount] $ \p -> do
+      forM_ [0..fromIntegral partitionCount - 1] $ \p -> do
         writeBE32 p -- partition
         writeBE32 0 -- current_leader_epoch
         writeBE64 0 -- fetch_offset
