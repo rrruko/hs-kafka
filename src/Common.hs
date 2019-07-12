@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Common where
 
@@ -61,3 +62,15 @@ toKafkaException = KafkaException . show
 
 foldByteArrays :: UnliftedArray ByteArray -> ByteArray
 foldByteArrays = foldrUnliftedArray (<>) (byteArrayFromList ([]::[Char]))
+
+clientId :: ByteString
+clientId = "ruko"
+
+clientIdLength :: Int
+clientIdLength = BS.length clientId
+
+correlationId :: Int32
+correlationId = 0xbeef
+
+magic :: Int8
+magic = 2

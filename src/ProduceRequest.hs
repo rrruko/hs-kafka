@@ -16,7 +16,6 @@ module ProduceRequest
   ) where
 
 import Control.Monad.ST
-import Data.ByteString (ByteString)
 import Data.Bytes.Types
 import Data.Foldable
 import Data.Int
@@ -29,7 +28,6 @@ import Socket.Stream.Uninterruptible.Bytes
 import Socket.Stream.IPv4
 
 import qualified Crc32c as CRC
-import qualified Data.ByteString as BS
 
 import Common
 import KafkaWriter
@@ -40,18 +38,6 @@ produceApiVersion = 7
 
 produceApiKey :: Int16
 produceApiKey = 0
-
-clientId :: ByteString
-clientId = "ruko"
-
-clientIdLength :: Int
-clientIdLength = BS.length clientId
-
-correlationId :: Int32
-correlationId = 0xbeef
-
-magic :: Int8
-magic = 2
 
 makeRecordMetadata :: Int -> ByteArray -> ByteArray
 makeRecordMetadata index content =
