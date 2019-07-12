@@ -10,6 +10,7 @@ import Socket.Stream.IPv4
 import Socket.Stream.Uninterruptible.Bytes
 
 import Common
+import FetchRequest
 import ProduceRequest
 
 produce ::
@@ -28,3 +29,12 @@ produce' bytes topicName = do
   Right k <- newKafka (Peer (IPv4 0) 9092)
   _ <- produce k topic 30000000 bytes
   pure ()
+
+fetch ::
+     Kafka
+  -> Topic
+  -> Int
+  -> IO (Either KafkaException ())
+fetch kafka topic waitTime = do
+  let message = sessionlessFetchRequest (waitTime `div` 1000) topic
+  first toKafkaException <$> sendMany (getKafka kafka) message
