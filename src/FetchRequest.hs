@@ -39,7 +39,7 @@ fetchRequest ::
   -> UnliftedArray ByteArray
 fetchRequest fetchSessionId fetchSessionEpoch timeout topic =
   let
-    requestSize = 57 + 28 * partitionCount + topicNameSize + clientIdLength
+    requestSize = 53 + 28 * partitionCount + topicNameSize + clientIdLength
     --evaluateWriter requestSize $ do
     requestMetadata = evaluate $ foldBuilder $
       [ build32 (fromIntegral $ requestSize - 4) -- size
