@@ -13,9 +13,9 @@ module KafkaWriter
   , withCtx
   , writeNum
   , write8
-  , writeBE16
-  , writeBE32
-  , writeBE64
+  , write16
+  , write32
+  , write64
   , writeArray
   , build8
   , build16
@@ -72,26 +72,26 @@ writeNum n = withCtx $ \index arr -> do
 write8 :: Int8 -> KafkaWriter s ()
 write8 = writeNum
 
-writeBE16 :: Int16 -> KafkaWriter s ()
-writeBE16 = writeNum . toBE16
+write16 :: Int16 -> KafkaWriter s ()
+write16 = writeNum . toBE16
 
-writeBE32 :: Int32 -> KafkaWriter s ()
-writeBE32 = writeNum . toBE32
+write32 :: Int32 -> KafkaWriter s ()
+write32 = writeNum . toBE32
 
-writeBE64 :: Int64 -> KafkaWriter s ()
-writeBE64 = writeNum . toBE64
+write64 :: Int64 -> KafkaWriter s ()
+write64 = writeNum . toBE64
 
 build8 :: Int8 -> KafkaWriterBuilder s
 build8 i = Kwb 1 (write8 i)
 
 build16 :: Int16 -> KafkaWriterBuilder s
-build16 i = Kwb 2 (writeBE16 i)
+build16 i = Kwb 2 (write16 i)
 
 build32 :: Int32 -> KafkaWriterBuilder s
-build32 i = Kwb 4 (writeBE32 i)
+build32 i = Kwb 4 (write32 i)
 
 build64 :: Int64 -> KafkaWriterBuilder s
-build64 i = Kwb 8 (writeBE64 i)
+build64 i = Kwb 8 (write64 i)
 
 writeArray ::
      ByteArray
