@@ -131,6 +131,3 @@ instance Semigroup (KafkaWriterBuilder s) where
 instance Monoid (KafkaWriterBuilder s) where
   mempty = Kwb 0 mempty
 
---kwb :: Int -> KafkaWriter s () -> KafkaWriter s (KafkaWriterBuilder s)
---kwb !len writer =
-
