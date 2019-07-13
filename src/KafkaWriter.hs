@@ -33,8 +33,7 @@ import Control.Monad.Reader
 import Control.Monad.ST
 import Control.Monad.State.Strict
 import Data.Int
-import Data.Foldable (fold)
-import Data.Functor.Reverse (Reverse(..))
+import Data.Foldable (foldl')
 import Data.Primitive (Prim(..), alignment)
 import Data.Primitive.ByteArray
 import Data.Primitive.ByteArray.Unaligned
@@ -120,7 +119,7 @@ evaluate kwb = runST (go kwb)
       unsafeFreezeByteArray arr
 
 foldBuilder :: Foldable t => t (KafkaWriterBuilder s) -> KafkaWriterBuilder s
-foldBuilder = fold . Reverse
+foldBuilder = foldl' (<>) mempty
 
 data KafkaWriterBuilder s = Kwb
   !Int -- ^ length
