@@ -39,8 +39,9 @@ fetchRequest ::
   -> UnliftedArray ByteArray
 fetchRequest fetchSessionId fetchSessionEpoch timeout topic =
   let
-    requestMetadata = evaluateWriter (57 + 28 * partitionCount + topicNameSize + clientIdLength) $ do
-      writeBE32 (fromIntegral $ 53 + 28 * partitionCount + topicNameSize + clientIdLength) -- size
+    requestSize = 57 + 28 * partitionCount + topicNameSize + clientIdLength
+    requestMetadata = evaluateWriter requestSize $ do
+      writeBE32 (fromIntegral $ requestSize - 4) -- size
 
       -- common request headers
       writeBE16 fetchApiKey
@@ -48,7 +49,6 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic =
       writeBE32 correlationId
       writeBE16 (fromIntegral clientIdLength)
       writeArray (fromByteString clientId) clientIdLength
-      writeBE32 (-1)
 
       -- fetch request
       writeBE32 (-1) -- replica_id

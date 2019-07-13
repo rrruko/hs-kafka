@@ -14,10 +14,13 @@ maintainer:          joneetha@oregonstate.edu
 extra-source-files:  CHANGELOG.md
 
 library
-  exposed-modules:     Common
+  exposed-modules:     Combinator
+                     , Common
                      , Kafka
+                     , KafkaResponse
                      , KafkaWriter
                      , FetchRequest
+                     , FetchResponse
                      , ProduceRequest
                      , ProduceResponse
                      , Varint

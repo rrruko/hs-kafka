@@ -12,7 +12,6 @@
 
 module ProduceRequest
   ( produceRequest
-  , sendProduceRequest
   ) where
 
 import Control.Monad.ST
@@ -23,9 +22,6 @@ import Data.Primitive.Unlifted.Array
 import Data.Primitive.ByteArray
 import Data.Primitive.Slice (UnliftedVector(UnliftedVector))
 import Data.Word
-import GHC.Conc
-import Socket.Stream.Uninterruptible.Bytes
-import Socket.Stream.IPv4
 
 import qualified Crc32c as CRC
 
@@ -153,13 +149,3 @@ produceRequest timeout topic payloads =
       writeUnliftedArray arr 1 recordBatchMetadata
       copyUnliftedArray arr 2 payloadsSectionChunks 0 (3 * payloadCount)
       pure arr
-
-sendProduceRequest ::
-     Kafka
-  -> TVar Bool
-  -> UnliftedArray ByteArray
-  -> IO (Either (SendException 'Uninterruptible) ())
-sendProduceRequest kafka _ message = do
-  sendMany
-    (getKafka kafka)
-    message

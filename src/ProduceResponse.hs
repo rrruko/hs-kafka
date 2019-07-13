@@ -3,22 +3,18 @@
 
 module ProduceResponse
   ( getProduceResponse
-  , int32
   ) where
 
 import Data.Attoparsec.ByteString ((<?>), Parser)
-import Data.Bifunctor
 import Data.ByteString (ByteString)
-import Data.Bytes.Types
 import Data.Int
-import Data.Primitive
-import Data.Word
 import GHC.Conc
-import Socket.Stream.Interruptible.MutableBytes
 
 import qualified Data.Attoparsec.ByteString as AT
 
+import Combinator
 import Common
+import KafkaResponse
 
 data ProduceResponse = ProduceResponse
   { produceResponseMessages :: [ProduceResponseMessage]
@@ -64,52 +60,11 @@ parseProducePartitionResponse = ProducePartitionResponse
   <*> int64
   <*> int64
 
-int16 :: Parser Int16
-int16 = networkByteOrder . map fromIntegral <$> AT.count 2 AT.anyWord8
-
-int32 :: Parser Int32
-int32 = networkByteOrder . map fromIntegral <$> AT.count 4 AT.anyWord8
-
-int64 :: Parser Int64
-int64 = networkByteOrder . map fromIntegral <$> AT.count 8 AT.anyWord8
-
-networkByteOrder :: Integral a => [Word] -> a
-networkByteOrder = 
-  fst . foldr 
-    (\byte (acc, i) -> (acc + fromIntegral byte * i, i * 0x100))
-    (0, 1)
-
-count :: Integral n => n -> Parser a -> Parser [a]
-count = AT.count . fromIntegral
-
 getProduceResponse ::
      Kafka
   -> TVar Bool
   -> IO (Either KafkaException (Either String ProduceResponse))
-getProduceResponse kafka interrupt = do
-  getResponseSizeHeader kafka interrupt >>= \case
-    Right responseByteCount -> do
-      responseBuffer <- newByteArray responseByteCount
-      let responseBufferSlice = MutableBytes responseBuffer 0 responseByteCount
-      responseStatus <- first toKafkaException <$>
-        receiveExactly
-          interrupt
-          (getKafka kafka)
-          responseBufferSlice
-      responseBytes <- toByteString <$> unsafeFreezeByteArray responseBuffer
-      pure $ AT.parseOnly parseProduceResponse responseBytes <$ responseStatus
-    Left e -> pure $ Left e
-
-getResponseSizeHeader ::
-     Kafka
-  -> TVar Bool
-  -> IO (Either KafkaException Int)
-getResponseSizeHeader kafka interrupt = do
-  responseSizeBuf <- newByteArray 4
-  responseStatus <- first toKafkaException <$>
-    receiveExactly
-      interrupt
-      (getKafka kafka)
-      (MutableBytes responseSizeBuf 0 4)
-  byteCount <- fromIntegral . byteSwap32 <$> readByteArray responseSizeBuf 0
-  pure $ byteCount <$ responseStatus
+getProduceResponse kafka interrupt =
+  (fmap . fmap)
+    (AT.parseOnly parseProduceResponse)
+    (getKafkaResponse kafka interrupt)
