@@ -65,21 +65,23 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
         (CRC.bytes 0 (Bytes postCrc 0 40))
         (UnliftedVector payloadsSectionChunks 0 (3*payloadCount))
     batchLength = 9 + 40 + fromIntegral payloadsSectionSize
-    preCrc = evaluateWriter 21 $ do
-      write64 0
-      write32 batchLength
-      write32 0
-      write8 magic
-      write32 (fromIntegral crc)
-    postCrc = evaluateWriter 40 $ do
-      write16 0
-      write32 (fromIntegral (payloadCount - 1))
-      write64 0
-      write64 0
-      write64 (-1)
-      write16 (-1)
-      write32 (-1)
-      write32 $ fromIntegral payloadCount
+    preCrc = evaluate $ foldBuilder
+      [ build64 0
+      , build32 batchLength
+      , build32 0
+      , build8 magic
+      , build32 (fromIntegral crc)
+      ]
+    postCrc = evaluate $ foldBuilder
+      [ build16 0
+      , build32 (fromIntegral (payloadCount - 1))
+      , build64 0
+      , build64 0
+      , build64 (-1)
+      , build16 (-1)
+      , build32 (-1)
+      , build32 $ fromIntegral payloadCount
+      ]
   in
     preCrc <> postCrc
 
@@ -89,22 +91,23 @@ makeRequestMetadata ::
   -> Topic
   -> ByteArray
 makeRequestMetadata recordBatchSectionSize timeout topic =
-  evaluateWriter (40 + clientIdLength + topicNameSize) $ do
-    write32 (fromIntegral $ 36 + clientIdLength + topicNameSize + recordBatchSectionSize)
-    write16 produceApiKey
-    write16 produceApiVersion
-    write32 correlationId
-    write16 (fromIntegral clientIdLength)
-    writeArray (fromByteString clientId) clientIdLength
-    write16 (-1) -- transactional_id length
-    write16 1 -- acks
-    write32 (fromIntegral timeout) -- timeout in ms
-    write32 1 -- following array length
-    write16 (size16 topicName) -- following string length
-    writeArray topicName topicNameSize -- topic_data topic
-    write32 1 -- following array [data] length
-    write32 0 -- partition
-    write32 (fromIntegral recordBatchSectionSize) -- record_set length
+  evaluate $ foldBuilder 
+    [ build32 (fromIntegral $ 36 + clientIdLength + topicNameSize + recordBatchSectionSize)
+    , build16 produceApiKey
+    , build16 produceApiVersion
+    , build32 correlationId
+    , build16 (fromIntegral clientIdLength)
+    , buildArray (fromByteString clientId) clientIdLength
+    , build16 (-1) -- transactional_id length
+    , build16 1 -- acks
+    , build32 (fromIntegral timeout) -- timeout in ms
+    , build32 1 -- following array length
+    , build16 (size16 topicName) -- following string length
+    , buildArray topicName topicNameSize -- topic_data topic
+    , build32 1 -- following array [data] length
+    , build32 0 -- partition
+    , build32 (fromIntegral recordBatchSectionSize) -- record_set length
+    ]
   where
     Topic topicName _ _ = topic
     topicNameSize = sizeofByteArray topicName
