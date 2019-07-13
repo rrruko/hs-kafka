@@ -49,7 +49,6 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic =
       writeBE32 correlationId
       writeBE16 (fromIntegral clientIdLength)
       writeArray (fromByteString clientId) clientIdLength
-      writeBE32 (-1)
 
       -- fetch request
       writeBE32 (-1) -- replica_id
