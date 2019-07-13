@@ -12,7 +12,7 @@ module FetchResponse
   , getFetchResponse
   ) where
 
-import Data.Attoparsec.ByteString (Parser)
+import Data.Attoparsec.ByteString (Parser, (<?>))
 import Data.ByteString
 import Data.Int
 import GHC.Conc
@@ -90,11 +90,13 @@ data Header = Header
   } deriving Show
 
 parseFetchResponse :: Parser FetchResponse
-parseFetchResponse = FetchResponse
-  <$> int32
-  <*> int16
-  <*> int32
-  <*> array parseFetchResponseMessage
+parseFetchResponse = do
+  _correlationId <- int32 <?> "correlation id"
+  FetchResponse
+    <$> int32
+    <*> int16
+    <*> int32
+    <*> array parseFetchResponseMessage
 
 parseFetchResponseMessage :: Parser FetchResponseMessage
 parseFetchResponseMessage = FetchResponseMessage
