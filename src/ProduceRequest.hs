@@ -66,20 +66,20 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
         (UnliftedVector payloadsSectionChunks 0 (3*payloadCount))
     batchLength = 9 + 40 + fromIntegral payloadsSectionSize
     preCrc = evaluateWriter 21 $ do
-      writeBE64 0
-      writeBE32 batchLength
-      writeBE32 0
+      write64 0
+      write32 batchLength
+      write32 0
       write8 magic
-      writeBE32 (fromIntegral crc)
+      write32 (fromIntegral crc)
     postCrc = evaluateWriter 40 $ do
-      writeBE16 0
-      writeBE32 (fromIntegral (payloadCount - 1))
-      writeBE64 0
-      writeBE64 0
-      writeBE64 (-1)
-      writeBE16 (-1)
-      writeBE32 (-1)
-      writeBE32 $ fromIntegral payloadCount
+      write16 0
+      write32 (fromIntegral (payloadCount - 1))
+      write64 0
+      write64 0
+      write64 (-1)
+      write16 (-1)
+      write32 (-1)
+      write32 $ fromIntegral payloadCount
   in
     preCrc <> postCrc
 
@@ -90,21 +90,21 @@ makeRequestMetadata ::
   -> ByteArray
 makeRequestMetadata recordBatchSectionSize timeout topic =
   evaluateWriter (40 + clientIdLength + topicNameSize) $ do
-    writeBE32 (fromIntegral $ 36 + clientIdLength + topicNameSize + recordBatchSectionSize)
-    writeBE16 produceApiKey
-    writeBE16 produceApiVersion
-    writeBE32 correlationId
-    writeBE16 (fromIntegral clientIdLength)
+    write32 (fromIntegral $ 36 + clientIdLength + topicNameSize + recordBatchSectionSize)
+    write16 produceApiKey
+    write16 produceApiVersion
+    write32 correlationId
+    write16 (fromIntegral clientIdLength)
     writeArray (fromByteString clientId) clientIdLength
-    writeBE16 (-1) -- transactional_id length
-    writeBE16 1 -- acks
-    writeBE32 (fromIntegral timeout) -- timeout in ms
-    writeBE32 1 -- following array length
-    writeBE16 (size16 topicName) -- following string length
+    write16 (-1) -- transactional_id length
+    write16 1 -- acks
+    write32 (fromIntegral timeout) -- timeout in ms
+    write32 1 -- following array length
+    write16 (size16 topicName) -- following string length
     writeArray topicName topicNameSize -- topic_data topic
-    writeBE32 1 -- following array [data] length
-    writeBE32 0 -- partition
-    writeBE32 (fromIntegral recordBatchSectionSize) -- record_set length
+    write32 1 -- following array [data] length
+    write32 0 -- partition
+    write32 (fromIntegral recordBatchSectionSize) -- record_set length
   where
     Topic topicName _ _ = topic
     topicNameSize = sizeofByteArray topicName

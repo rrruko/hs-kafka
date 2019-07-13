@@ -41,37 +41,37 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic =
   let
     requestSize = 57 + 28 * partitionCount + topicNameSize + clientIdLength
     requestMetadata = evaluateWriter requestSize $ do
-      writeBE32 (fromIntegral $ requestSize - 4) -- size
+      write32 (fromIntegral $ requestSize - 4) -- size
 
       -- common request headers
-      writeBE16 fetchApiKey
-      writeBE16 fetchApiVersion
-      writeBE32 correlationId
-      writeBE16 (fromIntegral clientIdLength)
+      write16 fetchApiKey
+      write16 fetchApiVersion
+      write32 correlationId
+      write16 (fromIntegral clientIdLength)
       writeArray (fromByteString clientId) clientIdLength
 
       -- fetch request
-      writeBE32 (-1) -- replica_id
-      writeBE32 (fromIntegral timeout) -- max_wait_time
-      writeBE32 0 -- min_bytes
-      writeBE32 (-1) -- max_bytes (not sure what to pass for this)
+      write32 (-1) -- replica_id
+      write32 (fromIntegral timeout) -- max_wait_time
+      write32 0 -- min_bytes
+      write32 (-1) -- max_bytes (not sure what to pass for this)
       write8 (isolationLevel ReadUncommitted)
-      writeBE32 fetchSessionId
-      writeBE32 fetchSessionEpoch
-      writeBE32 1 -- number of following topics
+      write32 fetchSessionId
+      write32 fetchSessionEpoch
+      write32 1 -- number of following topics
 
-      writeBE16 (size16 topicName)
+      write16 (size16 topicName)
       writeArray topicName topicNameSize
-      writeBE32 (fromIntegral partitionCount) -- number of following partitions
+      write32 (fromIntegral partitionCount) -- number of following partitions
 
       forM_ [0..fromIntegral partitionCount - 1] $ \p -> do
-        writeBE32 p -- partition
-        writeBE32 0 -- current_leader_epoch
-        writeBE64 0 -- fetch_offset
-        writeBE64 0 -- log_start_offset
-        writeBE32 (-1) -- partition_max_bytes
+        write32 p -- partition
+        write32 0 -- current_leader_epoch
+        write64 0 -- fetch_offset
+        write64 0 -- log_start_offset
+        write32 (-1) -- partition_max_bytes
 
-      writeBE32 0 -- forgotten_topics_data array length
+      write32 0 -- forgotten_topics_data array length
   in
     runUnliftedArray $ do
       arr <- newUnliftedArray 1 mempty
