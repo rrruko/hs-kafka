@@ -3,7 +3,6 @@
 
 module ProduceResponse
   ( getProduceResponse
-  , int32
   ) where
 
 import Data.Attoparsec.ByteString ((<?>), Parser)
@@ -13,6 +12,7 @@ import GHC.Conc
 
 import qualified Data.Attoparsec.ByteString as AT
 
+import Combinator
 import Common
 import KafkaResponse
 
@@ -59,24 +59,6 @@ parseProducePartitionResponse = ProducePartitionResponse
   <*> int64
   <*> int64
   <*> int64
-
-int16 :: Parser Int16
-int16 = networkByteOrder . map fromIntegral <$> AT.count 2 AT.anyWord8
-
-int32 :: Parser Int32
-int32 = networkByteOrder . map fromIntegral <$> AT.count 4 AT.anyWord8
-
-int64 :: Parser Int64
-int64 = networkByteOrder . map fromIntegral <$> AT.count 8 AT.anyWord8
-
-networkByteOrder :: Integral a => [Word] -> a
-networkByteOrder = 
-  fst . foldr 
-    (\byte (acc, i) -> (acc + fromIntegral byte * i, i * 0x100))
-    (0, 1)
-
-count :: Integral n => n -> Parser a -> Parser [a]
-count = AT.count . fromIntegral
 
 getProduceResponse ::
      Kafka
