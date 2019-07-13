@@ -3,6 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UnboxedTuples #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -16,13 +17,24 @@ module KafkaWriter
   , writeBE32
   , writeBE64
   , writeArray
+  , build8
+  , build16
+  , build32
+  , build64
+  , buildArray
+
+  , evaluate
+  , foldBuilder
   ) where
 
+import Control.Applicative (liftA2)
 import Control.Monad.Primitive
 import Control.Monad.Reader
 import Control.Monad.ST
 import Control.Monad.State.Strict
 import Data.Int
+import Data.Foldable (fold)
+import Data.Functor.Reverse (Reverse(..))
 import Data.Primitive (Prim(..), alignment)
 import Data.Primitive.ByteArray
 import Data.Primitive.ByteArray.Unaligned
@@ -37,6 +49,12 @@ newtype KafkaWriter s a = KafkaWriter
     , MonadState Int
     , PrimMonad
     )
+
+instance Semigroup a => Semigroup (KafkaWriter s a) where
+  (<>) = liftA2 (<>)
+
+instance Monoid a => Monoid (KafkaWriter s a) where
+  mempty = pure mempty
 
 withCtx :: (Int -> MutableByteArray s -> KafkaWriter s a) -> KafkaWriter s a
 withCtx f = do
@@ -63,6 +81,18 @@ writeBE32 = writeNum . toBE32
 writeBE64 :: Int64 -> KafkaWriter s ()
 writeBE64 = writeNum . toBE64
 
+build8 :: Int8 -> KafkaWriterBuilder s
+build8 i = Kwb 1 (write8 i)
+
+build16 :: Int16 -> KafkaWriterBuilder s
+build16 i = Kwb 2 (writeBE16 i)
+
+build32 :: Int32 -> KafkaWriterBuilder s
+build32 i = Kwb 4 (writeBE32 i)
+
+build64 :: Int64 -> KafkaWriterBuilder s
+build64 i = Kwb 8 (writeBE64 i)
+
 writeArray ::
      ByteArray
   -> Int
@@ -71,8 +101,37 @@ writeArray src len = withCtx $ \index arr -> do
   copyByteArray arr index src 0 len
   modify' (+len)
 
+buildArray :: ByteArray -> Int -> KafkaWriterBuilder s
+buildArray src len = Kwb len (writeArray src len)
+
 evaluateWriter :: Int -> (forall s. KafkaWriter s a) -> ByteArray
 evaluateWriter n kw = runST $ do
   arr <- newByteArray n
   _ <- runStateT (runReaderT (runKafkaWriter kw) arr) 0
   unsafeFreezeByteArray arr
+
+evaluate :: (forall s. KafkaWriterBuilder s) -> ByteArray
+evaluate kwb = runST (go kwb)
+  where
+    go :: forall s. KafkaWriterBuilder s -> ST s ByteArray
+    go (Kwb len kw) = do
+      arr <- newByteArray len
+      void $ runStateT (runReaderT (runKafkaWriter kw) arr) 0
+      unsafeFreezeByteArray arr
+
+foldBuilder :: Foldable t => t (KafkaWriterBuilder s) -> KafkaWriterBuilder s
+foldBuilder = fold . Reverse
+
+data KafkaWriterBuilder s = Kwb
+  !Int -- ^ length
+  !(KafkaWriter s ())
+
+instance Semigroup (KafkaWriterBuilder s) where
+  Kwb len1 x <> Kwb len2 y = Kwb (len1 + len2) (x <> y)
+
+instance Monoid (KafkaWriterBuilder s) where
+  mempty = Kwb 0 mempty
+
+--kwb :: Int -> KafkaWriter s () -> KafkaWriter s (KafkaWriterBuilder s)
+--kwb !len writer =
+
