@@ -24,16 +24,6 @@ main = do
 testTopic :: IO Topic
 testTopic = Topic (fromByteString "test") 0 <$> newIORef 0
 
-
-withKafka :: (Kafka -> IO a) -> IO a
-withKafka f = do
-  newKafka (Peer (IPv4 0) 9092) >>= \case
-    Right kafka -> do
-      f kafka
-    Left bad -> do
-      print bad
-      fail "Couldn't connect to kafka"
-
 sendProduceRequest :: IO ()
 sendProduceRequest = do
   let thirtySecondsUs = 30000000
