@@ -37,7 +37,7 @@ data FetchResponseMessage = FetchResponseMessage
 
 data PartitionResponse = PartitionResponse
   { partitionHeader :: PartitionHeader
-  , recordSet :: RecordBatch
+  , recordSet :: Maybe RecordBatch
   } deriving Show
 
 data PartitionHeader = PartitionHeader
@@ -99,14 +99,24 @@ parseFetchResponse = do
     <*> array parseFetchResponseMessage
 
 parseFetchResponseMessage :: Parser FetchResponseMessage
-parseFetchResponseMessage = FetchResponseMessage
-  <$> byteString
-  <*> array parsePartitionResponse
+parseFetchResponseMessage = do
+  topicLengthBytes <- int16 <?> "topic length"
+  topicName <- AT.take (fromIntegral topicLengthBytes) <?> "topic name"
+  rs <- array parsePartitionResponse
+  pure (FetchResponseMessage topicName rs)
 
 parsePartitionResponse :: Parser PartitionResponse
 parsePartitionResponse = PartitionResponse
   <$> parsePartitionHeader
-  <*> parseRecordBatch
+  <*> (nullableBytes parseRecordBatch)
+
+nullableBytes :: Parser a -> Parser (Maybe a)
+nullableBytes p = do
+  bytesLength <- int32
+  if bytesLength == 0 then
+    pure Nothing
+  else
+    Just <$> p
 
 parsePartitionHeader :: Parser PartitionHeader
 parsePartitionHeader = PartitionHeader
@@ -123,20 +133,21 @@ parseAbortedTransaction = AbortedTransaction
   <*> int64
 
 parseRecordBatch :: Parser RecordBatch
-parseRecordBatch = RecordBatch
-  <$> int64
-  <*> int32
-  <*> int32
-  <*> int8
-  <*> int32
-  <*> int16
-  <*> int32
-  <*> int64
-  <*> int64
-  <*> int64
-  <*> int16
-  <*> int32
-  <*> array parseRecord
+parseRecordBatch =
+  RecordBatch
+    <$> int64
+    <*> int32
+    <*> int32
+    <*> int8
+    <*> int32
+    <*> int16
+    <*> int32
+    <*> int64
+    <*> int64
+    <*> int64
+    <*> int16
+    <*> int32
+    <*> array parseRecord
 
 parseRecord :: Parser Record
 parseRecord = fail "parser unimplemented"
