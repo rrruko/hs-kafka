@@ -7,9 +7,11 @@ module Combinator
   , count
   , array
   , byteString
+  , parseVarint
   ) where
 
 import Data.Attoparsec.ByteString (Parser, (<?>))
+import Data.Bits
 import Data.ByteString (ByteString)
 import Data.Int
 
@@ -45,3 +47,20 @@ byteString :: Parser ByteString
 byteString = do
   stringLength <- int16 <?> "string length"
   AT.take (fromIntegral stringLength) <?> "string contents"
+
+parseVarint :: Parser Int
+parseVarint = unZigzag <$> go 1
+  where
+    go :: Int -> Parser Int
+    go n = do
+      b <- fromIntegral <$> AT.anyWord8
+      case testBit b 7 of
+        True -> do
+          rest <- go (n * 128)
+          pure (clearBit b 7 * n + rest)
+        False -> pure (b * n)
+
+unZigzag :: Int -> Int
+unZigzag n
+  | even n    = n `div` 2
+  | otherwise = (-1) * ((n + 1) `div` 2)

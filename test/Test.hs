@@ -44,6 +44,9 @@ zigzagTests = testGroup "zigzag"
   , testCase
       "zigzag 100 is [200, 1]"
       (zigzag 100 @?= byteArrayFromList [200, 1 :: Word8])
+  , testCase
+      "zigzag 150 is [172, 2]"
+      (zigzag 150 @?= byteArrayFromList [172, 2 :: Word8])
   ]
 
 parserTests :: TestTree
@@ -54,6 +57,19 @@ parserTests = testGroup "Parsers"
   , testCase
       "int32 [0x12, 0x34, 0x56, 0x78] is 305419896"
       (AT.parseOnly int32 (B.pack [0x12, 0x34, 0x56, 0x78]) @?= Right 305419896)
+  , testCase
+      "parseVarint (zigzag 0) is 0"
+      (AT.parseOnly parseVarint (toByteString $ zigzag 0) @?= Right 0)
+  , testCase
+      "parseVarint (zigzag 10) is 10"
+      (AT.parseOnly parseVarint (toByteString $ zigzag 10) @?= Right 10)
+  , testCase
+      "parseVarint (zigzag 150) is 150"
+      (AT.parseOnly parseVarint (toByteString $ zigzag 150) @?= Right 150)
+  , testCase
+      "parseVarint (zigzag 1000) is 1000"
+      (AT.parseOnly parseVarint (toByteString $ zigzag 1000) @?= Right 1000)
+
   ]
 
 goldenTests :: TestTree

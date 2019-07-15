@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module FetchResponse
   ( FetchResponse(..)
@@ -13,7 +15,7 @@ module FetchResponse
   ) where
 
 import Data.Attoparsec.ByteString (Parser, (<?>))
-import Data.ByteString
+import Data.ByteString (ByteString)
 import Data.Int
 import GHC.Conc
 
@@ -150,7 +152,35 @@ parseRecordBatch =
     <*> array parseRecord
 
 parseRecord :: Parser Record
-parseRecord = fail "parser unimplemented"
+parseRecord = do
+  recordLength <- parseVarint <?> "record length"
+  recordAttributes <- int8 <?> "record attributes"
+  recordTimestampDelta <- parseVarint <?> "record timestamp delta"
+  recordOffsetDelta <- parseVarint <?> "record offset delta"
+  recordKeyLength <- parseVarint <?> "record key length"
+  recordKey <- nullableByteString recordKeyLength <?> "record key"
+  recordValueLength <- parseVarint <?> "record value length"
+  recordValue <- nullableByteString recordValueLength <?> "record value"
+  recordHeaders <- varintArray parseHeader <?> "record headers"
+  pure (Record {..})
+
+nullableByteString :: Int -> Parser ByteString
+nullableByteString n
+  | n < 0 = pure ""
+  | otherwise = AT.take n
+
+varintArray :: Parser a -> Parser [a]
+varintArray p = do
+  arraySize <- parseVarint
+  count arraySize p
+
+parseHeader :: Parser Header
+parseHeader = do
+  headerKeyLength <- parseVarint <?> "header key length"
+  headerKey <- nullableByteString headerKeyLength <?> "header key"
+  headerValueLength <- parseVarint <?> "header value length"
+  headerValue <- nullableByteString headerValueLength <?> "header value"
+  pure (Header {..})
 
 getFetchResponse ::
      Kafka
