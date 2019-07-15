@@ -46,7 +46,7 @@ testTopic = Topic (fromByteString "test") 1
 sendProduceRequest :: Topic -> IO (Either KafkaException (Either String ProduceResponse))
 sendProduceRequest topic' = do
   let thirtySecondsUs = 30000000
-  withKafka $ \kafka -> do
+  withDefaultKafka $ \kafka -> do
     let msg = unliftedArrayFromList
           [ fromByteString "aaaaa"
           , fromByteString "bbbbb"
@@ -63,7 +63,7 @@ sendProduceRequest topic' = do
 sendFetchRequest :: [Partition] -> IO ()
 sendFetchRequest partitions = do
   let thirtySecondsUs = 30000000
-  withKafka $ \kafka -> do
+  withDefaultKafka $ \kafka -> do
     topic' <- testTopic <$> newIORef 0
     fetch kafka topic' thirtySecondsUs partitions >>= \case
       Right () -> do

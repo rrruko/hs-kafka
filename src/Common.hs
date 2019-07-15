@@ -34,9 +34,12 @@ data KafkaException = KafkaException String
 newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
 newKafka = fmap (fmap Kafka) . connect
 
-withKafka :: (Kafka -> IO a) -> IO a
-withKafka f = do
-  newKafka (Peer (IPv4 0) 9092) >>= \case
+defaultKafka :: Peer
+defaultKafka = Peer (IPv4 0) 9092
+
+withDefaultKafka :: (Kafka -> IO a) -> IO a
+withDefaultKafka f = do
+  newKafka defaultKafka >>= \case
     Right kafka -> do
       f kafka
     Left bad -> do
