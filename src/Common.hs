@@ -1,4 +1,6 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Common where
 
@@ -9,6 +11,7 @@ import Data.IORef
 import Data.Primitive
 import Data.Primitive.Unlifted.Array
 import Data.Word
+import Net.IPv4 (IPv4(..))
 import Socket.Stream.IPv4
 
 import qualified Data.ByteString as BS
@@ -25,6 +28,15 @@ data KafkaException = KafkaException String
 
 newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
 newKafka = fmap (fmap Kafka) . connect
+
+withKafka :: (Kafka -> IO a) -> IO a
+withKafka f = do
+  newKafka (Peer (IPv4 0) 9092) >>= \case
+    Right kafka -> do
+      f kafka
+    Left bad -> do
+      print bad
+      fail "Couldn't connect to kafka"
 
 toBE16 :: Int16 -> Int16
 toBE16 = fromIntegral . byteSwap16 . fromIntegral
@@ -61,3 +73,15 @@ toKafkaException = KafkaException . show
 
 foldByteArrays :: UnliftedArray ByteArray -> ByteArray
 foldByteArrays = foldrUnliftedArray (<>) (byteArrayFromList ([]::[Char]))
+
+clientId :: ByteString
+clientId = "ruko"
+
+clientIdLength :: Int
+clientIdLength = BS.length clientId
+
+correlationId :: Int32
+correlationId = 0xbeef
+
+magic :: Int8
+magic = 2

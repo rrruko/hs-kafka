@@ -14,8 +14,13 @@ maintainer:          joneetha@oregonstate.edu
 extra-source-files:  CHANGELOG.md
 
 library
-  exposed-modules:     Common
+  exposed-modules:     Combinator
+                     , Common
                      , Kafka
+                     , KafkaResponse
+                     , KafkaWriter
+                     , FetchRequest
+                     , FetchResponse
                      , ProduceRequest
                      , ProduceResponse
                      , Varint
@@ -34,6 +39,7 @@ library
                      , ip >= 1.5.0
                      , cpu >= 0.1.2 && < 0.2
                      , bytestring
+                     , transformers
                      , text
                      , crc32c
                      , attoparsec
@@ -72,10 +78,10 @@ test-suite tests
                      , tasty-golden
                      , tasty-hunit
 
-test-suite benchmark
+benchmark bench
   type:                exitcode-stdio-1.0
   main-is:             Benchmark.hs
-  hs-source-dirs:      test
+  hs-source-dirs:      bench
   build-depends:       base ^>=4.12.0.0
                      , bytestring
                      , gauge
