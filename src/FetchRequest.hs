@@ -44,9 +44,14 @@ fetchRequest ::
   -> UnliftedArray ByteArray
 fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
   let
-    requestSize = 53 + 28 * partitionCount + topicNameSize + clientIdLength
+    minimumRequestSize = 49
+    partitionMessageSize = 28
+    requestSize = minimumRequestSize
+      + partitionMessageSize * partitionCount
+      + topicNameSize
+      + clientIdLength
     requestMetadata = evaluate $ foldBuilder $
-      [ build32 (fromIntegral $ requestSize - 4) -- size
+      [ build32 (fromIntegral requestSize) -- size
       -- common request headers
       , build16 fetchApiKey
       , build16 fetchApiVersion

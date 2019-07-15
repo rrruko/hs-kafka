@@ -64,7 +64,11 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
       CRC.chunks
         (CRC.bytes 0 (Bytes postCrc 0 40))
         (UnliftedVector payloadsSectionChunks 0 (3*payloadCount))
-    batchLength = 9 + 40 + fromIntegral payloadsSectionSize
+    batchLength =
+        preCrcLength
+      + postCrcLength
+      + fromIntegral payloadsSectionSize
+    preCrcLength = 9
     preCrc = evaluate $ foldBuilder
       [ build64 0
       , build32 batchLength
@@ -72,6 +76,7 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
       , build8 magic
       , build32 (fromIntegral crc)
       ]
+    postCrcLength = 40
     postCrc = evaluate $ foldBuilder
       [ build16 0
       , build32 (fromIntegral (payloadCount - 1))
@@ -92,8 +97,8 @@ makeRequestMetadata ::
   -> Int32
   -> ByteArray
 makeRequestMetadata recordBatchSectionSize timeout topic partition =
-  evaluate $ foldBuilder 
-    [ build32 (fromIntegral $ 36 + clientIdLength + topicNameSize + recordBatchSectionSize)
+  evaluate $ foldBuilder
+    [ build32 size
     , build16 produceApiKey
     , build16 produceApiVersion
     , build32 correlationId
@@ -112,6 +117,12 @@ makeRequestMetadata recordBatchSectionSize timeout topic partition =
   where
     Topic topicName _ _ = topic
     topicNameSize = sizeofByteArray topicName
+    minimumSize = 36
+    size = fromIntegral $
+        minimumSize
+      + clientIdLength
+      + topicNameSize
+      + recordBatchSectionSize
 
 produceRequest ::
      Int
