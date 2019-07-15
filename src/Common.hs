@@ -23,6 +23,11 @@ data Topic = Topic
   Int -- Number of partitions
   (IORef Int) -- incrementing number
 
+data Partition = Partition
+  { partitionIndex :: Int32
+  , partitionOffset :: Int64
+  }
+
 data KafkaException = KafkaException String
   deriving Show
 

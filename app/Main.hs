@@ -4,12 +4,9 @@
 
 module Main where
 
-import Data.Int
 import Data.IORef
 import Data.Primitive.Unlifted.Array
 import GHC.Conc
-import Net.IPv4 (IPv4(..))
-import Socket.Stream.IPv4 (Peer(..))
 
 import Common
 import Kafka
@@ -23,10 +20,15 @@ main = do
   case response of
     Right parseResult -> do
       case parseResult of
-        Right res@(ProduceResponse [ProduceResponseMessage _ [resp]] _) -> do
+        Right res@(ProduceResponse [ProduceResponseMessage _ rs] _) -> do
           print res
           putStrLn "fetch request:"
-          sendFetchRequest (prResponseBaseOffset resp)
+          sendFetchRequest
+            (fmap
+              (\r -> Partition
+                (prResponsePartition r)
+                (prResponseBaseOffset r))
+              rs)
         Right resp -> do
           putStrLn "Got an unexpected number of responses from the produce request"
           print resp
@@ -44,14 +46,13 @@ sendProduceRequest :: IO (Either KafkaException (Either String ProduceResponse))
 sendProduceRequest = do
   let thirtySecondsUs = 30000000
   withKafka $ \kafka -> do
-    partitionIndex <- newIORef 0
-    topic <- testTopic
+    topic' <- testTopic
     let msg = unliftedArrayFromList
           [ fromByteString "aaaaa"
           , fromByteString "bbbbb"
           , fromByteString "ccccc"
           ]
-    produce kafka topic thirtySecondsUs msg >>= \case
+    produce kafka topic' thirtySecondsUs msg >>= \case
       Right () -> do
         interrupt <- registerDelay thirtySecondsUs
         response <- getProduceResponse kafka interrupt
@@ -59,13 +60,12 @@ sendProduceRequest = do
       Left exception -> do
         pure (Left exception)
 
-sendFetchRequest :: Int64 -> IO ()
-sendFetchRequest offset = do
+sendFetchRequest :: [Partition] -> IO ()
+sendFetchRequest partitions = do
   let thirtySecondsUs = 30000000
   withKafka $ \kafka -> do
-    partitionIndex <- newIORef 0
-    topic <- testTopic
-    fetch kafka topic thirtySecondsUs offset >>= \case
+    topic' <- testTopic
+    fetch kafka topic' thirtySecondsUs partitions >>= \case
       Right () -> do
         interrupt <- registerDelay thirtySecondsUs
         response <- getFetchResponse kafka interrupt

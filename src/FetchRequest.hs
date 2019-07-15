@@ -28,7 +28,7 @@ isolationLevel ReadCommitted = 1
 sessionlessFetchRequest ::
      Int
   -> Topic
-  -> Int64
+  -> [Partition]
   -> UnliftedArray ByteArray
 sessionlessFetchRequest = fetchRequest 0 (-1)
 
@@ -40,9 +40,9 @@ fetchRequest ::
   -> Int32
   -> Int
   -> Topic
-  -> Int64
+  -> [Partition]
   -> UnliftedArray ByteArray
-fetchRequest fetchSessionId fetchSessionEpoch timeout topic offset =
+fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
   let
     requestSize = 53 + 28 * partitionCount + topicNameSize + clientIdLength
     --evaluateWriter requestSize $ do
@@ -69,13 +69,13 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic offset =
       , build32 (fromIntegral partitionCount) -- number of following partitions
       , foldl'
           (\b p -> b <> foldBuilder
-              [ build32 p -- partition
+              [ build32 (partitionIndex p) -- partition
               , build32 0 -- current_leader_epoch
-              , build64 offset -- fetch_offset
+              , build64 (partitionOffset p) -- fetch_offset
               , build64 0 -- log_start_offset
               , build32 maxFetchRequestBytes -- partition_max_bytes
               ]
-          ) mempty [0..fromIntegral partitionCount - 1]
+          ) mempty partitions
       , build32 0
       ]
   in
