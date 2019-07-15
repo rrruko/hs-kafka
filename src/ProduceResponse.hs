@@ -2,7 +2,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module ProduceResponse
-  ( getProduceResponse
+  ( ProduceResponse(..)
+  , ProduceResponseMessage(..)
+  , ProducePartitionResponse(..)
+  , getProduceResponse
   ) where
 
 import Data.Attoparsec.ByteString ((<?>), Parser)

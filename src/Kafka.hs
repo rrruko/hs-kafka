@@ -4,6 +4,7 @@ module Kafka
   ) where
 
 import Data.Bifunctor (first)
+import Data.Int
 import Data.Primitive
 import Data.Primitive.Unlifted.Array
 import Socket.Stream.Uninterruptible.Bytes
@@ -31,6 +32,7 @@ fetch ::
      Kafka
   -> Topic
   -> Int
+  -> Int64
   -> IO (Either KafkaException ())
-fetch kafka topic waitTime =
-  request kafka $ sessionlessFetchRequest (waitTime `div` 1000) topic
+fetch kafka topic waitTime offset =
+  request kafka $ sessionlessFetchRequest (waitTime `div` 1000) topic offset
