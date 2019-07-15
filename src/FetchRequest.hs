@@ -45,7 +45,6 @@ fetchRequest ::
 fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
   let
     requestSize = 53 + 28 * partitionCount + topicNameSize + clientIdLength
-    --evaluateWriter requestSize $ do
     requestMetadata = evaluate $ foldBuilder $
       [ build32 (fromIntegral $ requestSize - 4) -- size
       -- common request headers
@@ -84,5 +83,6 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
       writeUnliftedArray arr 0 requestMetadata
       pure arr
   where
-    Topic topicName partitionCount _ = topic
+    Topic topicName _ _ = topic
     topicNameSize = sizeofByteArray topicName
+    partitionCount = length partitions
