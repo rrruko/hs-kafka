@@ -31,6 +31,9 @@ sessionlessFetchRequest ::
   -> UnliftedArray ByteArray
 sessionlessFetchRequest = fetchRequest 0 (-1)
 
+maxFetchRequestBytes :: Int32
+maxFetchRequestBytes = 30 * 1000 * 1000
+
 fetchRequest ::
      Int32
   -> Int32
@@ -52,8 +55,8 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic =
       -- fetch request
       , build32 (-1) -- replica_id
       , build32 (fromIntegral timeout) -- max_wait_time
-      , build32 0 -- min_bytes
-      , build32 (-1) -- max_bytes (not sure what to pass for this)
+      , build32 1 -- min_bytes
+      , build32 maxFetchRequestBytes -- max_bytes (not sure what to pass for this)
       , build8 (isolationLevel ReadUncommitted)
       , build32 fetchSessionId
       , build32 fetchSessionEpoch
@@ -68,7 +71,7 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic =
               , build32 0 -- current_leader_epoch
               , build64 0 -- fetch_offset
               , build64 0 -- log_start_offset
-              , build32 (-1) -- partition_max_bytes
+              , build32 maxFetchRequestBytes -- partition_max_bytes
               ]
           ) mempty [0..fromIntegral partitionCount - 1]
       , build32 0
