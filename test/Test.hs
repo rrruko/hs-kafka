@@ -95,7 +95,7 @@ requestTest = do
   payloadsf <- freezeUnliftedArray payloads 0 1
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
-      req = toByteString $ unChunks $ produceRequest 30000 topic payloadsf
+      req = toByteString $ unChunks $ produceRequest 30000 topic 0 payloadsf
   pure req
 
 multiplePayloadTest = do
@@ -108,5 +108,5 @@ multiplePayloadTest = do
         ]
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
-      req = toByteString $ unChunks $ produceRequest 30000 topic payloads
+      req = toByteString $ unChunks $ produceRequest 30000 topic 0 payloads
   pure req

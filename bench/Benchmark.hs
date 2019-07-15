@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Control.Monad.ST
+import Data.Int
 import Data.IORef
 import Data.ByteString
 import Data.Primitive.Unlifted.Array
@@ -15,12 +16,13 @@ data RequestData =
   RequestData
     { timeout :: Int
     , topic :: Topic
+    , partition :: Int32
     , payloads :: UnliftedArray ByteArray
     }
 
 produceRequest' :: RequestData -> UnliftedArray ByteArray
-produceRequest' (RequestData timeout topic payloads) =
-  produceRequest timeout topic payloads
+produceRequest' (RequestData timeout topic partition payloads) =
+  produceRequest timeout topic partition payloads
 
 main :: IO ()
 main = do
@@ -36,6 +38,7 @@ main = do
         RequestData
           30000000
           (Topic (fromByteString "test") 1 ioref)
+          0
           shortPayloads
       longPayloads = unliftedArrayFromList
         [ runST $ newByteArray (10*1000*1000) >>= unsafeFreezeByteArray
@@ -44,6 +47,7 @@ main = do
         RequestData
           30000000
           (Topic (fromByteString "test") 1 ioref)
+          0
           longPayloads
   defaultMain
     [ bgroup "produceRequest"
