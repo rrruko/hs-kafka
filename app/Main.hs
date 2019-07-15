@@ -16,7 +16,8 @@ import FetchResponse
 main :: IO ()
 main = do
   putStrLn "produce request:"
-  response <- sendProduceRequest
+  ctr <- newIORef 0
+  response <- sendProduceRequest (testTopic ctr)
   case response of
     Right parseResult -> do
       case parseResult of
@@ -39,14 +40,13 @@ main = do
       putStrLn "Failed to communicate with the Kafka server: "
       print networkError
 
-testTopic :: IO Topic
-testTopic = Topic (fromByteString "test") 1 <$> newIORef 0
+testTopic :: IORef Int -> Topic
+testTopic = Topic (fromByteString "test") 1
 
-sendProduceRequest :: IO (Either KafkaException (Either String ProduceResponse))
-sendProduceRequest = do
+sendProduceRequest :: Topic -> IO (Either KafkaException (Either String ProduceResponse))
+sendProduceRequest topic' = do
   let thirtySecondsUs = 30000000
   withKafka $ \kafka -> do
-    topic' <- testTopic
     let msg = unliftedArrayFromList
           [ fromByteString "aaaaa"
           , fromByteString "bbbbb"
@@ -64,7 +64,7 @@ sendFetchRequest :: [Partition] -> IO ()
 sendFetchRequest partitions = do
   let thirtySecondsUs = 30000000
   withKafka $ \kafka -> do
-    topic' <- testTopic
+    topic' <- testTopic <$> newIORef 0
     fetch kafka topic' thirtySecondsUs partitions >>= \case
       Right () -> do
         interrupt <- registerDelay thirtySecondsUs

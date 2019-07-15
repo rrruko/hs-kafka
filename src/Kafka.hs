@@ -26,7 +26,8 @@ produce ::
   -> UnliftedArray ByteArray -- payloads
   -> IO (Either KafkaException ())
 produce kafka topic@(Topic _ parts ctr) waitTime payloads = do
-  let message = produceRequest (waitTime `div` 1000) topic payloads
+  p <- fromIntegral <$> readIORef ctr
+  let message = produceRequest (waitTime `div` 1000) topic p payloads
   e <- request kafka message
   either (pure . Left) (\a -> increment parts ctr >> pure (Right a)) e
 

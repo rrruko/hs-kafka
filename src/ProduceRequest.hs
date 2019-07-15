@@ -89,8 +89,9 @@ makeRequestMetadata ::
      Int
   -> Int
   -> Topic
+  -> Int32
   -> ByteArray
-makeRequestMetadata recordBatchSectionSize timeout topic =
+makeRequestMetadata recordBatchSectionSize timeout topic partition =
   evaluate $ foldBuilder 
     [ build32 (fromIntegral $ 36 + clientIdLength + topicNameSize + recordBatchSectionSize)
     , build16 produceApiKey
@@ -105,7 +106,7 @@ makeRequestMetadata recordBatchSectionSize timeout topic =
     , build16 (size16 topicName) -- following string length
     , buildArray topicName topicNameSize -- topic_data topic
     , build32 1 -- following array [data] length
-    , build32 0 -- partition
+    , build32 partition -- partition
     , build32 (fromIntegral recordBatchSectionSize) -- record_set length
     ]
   where
@@ -115,9 +116,10 @@ makeRequestMetadata recordBatchSectionSize timeout topic =
 produceRequest ::
      Int
   -> Topic
+  -> Int32
   -> UnliftedArray ByteArray
   -> UnliftedArray ByteArray
-produceRequest timeout topic payloads =
+produceRequest timeout topic partition payloads =
   let
     payloadCount = sizeofUnliftedArray payloads
     zero = runST $ do
@@ -131,6 +133,7 @@ produceRequest timeout topic payloads =
       recordBatchSectionSize
       timeout
       topic
+      partition
     recordBatchMetadata =
       produceRequestRecordBatchMetadata
         payloadsSectionChunks
