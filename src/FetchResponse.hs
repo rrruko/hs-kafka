@@ -78,17 +78,17 @@ data Record = Record
   , recordTimestampDelta :: Int
   , recordOffsetDelta :: Int
   , recordKeyLength :: Int
-  , recordKey :: ByteString
+  , recordKey :: Maybe ByteString
   , recordValueLength :: Int
-  , recordValue :: ByteString
+  , recordValue :: Maybe ByteString
   , recordHeaders :: [Header]
   } deriving Show
 
 data Header = Header
   { headerKeyLength :: Int
-  , headerKey :: ByteString
+  , headerKey :: Maybe ByteString
   , headerValueLength :: Int
-  , headerValue :: ByteString
+  , headerValue :: Maybe ByteString
   } deriving Show
 
 parseFetchResponse :: Parser FetchResponse
@@ -164,10 +164,10 @@ parseRecord = do
   recordHeaders <- varintArray parseHeader <?> "record headers"
   pure (Record {..})
 
-nullableByteString :: Int -> Parser ByteString
+nullableByteString :: Int -> Parser (Maybe ByteString)
 nullableByteString n
-  | n < 0 = pure ""
-  | otherwise = AT.take n
+  | n < 0 = pure Nothing
+  | otherwise = Just <$> AT.take n
 
 varintArray :: Parser a -> Parser [a]
 varintArray p = do
