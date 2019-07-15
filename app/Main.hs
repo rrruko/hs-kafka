@@ -22,7 +22,7 @@ main = do
   sendFetchRequest
 
 testTopic :: IO Topic
-testTopic = Topic (fromByteString "test") 0 <$> newIORef 0
+testTopic = Topic (fromByteString "test") 1 <$> newIORef 0
 
 sendProduceRequest :: IO ()
 sendProduceRequest = do
