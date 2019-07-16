@@ -33,7 +33,7 @@ data FetchResponse = FetchResponse
   } deriving Show
 
 data FetchResponseMessage = FetchResponseMessage
-  { topic :: ByteString
+  { fetchResponseTopic :: ByteString
   , partitionResponses :: [PartitionResponse]
   } deriving Show
 
