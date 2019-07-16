@@ -4,7 +4,9 @@
 
 module Main where
 
+import Data.ByteString (ByteString)
 import Data.IORef
+import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 import GHC.Conc
 
@@ -15,7 +17,7 @@ import FetchResponse
 
 main :: IO ()
 main = do
-  putStrLn "produce request:"
+  putStrLn "Produce request:"
   ctr <- newIORef 0
   response <- sendProduceRequest (testTopic ctr)
   case response of
@@ -23,36 +25,41 @@ main = do
       case parseResult of
         Right res@(ProduceResponse [ProduceResponseMessage _ rs] _) -> do
           print res
-          putStrLn "fetch request:"
-          sendFetchRequest
+          putStrLn "Fetch request:"
+          sendFetchRequest (testTopic ctr)
             (fmap
               (\r -> Partition
                 (prResponsePartition r)
                 (prResponseBaseOffset r))
               rs)
         Right resp -> do
-          putStrLn "Got an unexpected number of responses from the produce request"
+          putStrLn $
+               "Got an unexpected number of responses from the produce "
+            <> "request"
           print resp
         Left parseError -> do
-          putStrLn "Failed to parse the response: "
+          putStrLn "Failed to parse the response"
           putStrLn parseError
     Left networkError -> do
-      putStrLn "Failed to communicate with the Kafka server: "
+      putStrLn "Failed to communicate with the Kafka server"
       print networkError
 
 testTopic :: IORef Int -> Topic
 testTopic = Topic (fromByteString "test") 1
 
-sendProduceRequest :: Topic -> IO (Either KafkaException (Either String ProduceResponse))
-sendProduceRequest topic' = do
-  let thirtySecondsUs = 30000000
+thirtySecondsUs :: Int
+thirtySecondsUs = 30000000
+
+byteStrings :: [ByteString] -> UnliftedArray ByteArray
+byteStrings = unliftedArrayFromList . fmap fromByteString
+
+sendProduceRequest :: 
+     Topic 
+  -> IO (Either KafkaException (Either String ProduceResponse))
+sendProduceRequest topic = do
   withDefaultKafka $ \kafka -> do
-    let msg = unliftedArrayFromList
-          [ fromByteString "aaaaa"
-          , fromByteString "bbbbb"
-          , fromByteString "ccccc"
-          ]
-    produce kafka topic' thirtySecondsUs msg >>= \case
+    let msg = byteStrings ["aaaaa", "bbbbb", "ccccc"]
+    produce kafka topic thirtySecondsUs msg >>= \case
       Right () -> do
         interrupt <- registerDelay thirtySecondsUs
         response <- getProduceResponse kafka interrupt
@@ -60,12 +67,10 @@ sendProduceRequest topic' = do
       Left exception -> do
         pure (Left exception)
 
-sendFetchRequest :: [Partition] -> IO ()
-sendFetchRequest partitions = do
-  let thirtySecondsUs = 30000000
+sendFetchRequest :: Topic -> [Partition] -> IO ()
+sendFetchRequest topic partitions = do
   withDefaultKafka $ \kafka -> do
-    topic' <- testTopic <$> newIORef 0
-    fetch kafka topic' thirtySecondsUs partitions >>= \case
+    fetch kafka topic thirtySecondsUs partitions >>= \case
       Right () -> do
         interrupt <- registerDelay thirtySecondsUs
         response <- getFetchResponse kafka interrupt
