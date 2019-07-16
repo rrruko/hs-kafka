@@ -59,6 +59,19 @@ defaultBaseSequence = -1
 defaultRecordBatchAttributes :: Int16
 defaultRecordBatchAttributes = 0
 
+data Acknowledgments
+  = AckLeaderOnly
+  | NoAcknowledgments
+  | AckFullISR
+
+defaultAcknowledgments :: Acknowledgments
+defaultAcknowledgments = AckLeaderOnly
+
+acks :: Acknowledgments -> Int16
+acks AckLeaderOnly = 1
+acks NoAcknowledgments = 0
+acks AckFullISR = -1
+
 makeRecordMetadata :: Int -> ByteArray -> ByteArray
 makeRecordMetadata index content =
   let
@@ -129,7 +142,7 @@ makeRequestMetadata recordBatchSectionSize timeout topic partition =
     , build16 (fromIntegral clientIdLength)
     , buildArray (fromByteString clientId) clientIdLength
     , build16 (-1) -- transactional_id length
-    , build16 1 -- acks
+    , build16 (acks defaultAcknowledgments) -- acks
     , build32 (fromIntegral timeout) -- timeout in ms
     , build32 1 -- following array length
     , build16 (size16 topicName) -- following string length
