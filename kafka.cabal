@@ -34,7 +34,6 @@ library
                      , byteslice >= 0.1.1.0 && < 0.2.0.0
                      , bytestring
                      , castagnoli
-                     , chronos >= 1.0.5 && < 1.1
                      , containers
                      , cpu >= 0.1.2 && < 0.2
                      , crc32c
@@ -74,7 +73,6 @@ executable listoffsets-example
   build-depends:       base ^>=4.12.0.0
                      , byteslice >= 0.1.1.0 && < 0.2.0.0
                      , bytestring
-                     , chronos >= 1.0.5 && < 1.1
                      , ip >= 1.5.0
                      , kafka
                      , primitive >= 0.7.0.0 && < 0.8.0.0

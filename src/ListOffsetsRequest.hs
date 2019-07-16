@@ -2,7 +2,6 @@ module ListOffsetsRequest
   ( listOffsetsRequest
   ) where
 
-import Chronos (Time(..))
 import Data.Foldable (foldl')
 import Data.Int
 import Data.Primitive.ByteArray
@@ -34,12 +33,24 @@ defaultIsolationLevel = isolationLevel ReadUncommitted
 defaultCurrentLeaderEpoch :: Int32
 defaultCurrentLeaderEpoch = -1
 
+data KafkaTimestamp
+  = Latest
+  | Earliest
+  | At Int64
+
+defaultTimestamp :: KafkaTimestamp
+defaultTimestamp = Latest
+
+kafkaTimestamp :: KafkaTimestamp -> Int64
+kafkaTimestamp Latest = -1
+kafkaTimestamp Earliest = -2
+kafkaTimestamp (At n) = n
+
 listOffsetsRequest ::
-     Time
-  -> Topic
+     Topic
   -> [Partition]
   -> UnliftedArray ByteArray
-listOffsetsRequest timestamp topic partitions =
+listOffsetsRequest topic partitions =
   let
     minimumReqSize = 25
     partitionMessageSize = 16
@@ -68,7 +79,7 @@ listOffsetsRequest timestamp topic partitions =
           (\b p -> b <> foldBuilder
               [ build32 (partitionIndex p)
               , build32 defaultCurrentLeaderEpoch
-              , build64 (getTime timestamp)
+              , build64 (kafkaTimestamp defaultTimestamp)
               ]
           ) mempty partitions
       ]

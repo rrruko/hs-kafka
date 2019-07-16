@@ -7,7 +7,6 @@ module Main where
 import Data.IORef
 import GHC.Conc
 
-import Chronos (now)
 import Common
 import Kafka
 import ListOffsetsResponse
@@ -25,9 +24,8 @@ thirtySecondsUs = 30000000
 
 sendListOffsetsRequest :: Topic -> [Partition] -> IO ()
 sendListOffsetsRequest topic' partitions = do
-  time <- now
   withDefaultKafka $ \kafka -> do
-    listOffsets kafka topic' partitions time >>= \case
+    listOffsets kafka topic' partitions >>= \case
       Right () -> do
         interrupt <- registerDelay thirtySecondsUs
         response <- getListOffsetsResponse kafka interrupt

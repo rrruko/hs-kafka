@@ -10,7 +10,6 @@ import Data.Primitive
 import Data.Primitive.Unlifted.Array
 import Socket.Stream.Uninterruptible.Bytes
 
-import Chronos (Time)
 import Common
 import FetchRequest
 import ListOffsetsRequest
@@ -63,7 +62,6 @@ listOffsets ::
      Kafka
   -> Topic
   -> [Partition]
-  -> Time
   -> IO (Either KafkaException ())
-listOffsets kafka topic partitions time =
-  request kafka $ listOffsetsRequest time topic partitions
+listOffsets kafka topic partitions = do
+  request kafka $ listOffsetsRequest topic partitions
