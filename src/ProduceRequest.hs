@@ -64,10 +64,10 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
       CRC.chunks
         (CRC.bytes 0 (Bytes postCrc 0 postCrcLength))
         (UnliftedVector payloadsSectionChunks 0 (3*payloadCount))
-    batchLength =
+    batchLength = fromIntegral $
         preCrcLength
       + postCrcLength
-      + fromIntegral payloadsSectionSize
+      + payloadsSectionSize
     preCrcLength = 9
     preCrc = evaluate $ foldBuilder
       [ build64 0
