@@ -62,7 +62,7 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
   let
     crc =
       CRC.chunks
-        (CRC.bytes 0 (Bytes postCrc 0 40))
+        (CRC.bytes 0 (Bytes postCrc 0 postCrcLength))
         (UnliftedVector payloadsSectionChunks 0 (3*payloadCount))
     batchLength =
         preCrcLength
