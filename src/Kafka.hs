@@ -53,5 +53,5 @@ fetch ::
   -> Int
   -> [Partition]
   -> IO (Either KafkaException ())
-fetch kafka topic waitTime offsets =
-  request kafka $ sessionlessFetchRequest (waitTime `div` 1000) topic offsets
+fetch kafka topic waitTime partitions =
+  request kafka $ sessionlessFetchRequest (waitTime `div` 1000) topic partitions
