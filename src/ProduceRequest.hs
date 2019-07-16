@@ -35,14 +35,38 @@ produceApiVersion = 7
 produceApiKey :: Int16
 produceApiKey = 0
 
+defaultRecordAttributes :: Int8
+defaultRecordAttributes = 0
+
+defaultTimestampDelta :: Int
+defaultTimestampDelta = 0
+
+defaultFirstTimestamp :: Int64
+defaultFirstTimestamp = 0
+
+defaultMaxTimestamp :: Int64
+defaultMaxTimestamp = 0
+
+defaultProducerId :: Int64
+defaultProducerId = -1
+
+defaultProducerEpoch :: Int16
+defaultProducerEpoch = -1
+
+defaultBaseSequence :: Int32
+defaultBaseSequence = -1
+
+defaultRecordBatchAttributes :: Int16
+defaultRecordBatchAttributes = 0
+
 makeRecordMetadata :: Int -> ByteArray -> ByteArray
 makeRecordMetadata index content =
   let
     -- plus one is for the trailing null byte
     recordLength = zigzag (sizeofByteArray metadataContent + sizeofByteArray content + 1)
     metadataContent = fold
-      [ byteArrayFromList [0 :: Word8]
-      , zigzag 0 -- timestampDelta
+      [ byteArrayFromList [defaultRecordAttributes]
+      , zigzag defaultTimestampDelta
       , zigzag index -- offsetDelta
       , zigzag (-1) -- keyLength
       , zigzag (sizeofByteArray content) -- valueLen
@@ -78,13 +102,13 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
       ]
     postCrcLength = 40
     postCrc = evaluate $ foldBuilder
-      [ build16 0
+      [ build16 defaultRecordBatchAttributes
       , build32 (fromIntegral (payloadCount - 1))
-      , build64 0
-      , build64 0
-      , build64 (-1)
-      , build16 (-1)
-      , build32 (-1)
+      , build64 defaultFirstTimestamp
+      , build64 defaultMaxTimestamp
+      , build64 defaultProducerId
+      , build16 defaultProducerEpoch
+      , build32 defaultBaseSequence
       , build32 $ fromIntegral payloadCount
       ]
   in
