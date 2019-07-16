@@ -1,6 +1,7 @@
 module Kafka
   ( produce
   , fetch
+  , listOffsets
   ) where
 
 import Data.Bifunctor (first)
@@ -11,6 +12,7 @@ import Socket.Stream.Uninterruptible.Bytes
 
 import Common
 import FetchRequest
+import ListOffsetsRequest
 import ProduceRequest
 
 request ::
@@ -55,3 +57,11 @@ fetch ::
   -> IO (Either KafkaException ())
 fetch kafka topic waitTime partitions =
   request kafka $ sessionlessFetchRequest (waitTime `div` 1000) topic partitions
+
+listOffsets ::
+     Kafka
+  -> Topic
+  -> [Partition]
+  -> IO (Either KafkaException ())
+listOffsets kafka topic partitions = do
+  request kafka $ listOffsetsRequest topic partitions
