@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.IORef
 import Data.Primitive.ByteArray
@@ -19,6 +20,7 @@ import Common
 import Kafka
 import ProduceRequest
 import ProduceResponse
+import FetchRequest
 import Varint
 
 main :: IO ()
@@ -75,18 +77,24 @@ parserTests = testGroup "Parsers"
 goldenTests :: TestTree
 goldenTests = testGroup "Golden tests"
   [ goldenVsString
-      "generate well-formed requests"
-      "test/kafka-request-bytes"
-      (BL.fromStrict <$> requestTest)
+      "generate well-formed produce request for a single payload"
+      "test/single-produce-request"
+      (BL.fromStrict <$> produceTest)
   , goldenVsString
-      "handle multiple payloads in one request"
-      "test/kafka-multiple-payload"
-      (BL.fromStrict <$> multiplePayloadTest)
+      "generate well-formed produce request for many payloads"
+      "test/multiple-produce-request"
+      (BL.fromStrict <$> multipleProduceTest)
+  , goldenVsString
+      "generate well-formed fetch request for a single partition"
+      "test/fetch-request"
+      (BL.fromStrict <$> fetchTest)
   ]
 
+unChunks :: UnliftedArray ByteArray -> ByteArray
 unChunks = foldrUnliftedArray (<>) mempty
 
-requestTest = do
+produceTest :: IO ByteString
+produceTest = do
   ref <- newIORef 0
   let payload = fromByteString $
         "\"im not owned! im not owned!!\", i continue to insist as i slowly" <>
@@ -98,7 +106,8 @@ requestTest = do
       req = toByteString $ unChunks $ produceRequest 30000 topic 0 payloadsf
   pure req
 
-multiplePayloadTest = do
+multipleProduceTest :: IO ByteString
+multipleProduceTest = do
   ref <- newIORef 0
   let payloads = unliftedArrayFromList
         [ fromByteString "i'm dying"
@@ -109,4 +118,13 @@ multiplePayloadTest = do
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
       req = toByteString $ unChunks $ produceRequest 30000 topic 0 payloads
+  pure req
+
+fetchTest :: IO ByteString
+fetchTest = do
+  ref <- newIORef 0
+  let topicName = fromByteString "test"
+      topic = Topic topicName 1 ref
+      req = toByteString $ unChunks $
+        sessionlessFetchRequest 30000 topic [Partition 0 0]
   pure req
