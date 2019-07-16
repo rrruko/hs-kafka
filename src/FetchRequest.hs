@@ -32,8 +32,20 @@ sessionlessFetchRequest ::
   -> UnliftedArray ByteArray
 sessionlessFetchRequest = fetchRequest 0 (-1)
 
-maxFetchRequestBytes :: Int32
-maxFetchRequestBytes = 30 * 1000 * 1000
+defaultReplicaId :: Int32
+defaultReplicaId = -1
+
+defaultMinBytes :: Int32
+defaultMinBytes = 1
+
+defaultMaxBytes :: Int32
+defaultMaxBytes = 30 * 1000 * 1000
+
+defaultCurrentLeaderEpoch :: Int32
+defaultCurrentLeaderEpoch = -1
+
+defaultLogStartOffset :: Int64
+defaultLogStartOffset = -1
 
 fetchRequest ::
      Int32
@@ -59,10 +71,10 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
       , build16 (fromIntegral clientIdLength)
       , buildArray (fromByteString clientId) clientIdLength
       -- fetch request
-      , build32 (-1) -- replica_id
+      , build32 defaultReplicaId
       , build32 (fromIntegral timeout) -- max_wait_time
-      , build32 1 -- min_bytes
-      , build32 maxFetchRequestBytes -- max_bytes (not sure what to pass for this)
+      , build32 defaultMinBytes
+      , build32 defaultMaxBytes
       , build8 (isolationLevel ReadUncommitted)
       , build32 fetchSessionId
       , build32 fetchSessionEpoch
@@ -73,11 +85,11 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
       , build32 (fromIntegral partitionCount) -- number of following partitions
       , foldl'
           (\b p -> b <> foldBuilder
-              [ build32 (partitionIndex p) -- partition
-              , build32 0 -- current_leader_epoch
-              , build64 (partitionOffset p) -- fetch_offset
-              , build64 0 -- log_start_offset
-              , build32 maxFetchRequestBytes -- partition_max_bytes
+              [ build32 (partitionIndex p)
+              , build32 defaultCurrentLeaderEpoch
+              , build64 (partitionOffset p)
+              , build64 defaultLogStartOffset
+              , build32 defaultMaxBytes -- partition_max_bytes
               ]
           ) mempty partitions
       , build32 0
