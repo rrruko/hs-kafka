@@ -1,4 +1,4 @@
-module FetchRequest
+module Kafka.Fetch.Request
   ( fetchRequest
   , sessionlessFetchRequest
   ) where
@@ -8,8 +8,8 @@ import Data.Int
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 
-import Common
-import KafkaWriter
+import Kafka.Common
+import Kafka.Writer
 
 fetchApiVersion :: Int16
 fetchApiVersion = 10

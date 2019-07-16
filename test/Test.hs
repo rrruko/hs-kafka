@@ -15,13 +15,13 @@ import qualified Data.Attoparsec.ByteString as AT
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 
-import Combinator
-import Common
 import Kafka
-import ProduceRequest
-import ProduceResponse
-import FetchRequest
-import Varint
+import Kafka.Combinator
+import Kafka.Common
+import Kafka.Fetch.Request
+import Kafka.Produce.Request
+import Kafka.Produce.Response
+import Kafka.Varint
 
 main :: IO ()
 main = defaultMain (testGroup "Tests" [unitTests, goldenTests])

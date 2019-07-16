@@ -10,7 +10,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE UnboxedTuples #-}
 
-module ProduceRequest
+module Kafka.Produce.Request
   ( produceRequest
   ) where
 
@@ -25,9 +25,9 @@ import Data.Word
 
 import qualified Crc32c as CRC
 
-import Common
-import KafkaWriter
-import Varint
+import Kafka.Common
+import Kafka.Varint
+import Kafka.Writer
 
 produceApiVersion :: Int16
 produceApiVersion = 7

@@ -7,7 +7,7 @@
 {-# LANGUAGE UnboxedTuples #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module KafkaWriter
+module Kafka.Writer
   ( KafkaWriter(..)
   , evaluateWriter
   , withCtx
@@ -38,7 +38,7 @@ import Data.Primitive (Prim(..), alignment)
 import Data.Primitive.ByteArray
 import Data.Primitive.ByteArray.Unaligned
 
-import Common (toBE16, toBE32, toBE64)
+import Kafka.Common (toBE16, toBE32, toBE64)
 
 newtype KafkaWriter s a = KafkaWriter
   { runKafkaWriter :: ReaderT (MutableByteArray s) (StateT Int (ST s)) a }

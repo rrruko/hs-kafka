@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Common where
+module Kafka.Common where
 
 import Data.ByteString (ByteString)
 import Data.Bytes.Types

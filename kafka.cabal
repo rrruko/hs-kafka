@@ -14,18 +14,18 @@ maintainer:          joneetha@oregonstate.edu
 extra-source-files:  CHANGELOG.md
 
 library
-  exposed-modules:     Combinator
-                     , Common
-                     , FetchRequest
-                     , FetchResponse
-                     , Kafka
-                     , KafkaResponse
-                     , KafkaWriter
-                     , ListOffsetsRequest
-                     , ListOffsetsResponse
-                     , ProduceRequest
-                     , ProduceResponse
-                     , Varint
+  exposed-modules:     Kafka
+                     , Kafka.Combinator
+                     , Kafka.Common
+                     , Kafka.Fetch.Request
+                     , Kafka.Fetch.Response
+                     , Kafka.ListOffsets.Request
+                     , Kafka.ListOffsets.Response
+                     , Kafka.Produce.Request
+                     , Kafka.Produce.Response
+                     , Kafka.Response
+                     , Kafka.Varint
+                     , Kafka.Writer
   ghc-options: -Wall -Werror -O2
   -- other-modules:
   -- other-extensions:

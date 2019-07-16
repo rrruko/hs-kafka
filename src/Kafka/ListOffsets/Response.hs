@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module ListOffsetsResponse
+module Kafka.ListOffsets.Response
   ( ListOffsetsResponse(..)
   , ListOffsetsResponseMessage(..)
   , PartitionResponse(..)
@@ -14,9 +14,9 @@ import GHC.Conc
 
 import qualified Data.Attoparsec.ByteString as AT
 
-import Combinator
-import Common
-import KafkaResponse
+import Kafka.Combinator
+import Kafka.Common
+import Kafka.Response
 
 data ListOffsetsResponse = ListOffsetsResponse
   { throttleTimeMs :: Int32

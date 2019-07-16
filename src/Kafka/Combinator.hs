@@ -1,4 +1,4 @@
-module Combinator 
+module Kafka.Combinator 
   ( int8
   , int16
   , int32

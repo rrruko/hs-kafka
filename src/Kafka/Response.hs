@@ -1,11 +1,10 @@
 {-# LANGUAGE LambdaCase #-}
 
-module KafkaResponse
+module Kafka.Response
   ( getKafkaResponse
   , getResponseSizeHeader
   ) where
 
-import Common
 import Data.Bifunctor
 import Data.ByteString
 import Data.Bytes.Types
@@ -13,6 +12,8 @@ import Data.Primitive.ByteArray
 import Data.Word
 import GHC.Conc
 import Socket.Stream.Interruptible.MutableBytes
+
+import Kafka.Common
 
 getKafkaResponse ::
      Kafka

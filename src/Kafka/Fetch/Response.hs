@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module FetchResponse
+module Kafka.Fetch.Response
   ( FetchResponse(..)
   , FetchResponseMessage(..)
   , PartitionResponse(..)
@@ -21,9 +21,9 @@ import GHC.Conc
 
 import qualified Data.Attoparsec.ByteString as AT
 
-import Combinator
-import Common
-import KafkaResponse
+import Kafka.Combinator
+import Kafka.Common
+import Kafka.Response
 
 data FetchResponse = FetchResponse
   { throttleTimeMs :: Int32
