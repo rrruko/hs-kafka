@@ -1,15 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 import Control.Monad.ST
 import Data.Int
 import Data.IORef
-import Data.ByteString
 import Data.Primitive.Unlifted.Array
 import Data.Primitive.ByteArray
 import Gauge
 
 import Common
-import Kafka
 import ProduceRequest
 
 data RequestData =
@@ -21,7 +20,7 @@ data RequestData =
     }
 
 produceRequest' :: RequestData -> UnliftedArray ByteArray
-produceRequest' (RequestData timeout topic partition payloads) =
+produceRequest' (RequestData {..}) =
   produceRequest timeout topic partition payloads
 
 main :: IO ()
