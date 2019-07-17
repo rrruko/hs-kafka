@@ -1,12 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
 
-module KafkaResponse
+module Kafka.Response
   ( fromKafkaResponse
   , getKafkaResponse
   , getResponseSizeHeader
   ) where
 
-import Common
 import Data.Attoparsec.ByteString (Parser, parseOnly)
 import Data.Bifunctor
 import Data.ByteString
@@ -15,6 +14,8 @@ import Data.Primitive.ByteArray
 import Data.Word
 import GHC.Conc
 import Socket.Stream.Interruptible.MutableBytes
+
+import Kafka.Common
 
 getKafkaResponse ::
      Kafka

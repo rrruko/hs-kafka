@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module ListOffsetsResponse
+module Kafka.ListOffsets.Response
   ( ListOffsetsResponse(..)
   , ListOffsetsResponseMessage(..)
   , PartitionResponse(..)
@@ -12,9 +12,9 @@ import Data.ByteString (ByteString)
 import Data.Int
 import GHC.Conc
 
-import Combinator
-import Common
-import KafkaResponse
+import Kafka.Combinator
+import Kafka.Common
+import Kafka.Response
 
 data ListOffsetsResponse = ListOffsetsResponse
   { throttleTimeMs :: Int32

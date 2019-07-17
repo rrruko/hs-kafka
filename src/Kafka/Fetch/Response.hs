@@ -2,15 +2,14 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module FetchResponse
-  ( AbortedTransaction(..)
-  , FetchResponse(..)
+module Kafka.Fetch.Response
+  ( FetchResponse(..)
   , FetchResponseMessage(..)
   , Header(..)
-  , PartitionResponse(..)
   , PartitionHeader(..)
-  , RecordBatch(..)
+  , PartitionResponse(..)
   , Record(..)
+  , RecordBatch(..)
   , getFetchResponse
   ) where
 
@@ -19,9 +18,9 @@ import Data.ByteString (ByteString)
 import Data.Int
 import GHC.Conc
 
-import Combinator
-import Common
-import KafkaResponse
+import Kafka.Combinator
+import Kafka.Common
+import Kafka.Response
 
 data FetchResponse = FetchResponse
   { throttleTimeMs :: Int32

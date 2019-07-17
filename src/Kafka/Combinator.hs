@@ -1,4 +1,4 @@
-module Combinator 
+module Kafka.Combinator 
   ( array
   , byteString
   , count

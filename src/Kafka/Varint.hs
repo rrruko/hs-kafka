@@ -1,4 +1,4 @@
-module Varint
+module Kafka.Varint
   ( varint
   , zigzag
   ) where

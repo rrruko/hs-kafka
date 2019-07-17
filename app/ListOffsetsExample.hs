@@ -8,9 +8,9 @@ import Data.Int
 import Data.IORef
 import GHC.Conc
 
-import Common
 import Kafka
-import ListOffsetsResponse
+import Kafka.Common
+import Kafka.ListOffsets.Response
 
 main :: IO ()
 main = do

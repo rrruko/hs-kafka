@@ -11,10 +11,10 @@ import Data.Primitive
 import Data.Primitive.Unlifted.Array
 import Socket.Stream.Uninterruptible.Bytes
 
-import Common
-import FetchRequest
-import ListOffsetsRequest
-import ProduceRequest
+import Kafka.Common
+import Kafka.Fetch.Request
+import Kafka.ListOffsets.Request
+import Kafka.Produce.Request
 
 request ::
      Kafka

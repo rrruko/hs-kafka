@@ -1,4 +1,4 @@
-module ListOffsetsRequest
+module Kafka.ListOffsets.Request
   ( listOffsetsRequest
   ) where
 
@@ -7,8 +7,8 @@ import Data.Int
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 
-import Common
-import KafkaWriter
+import Kafka.Common
+import Kafka.Writer
 
 listOffsetsApiVersion :: Int16
 listOffsetsApiVersion = 5

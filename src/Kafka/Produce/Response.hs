@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module ProduceResponse
+module Kafka.Produce.Response
   ( ProducePartitionResponse(..)
   , ProduceResponse(..)
   , ProduceResponseMessage(..)
@@ -15,9 +15,9 @@ import GHC.Conc
 
 import qualified Data.Attoparsec.ByteString as AT
 
-import Combinator
-import Common
-import KafkaResponse
+import Kafka.Combinator
+import Kafka.Common
+import Kafka.Response
 
 data ProduceResponse = ProduceResponse
   { produceResponseMessages :: [ProduceResponseMessage]
