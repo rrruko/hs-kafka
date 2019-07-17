@@ -6,6 +6,7 @@ module Kafka.Produce.Response
   , ProduceResponse(..)
   , ProduceResponseMessage(..)
   , getProduceResponse
+  , parseProduceResponse
   ) where
 
 import Data.Attoparsec.ByteString ((<?>), Parser)
@@ -22,12 +23,12 @@ import Kafka.Response
 data ProduceResponse = ProduceResponse
   { produceResponseMessages :: [ProduceResponseMessage]
   , throttleTimeMs :: Int32
-  } deriving Show
+  } deriving (Eq, Show)
 
 data ProduceResponseMessage = ProduceResponseMessage
   { prMessageTopic :: ByteString
   , prPartitionResponses :: [ProducePartitionResponse]
-  } deriving Show
+  } deriving (Eq, Show)
 
 data ProducePartitionResponse = ProducePartitionResponse
   { prResponsePartition :: Int32
@@ -35,7 +36,7 @@ data ProducePartitionResponse = ProducePartitionResponse
   , prResponseBaseOffset :: Int64
   , prResponseLogAppendTime :: Int64
   , prResponseLogStartTime :: Int64
-  } deriving Show
+  } deriving (Eq, Show)
 
 parseProduceResponse :: Parser ProduceResponse
 parseProduceResponse = do

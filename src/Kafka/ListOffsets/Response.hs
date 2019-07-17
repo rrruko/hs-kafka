@@ -19,12 +19,12 @@ import Kafka.Response
 data ListOffsetsResponse = ListOffsetsResponse
   { throttleTimeMs :: Int32
   , responses :: [ListOffsetsResponseMessage]
-  } deriving Show
+  } deriving (Eq, Show)
 
 data ListOffsetsResponseMessage = ListOffsetsResponseMessage
   { topic :: ByteString
   , partitionResponses :: [PartitionResponse]
-  } deriving Show
+  } deriving (Eq, Show)
 
 data PartitionResponse = PartitionResponse
   { partition :: Int32
@@ -32,7 +32,7 @@ data PartitionResponse = PartitionResponse
   , timestamp :: Int64
   , offset :: Int64
   , leaderEpoch :: Int32
-  } deriving Show
+  } deriving (Eq, Show)
 
 parseListOffsetsResponse :: Parser ListOffsetsResponse
 parseListOffsetsResponse = do

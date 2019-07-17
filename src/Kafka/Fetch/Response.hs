@@ -27,17 +27,17 @@ data FetchResponse = FetchResponse
   , errorCode :: Int16
   , sessionId :: Int32
   , responses :: [FetchResponseMessage]
-  } deriving Show
+  } deriving (Eq, Show)
 
 data FetchResponseMessage = FetchResponseMessage
   { fetchResponseTopic :: ByteString
   , partitionResponses :: [PartitionResponse]
-  } deriving Show
+  } deriving (Eq, Show)
 
 data PartitionResponse = PartitionResponse
   { partitionHeader :: PartitionHeader
   , recordSet :: Maybe RecordBatch
-  } deriving Show
+  } deriving (Eq, Show)
 
 data PartitionHeader = PartitionHeader
   { partition :: Int32
@@ -46,12 +46,12 @@ data PartitionHeader = PartitionHeader
   , lastStableOffset :: Int64
   , logStartOffset :: Int64
   , abortedTransactions :: [AbortedTransaction]
-  } deriving Show
+  } deriving (Eq, Show)
 
 data AbortedTransaction = AbortedTransaction
   { abortedTransactionProducerId :: Int64
   , firstOffset :: Int64
-  } deriving Show
+  } deriving (Eq, Show)
 
 data RecordBatch = RecordBatch
   { baseOffset :: Int64
@@ -67,7 +67,7 @@ data RecordBatch = RecordBatch
   , producerEpoch :: Int16
   , baseSequence :: Int32
   , records :: [Record]
-  } deriving Show
+  } deriving (Eq, Show)
 
 data Record = Record
   { recordLength :: Int
@@ -79,14 +79,14 @@ data Record = Record
   , recordValueLength :: Int
   , recordValue :: Maybe ByteString
   , recordHeaders :: [Header]
-  } deriving Show
+  } deriving (Eq, Show)
 
 data Header = Header
   { headerKeyLength :: Int
   , headerKey :: Maybe ByteString
   , headerValueLength :: Int
   , headerValue :: Maybe ByteString
-  } deriving Show
+  } deriving (Eq, Show)
 
 parseFetchResponse :: Parser FetchResponse
 parseFetchResponse = do
