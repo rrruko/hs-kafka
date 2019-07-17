@@ -5,6 +5,7 @@ module Kafka
   ) where
 
 import Data.Bifunctor (first)
+import Data.Int
 import Data.IORef
 import Data.Primitive
 import Data.Primitive.Unlifted.Array
@@ -61,7 +62,7 @@ fetch kafka topic waitTime partitions =
 listOffsets ::
      Kafka
   -> Topic
-  -> [Partition]
+  -> [Int32]
   -> IO (Either KafkaException ())
-listOffsets kafka topic partitions = do
-  request kafka $ listOffsetsRequest topic partitions
+listOffsets kafka topic partitionIndices = do
+  request kafka $ listOffsetsRequest topic partitionIndices

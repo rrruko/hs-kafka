@@ -48,7 +48,7 @@ kafkaTimestamp (At n) = n
 
 listOffsetsRequest ::
      Topic
-  -> [Partition]
+  -> [Int32]
   -> UnliftedArray ByteArray
 listOffsetsRequest topic partitions =
   let
@@ -77,7 +77,7 @@ listOffsetsRequest topic partitions =
       , build32 (fromIntegral partitionCount)
       , foldl'
           (\b p -> b <> foldBuilder
-              [ build32 (partitionIndex p)
+              [ build32 p
               , build32 defaultCurrentLeaderEpoch
               , build64 (kafkaTimestamp defaultTimestamp)
               ]

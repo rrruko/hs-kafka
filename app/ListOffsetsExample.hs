@@ -4,6 +4,7 @@
 
 module Main where
 
+import Data.Int
 import Data.IORef
 import GHC.Conc
 
@@ -14,7 +15,7 @@ import ListOffsetsResponse
 main :: IO ()
 main = do
   topic' <- testTopic <$> newIORef 0
-  sendListOffsetsRequest topic' [Partition 0 0, Partition 1 0]
+  sendListOffsetsRequest topic' [0, 1]
 
 testTopic :: IORef Int -> Topic
 testTopic = Topic (fromByteString "test") 1
@@ -22,10 +23,10 @@ testTopic = Topic (fromByteString "test") 1
 thirtySecondsUs :: Int
 thirtySecondsUs = 30000000
 
-sendListOffsetsRequest :: Topic -> [Partition] -> IO ()
-sendListOffsetsRequest topic' partitions = do
+sendListOffsetsRequest :: Topic -> [Int32] -> IO ()
+sendListOffsetsRequest topic' partitionIndices = do
   withDefaultKafka $ \kafka -> do
-    listOffsets kafka topic' partitions >>= \case
+    listOffsets kafka topic' partitionIndices >>= \case
       Right () -> do
         interrupt <- registerDelay thirtySecondsUs
         response <- getListOffsetsResponse kafka interrupt
