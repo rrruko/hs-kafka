@@ -23,13 +23,18 @@ import Kafka.Fetch.Request
 import Kafka.ListOffsets.Request
 import Kafka.Produce.Request
 import Kafka.Produce.Response
+import Kafka.Writer
 import Kafka.Varint
 
 main :: IO ()
 main = defaultMain (testGroup "Tests" [unitTests, goldenTests])
 
 unitTests :: TestTree
-unitTests = testGroup "Unit tests" [zigzagTests, parserTests]
+unitTests = testGroup "Unit tests"
+  [ zigzagTests
+  , parserTests
+  , responseParserTests
+  ]
 
 zigzagTests :: TestTree
 zigzagTests = testGroup "zigzag"
@@ -74,6 +79,11 @@ parserTests = testGroup "Parsers"
       "parseVarint (zigzag 1000) is 1000"
       (AT.parseOnly parseVarint (toByteString $ zigzag 1000) @?= Right 1000)
 
+  ]
+
+responseParserTests :: TestTree
+responseParserTests = testGroup "Response parsers"
+  [ produceResponseTest
   ]
 
 goldenTests :: TestTree
@@ -160,7 +170,7 @@ multipleFetchTest = do
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
       req = toByteString $ unChunks $
-        sessionlessFetchRequest 30000 topic 
+        sessionlessFetchRequest 30000 topic
           [Partition 0 0, Partition 1 0, Partition 2 0]
   pure req
 
@@ -172,3 +182,100 @@ listOffsetsTest partitions = do
       req = toByteString $ unChunks $
         listOffsetsRequest topic partitions
   pure req
+
+produceResponseTest :: TestTree
+produceResponseTest = testGroup "Produce"
+  [ testCase
+      "One message"
+      (parseProduce oneMsgProduceResponseBytes @?=
+        Right oneMsgProduceResponse)
+  , testCase
+      "Two messages"
+      (parseProduce twoMsgProduceResponseBytes @?=
+        Right twoMsgProduceResponse)
+  ]
+
+parseProduce :: ByteArray -> Either String ProduceResponse
+parseProduce ba = AT.parseOnly parseProduceResponse (toByteString ba)
+
+oneMsgProduceResponseBytes :: ByteArray
+oneMsgProduceResponseBytes = evaluate $ foldBuilder
+  [ build32 0
+  , build32 1
+  , build16 10
+  , buildArray (fromByteString "topic-name") 10
+  , build32 1
+  , build32 10
+  , build16 11
+  , build64 12
+  , build64 13
+  , build64 14
+  , build32 1
+  ]
+
+twoMsgProduceResponseBytes :: ByteArray
+twoMsgProduceResponseBytes = evaluate $ foldBuilder
+  [ build32 0
+  , build32 1
+  , build16 10
+  , buildArray (fromByteString "topic-name") 10
+  , build32 2
+  , build32 10
+  , build16 11
+  , build64 12
+  , build64 13
+  , build64 14
+  , build32 20
+  , build16 21
+  , build64 22
+  , build64 23
+  , build64 24
+  , build32 1
+  ]
+
+oneMsgProduceResponse :: ProduceResponse
+oneMsgProduceResponse =
+  ProduceResponse
+    { produceResponseMessages =
+        [ ProduceResponseMessage
+            { prMessageTopic = "topic-name"
+            , prPartitionResponses =
+                [ ProducePartitionResponse
+                    { prResponsePartition = 10
+                    , prResponseErrorCode = 11
+                    , prResponseBaseOffset = 12
+                    , prResponseLogAppendTime = 13
+                    , prResponseLogStartTime = 14
+                    }
+                ]
+            }
+        ]
+    , throttleTimeMs = 1
+    }
+
+twoMsgProduceResponse :: ProduceResponse
+twoMsgProduceResponse =
+  ProduceResponse
+    { produceResponseMessages =
+        [ ProduceResponseMessage
+            { prMessageTopic = "topic-name"
+            , prPartitionResponses =
+                [ ProducePartitionResponse
+                    { prResponsePartition = 10
+                    , prResponseErrorCode = 11
+                    , prResponseBaseOffset = 12
+                    , prResponseLogAppendTime = 13
+                    , prResponseLogStartTime = 14
+                    }
+                , ProducePartitionResponse
+                    { prResponsePartition = 20
+                    , prResponseErrorCode = 21
+                    , prResponseBaseOffset = 22
+                    , prResponseLogAppendTime = 23
+                    , prResponseLogStartTime = 24
+                    }
+                ]
+            }
+        ]
+    , throttleTimeMs = 1
+    }
