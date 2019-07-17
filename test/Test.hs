@@ -2,6 +2,7 @@
 
 import Data.ByteString (ByteString)
 import Data.Foldable
+import Data.Int
 import Data.IORef
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
@@ -19,6 +20,7 @@ import Kafka
 import Kafka.Combinator
 import Kafka.Common
 import Kafka.Fetch.Request
+import Kafka.ListOffsets.Request
 import Kafka.Produce.Request
 import Kafka.Produce.Response
 import Kafka.Varint
@@ -76,18 +78,41 @@ parserTests = testGroup "Parsers"
 
 goldenTests :: TestTree
 goldenTests = testGroup "Golden tests"
-  [ goldenVsString
-      "generate well-formed produce request for a single payload"
-      "test/single-produce-request"
-      (BL.fromStrict <$> produceTest)
-  , goldenVsString
-      "generate well-formed produce request for many payloads"
-      "test/multiple-produce-request"
-      (BL.fromStrict <$> multipleProduceTest)
-  , goldenVsString
-      "generate well-formed fetch request for a single partition"
-      "test/fetch-request"
-      (BL.fromStrict <$> fetchTest)
+  [ testGroup "Produce"
+      [ goldenVsString
+          "One payload"
+          "test/produce-one-payload-request"
+          (BL.fromStrict <$> produceTest)
+      , goldenVsString
+          "Many payloads"
+          "test/produce-many-payloads-request"
+          (BL.fromStrict <$> multipleProduceTest)
+      ]
+  , testGroup "Fetch"
+      [ goldenVsString
+          "One partition"
+          "test/fetch-one-partition-request"
+          (BL.fromStrict <$> fetchTest)
+      , goldenVsString
+          "Many partitions"
+          "test/fetch-many-partitions-request"
+          (BL.fromStrict <$> multipleFetchTest)
+
+      ]
+  , testGroup "ListOffsets"
+      [ goldenVsString
+          "No partitions"
+          "test/listoffsets-no-partitions-request"
+          (BL.fromStrict <$> listOffsetsTest [])
+      , goldenVsString
+          "One partition"
+          "test/listoffsets-one-partition-request"
+          (BL.fromStrict <$> listOffsetsTest [0])
+      , goldenVsString
+          "Many partitions"
+          "test/listoffsets-many-partitions-request"
+          (BL.fromStrict <$> listOffsetsTest [0,1,2,3,4,5])
+      ]
   ]
 
 unChunks :: UnliftedArray ByteArray -> ByteArray
@@ -127,4 +152,23 @@ fetchTest = do
       topic = Topic topicName 1 ref
       req = toByteString $ unChunks $
         sessionlessFetchRequest 30000 topic [Partition 0 0]
+  pure req
+
+multipleFetchTest :: IO ByteString
+multipleFetchTest = do
+  ref <- newIORef 0
+  let topicName = fromByteString "test"
+      topic = Topic topicName 1 ref
+      req = toByteString $ unChunks $
+        sessionlessFetchRequest 30000 topic 
+          [Partition 0 0, Partition 1 0, Partition 2 0]
+  pure req
+
+listOffsetsTest :: [Int32] -> IO ByteString
+listOffsetsTest partitions = do
+  ref <- newIORef 0
+  let topicName = fromByteString "test"
+      topic = Topic topicName 1 ref
+      req = toByteString $ unChunks $
+        listOffsetsRequest topic partitions
   pure req
