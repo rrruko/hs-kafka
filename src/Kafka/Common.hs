@@ -1,6 +1,9 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Kafka.Common where
 
@@ -28,8 +31,11 @@ data Partition = Partition
   , partitionOffset :: Int64
   }
 
-data KafkaException = KafkaException String
-  deriving Show
+data KafkaException where
+  KafkaSendException :: SendException 'Uninterruptible -> KafkaException
+  KafkaReceiveException :: ReceiveException 'Interruptible -> KafkaException
+
+deriving stock instance Show KafkaException
 
 newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
 newKafka = fmap (fmap Kafka) . connect
@@ -75,9 +81,6 @@ toByteString = BS.pack . foldrByteArray (:) []
 
 fromByteString :: ByteString -> ByteArray
 fromByteString = byteArrayFromList . BS.unpack
-
-toKafkaException :: Show a => a -> KafkaException
-toKafkaException = KafkaException . show
 
 foldByteArrays :: UnliftedArray ByteArray -> ByteArray
 foldByteArrays = foldrUnliftedArray (<>) (byteArrayFromList ([]::[Char]))

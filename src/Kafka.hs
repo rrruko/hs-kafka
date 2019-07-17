@@ -20,7 +20,7 @@ request ::
      Kafka
   -> UnliftedArray ByteArray
   -> IO (Either KafkaException ())
-request kafka msg = first toKafkaException <$> sendMany (getKafka kafka) msg
+request kafka msg = first KafkaSendException <$> sendMany (getKafka kafka) msg
 
 produce ::
      Kafka

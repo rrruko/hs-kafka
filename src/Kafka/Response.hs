@@ -26,7 +26,7 @@ getKafkaResponse kafka interrupt = do
     Right responseByteCount -> do
       responseBuffer <- newByteArray responseByteCount
       let responseBufferSlice = MutableBytes responseBuffer 0 responseByteCount
-      responseStatus <- first toKafkaException <$>
+      responseStatus <- first KafkaReceiveException <$>
         receiveExactly
           interrupt
           (getKafka kafka)
@@ -41,7 +41,7 @@ getResponseSizeHeader ::
   -> IO (Either KafkaException Int)
 getResponseSizeHeader kafka interrupt = do
   responseSizeBuf <- newByteArray 4
-  responseStatus <- first toKafkaException <$>
+  responseStatus <- first KafkaReceiveException <$>
     receiveExactly
       interrupt
       (getKafka kafka)
