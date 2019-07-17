@@ -8,8 +8,8 @@ import Data.Primitive.Unlifted.Array
 import Data.Primitive.ByteArray
 import Gauge
 
-import Common
-import ProduceRequest
+import Kafka.Common
+import Kafka.Produce.Request
 
 data RequestData =
   RequestData
