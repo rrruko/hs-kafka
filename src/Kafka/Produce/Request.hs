@@ -35,6 +35,12 @@ produceApiVersion = 7
 produceApiKey :: Int16
 produceApiKey = 0
 
+defaultBaseOffset :: Int64
+defaultBaseOffset = 0
+
+defaultPartitionLeaderEpoch :: Int32
+defaultPartitionLeaderEpoch = 0
+
 defaultRecordAttributes :: Int8
 defaultRecordAttributes = 0
 
@@ -107,9 +113,9 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
       + payloadsSectionSize
     preCrcLength = 9
     preCrc = evaluate $ foldBuilder
-      [ build64 0
+      [ build64 defaultBaseOffset
       , build32 batchLength
-      , build32 0
+      , build32 defaultPartitionLeaderEpoch
       , build8 magic
       , build32 (fromIntegral crc)
       ]
