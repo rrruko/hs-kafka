@@ -186,7 +186,4 @@ getFetchResponse ::
      Kafka
   -> TVar Bool
   -> IO (Either KafkaException (Either String FetchResponse))
-getFetchResponse kafka interrupt =
-  (fmap . fmap)
-    (AT.parseOnly parseFetchResponse)
-    (getKafkaResponse kafka interrupt)
+getFetchResponse = fromKafkaResponse parseFetchResponse

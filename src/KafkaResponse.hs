@@ -1,11 +1,13 @@
 {-# LANGUAGE LambdaCase #-}
 
 module KafkaResponse
-  ( getKafkaResponse
+  ( fromKafkaResponse
+  , getKafkaResponse
   , getResponseSizeHeader
   ) where
 
 import Common
+import Data.Attoparsec.ByteString (Parser, parseOnly)
 import Data.Bifunctor
 import Data.ByteString
 import Data.Bytes.Types
@@ -45,3 +47,13 @@ getResponseSizeHeader kafka interrupt = do
       (MutableBytes responseSizeBuf 0 4)
   byteCount <- fromIntegral . byteSwap32 <$> readByteArray responseSizeBuf 0
   pure $ byteCount <$ responseStatus
+
+fromKafkaResponse ::
+     Parser a
+  -> Kafka
+  -> TVar Bool
+  -> IO (Either KafkaException (Either String a))
+fromKafkaResponse parser kafka interrupt =
+  (fmap . fmap)
+    (parseOnly parser)
+    (getKafkaResponse kafka interrupt)

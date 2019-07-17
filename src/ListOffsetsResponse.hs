@@ -12,8 +12,6 @@ import Data.ByteString (ByteString)
 import Data.Int
 import GHC.Conc
 
-import qualified Data.Attoparsec.ByteString as AT
-
 import Combinator
 import Common
 import KafkaResponse
@@ -62,7 +60,4 @@ getListOffsetsResponse ::
      Kafka
   -> TVar Bool
   -> IO (Either KafkaException (Either String ListOffsetsResponse))
-getListOffsetsResponse kafka interrupt =
-  (fmap . fmap)
-    (AT.parseOnly parseListOffsetsResponse)
-    (getKafkaResponse kafka interrupt)
+getListOffsetsResponse = fromKafkaResponse parseListOffsetsResponse

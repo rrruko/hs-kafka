@@ -67,7 +67,4 @@ getProduceResponse ::
      Kafka
   -> TVar Bool
   -> IO (Either KafkaException (Either String ProduceResponse))
-getProduceResponse kafka interrupt =
-  (fmap . fmap)
-    (AT.parseOnly parseProduceResponse)
-    (getKafkaResponse kafka interrupt)
+getProduceResponse = fromKafkaResponse parseProduceResponse
