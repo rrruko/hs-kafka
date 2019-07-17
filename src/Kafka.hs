@@ -1,7 +1,7 @@
 module Kafka
-  ( produce
-  , fetch
+  ( fetch
   , listOffsets
+  , produce
   ) where
 
 import Data.Bifunctor (first)

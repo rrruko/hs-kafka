@@ -3,14 +3,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module FetchResponse
-  ( FetchResponse(..)
+  ( AbortedTransaction(..)
+  , FetchResponse(..)
   , FetchResponseMessage(..)
+  , Header(..)
   , PartitionResponse(..)
   , PartitionHeader(..)
-  , AbortedTransaction(..)
   , RecordBatch(..)
   , Record(..)
-  , Header(..)
   , getFetchResponse
   ) where
 

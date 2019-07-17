@@ -9,22 +9,21 @@
 
 module KafkaWriter
   ( KafkaWriter(..)
-  , evaluateWriter
-  , withCtx
-  , writeNum
-  , write8
-  , write16
-  , write32
-  , write64
-  , writeArray
   , build8
   , build16
   , build32
   , build64
   , buildArray
-
   , evaluate
+  , evaluateWriter
   , foldBuilder
+  , withCtx
+  , write8
+  , write16
+  , write32
+  , write64
+  , writeArray
+  , writeNum
   ) where
 
 import Control.Applicative (liftA2)

@@ -2,9 +2,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module ProduceResponse
-  ( ProduceResponse(..)
+  ( ProducePartitionResponse(..)
+  , ProduceResponse(..)
   , ProduceResponseMessage(..)
-  , ProducePartitionResponse(..)
   , getProduceResponse
   ) where
 

@@ -18,9 +18,9 @@ import Control.Monad.ST
 import Data.Bytes.Types
 import Data.Foldable
 import Data.Int
-import Data.Primitive.Unlifted.Array
 import Data.Primitive.ByteArray
 import Data.Primitive.Slice (UnliftedVector(UnliftedVector))
+import Data.Primitive.Unlifted.Array
 import Data.Word
 
 import qualified Crc32c as CRC
