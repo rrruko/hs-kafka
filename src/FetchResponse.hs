@@ -19,8 +19,6 @@ import Data.ByteString (ByteString)
 import Data.Int
 import GHC.Conc
 
-import qualified Data.Attoparsec.ByteString as AT
-
 import Combinator
 import Common
 import KafkaResponse
@@ -102,8 +100,7 @@ parseFetchResponse = do
 
 parseFetchResponseMessage :: Parser FetchResponseMessage
 parseFetchResponseMessage = do
-  topicLengthBytes <- int16 <?> "topic length"
-  topicName <- AT.take (fromIntegral topicLengthBytes) <?> "topic name"
+  topicName <- byteString <?> "topic name"
   rs <- array parsePartitionResponse
   pure (FetchResponseMessage topicName rs)
 
@@ -111,14 +108,6 @@ parsePartitionResponse :: Parser PartitionResponse
 parsePartitionResponse = PartitionResponse
   <$> parsePartitionHeader
   <*> (nullableBytes parseRecordBatch)
-
-nullableBytes :: Parser a -> Parser (Maybe a)
-nullableBytes p = do
-  bytesLength <- int32
-  if bytesLength == 0 then
-    pure Nothing
-  else
-    Just <$> p
 
 parsePartitionHeader :: Parser PartitionHeader
 parsePartitionHeader = PartitionHeader
@@ -163,11 +152,6 @@ parseRecord = do
   recordValue <- nullableByteString recordValueLength <?> "record value"
   recordHeaders <- varintArray parseHeader <?> "record headers"
   pure (Record {..})
-
-nullableByteString :: Int -> Parser (Maybe ByteString)
-nullableByteString n
-  | n < 0 = pure Nothing
-  | otherwise = Just <$> AT.take n
 
 varintArray :: Parser a -> Parser [a]
 varintArray p = do

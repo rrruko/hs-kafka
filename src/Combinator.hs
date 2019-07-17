@@ -1,12 +1,14 @@
 module Combinator 
-  ( int8
+  ( array
+  , byteString
+  , count
+  , int8
   , int16
   , int32
   , int64
   , networkByteOrder
-  , count
-  , array
-  , byteString
+  , nullableByteString
+  , nullableBytes
   , parseVarint
   ) where
 
@@ -64,3 +66,16 @@ unZigzag :: Int -> Int
 unZigzag n
   | even n    = n `div` 2
   | otherwise = (-1) * ((n + 1) `div` 2)
+
+nullableByteString :: Int -> Parser (Maybe ByteString)
+nullableByteString n
+  | n < 0 = pure Nothing
+  | otherwise = Just <$> AT.take n
+
+nullableBytes :: Parser a -> Parser (Maybe a)
+nullableBytes p = do
+  bytesLength <- int32
+  if bytesLength == 0 then
+    pure Nothing
+  else
+    Just <$> p
