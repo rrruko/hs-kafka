@@ -1,7 +1,8 @@
 module Kafka
   ( fetch
-  , listOffsets
+  , heartbeat
   , joinGroup
+  , listOffsets
   , produce
   ) where
 
@@ -14,8 +15,9 @@ import Socket.Stream.Uninterruptible.Bytes
 
 import Kafka.Common
 import Kafka.Fetch.Request
-import Kafka.ListOffsets.Request
+import Kafka.Heartbeat.Request
 import Kafka.JoinGroup.Request
+import Kafka.ListOffsets.Request
 import Kafka.Produce.Request
 
 request ::
@@ -76,3 +78,11 @@ joinGroup ::
   -> IO (Either KafkaException ())
 joinGroup kafka topic groupMember =
   request kafka $ joinGroupRequest topic groupMember
+
+heartbeat ::
+     Kafka
+  -> GroupMember
+  -> GenerationId
+  -> IO (Either KafkaException ())
+heartbeat kafka groupMember generationId =
+  request kafka $ heartbeatRequest groupMember generationId

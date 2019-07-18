@@ -19,6 +19,8 @@ library
                      , Kafka.Common
                      , Kafka.Fetch.Request
                      , Kafka.Fetch.Response
+                     , Kafka.Heartbeat.Request
+                     , Kafka.Heartbeat.Response
                      , Kafka.JoinGroup.Request
                      , Kafka.JoinGroup.Response
                      , Kafka.ListOffsets.Request

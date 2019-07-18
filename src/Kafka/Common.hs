@@ -37,9 +37,11 @@ data KafkaException where
 
 deriving stock instance Show KafkaException
 
-data GroupMember = GroupMember
-  { groupId :: ByteArray
-  , memberId :: Maybe ByteArray
+data GroupMember = GroupMember ByteArray (Maybe ByteArray)
+  deriving (Eq, Show)
+
+data GenerationId = GenerationId
+  { getGenerationId :: Int32
   } deriving (Eq, Show)
 
 newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
