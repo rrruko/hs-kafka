@@ -20,6 +20,7 @@ library
                      , Kafka.Fetch.Request
                      , Kafka.Fetch.Response
                      , Kafka.JoinGroup.Request
+                     , Kafka.JoinGroup.Response
                      , Kafka.ListOffsets.Request
                      , Kafka.ListOffsets.Response
                      , Kafka.Produce.Request
