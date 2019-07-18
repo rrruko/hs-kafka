@@ -9,11 +9,13 @@
 
 module Kafka.Writer
   ( KafkaWriter(..)
+  , KafkaWriterBuilder(..)
   , build8
   , build16
   , build32
   , build64
   , buildArray
+  , buildString
   , evaluate
   , evaluateWriter
   , foldBuilder
@@ -101,6 +103,9 @@ writeArray src len = withCtx $ \index arr -> do
 
 buildArray :: ByteArray -> Int -> KafkaWriterBuilder s
 buildArray src len = Kwb len (writeArray src len)
+
+buildString :: ByteArray -> Int -> KafkaWriterBuilder s
+buildString src len = Kwb len (write16 (fromIntegral len) <> writeArray src len)
 
 evaluateWriter :: Int -> (forall s. KafkaWriter s a) -> ByteArray
 evaluateWriter n kw = runST $ do
