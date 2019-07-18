@@ -37,6 +37,11 @@ data KafkaException where
 
 deriving stock instance Show KafkaException
 
+data GroupMember = GroupMember
+  { groupId :: ByteArray
+  , memberId :: Maybe ByteArray
+  } deriving (Eq, Show)
+
 newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
 newKafka = fmap (fmap Kafka) . connect
 

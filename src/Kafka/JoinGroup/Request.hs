@@ -41,11 +41,6 @@ defaultProtocolData topic = mconcat
   , build32 0 -- userdata bytes length
   ]
 
-data GroupMember = GroupMember
-  { groupId :: ByteArray
-  , memberId :: Maybe ByteArray
-  } deriving (Eq, Show)
-
 joinGroupRequest ::
      Topic
   -> GroupMember

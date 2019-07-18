@@ -2,14 +2,18 @@
 
 module Kafka.JoinGroup.Response
   ( JoinGroupResponse(..)
+  , getJoinGroupResponse
   , parseJoinGroupResponse
   ) where
 
 import Data.Attoparsec.ByteString (Parser, (<?>))
 import Data.ByteString (ByteString)
 import Data.Int
+import GHC.Conc
 
 import Kafka.Combinator
+import Kafka.Common
+import Kafka.Response
 
 data JoinGroupResponse = JoinGroupResponse
   { throttleTimeMs :: Int32
@@ -42,3 +46,9 @@ parseMember :: Parser Member
 parseMember = Member
   <$> (byteString <?> "member id")
   <*> (sizedBytes <?> "member metadata")
+
+getJoinGroupResponse ::
+     Kafka
+  -> TVar Bool
+  -> IO (Either KafkaException (Either String JoinGroupResponse))
+getJoinGroupResponse = fromKafkaResponse parseJoinGroupResponse

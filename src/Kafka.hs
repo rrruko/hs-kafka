@@ -1,6 +1,7 @@
 module Kafka
   ( fetch
   , listOffsets
+  , joinGroup
   , produce
   ) where
 
@@ -14,6 +15,7 @@ import Socket.Stream.Uninterruptible.Bytes
 import Kafka.Common
 import Kafka.Fetch.Request
 import Kafka.ListOffsets.Request
+import Kafka.JoinGroup.Request
 import Kafka.Produce.Request
 
 request ::
@@ -66,3 +68,11 @@ listOffsets ::
   -> IO (Either KafkaException ())
 listOffsets kafka topic partitionIndices = do
   request kafka $ listOffsetsRequest topic partitionIndices
+
+joinGroup ::
+     Kafka
+  -> Topic
+  -> GroupMember
+  -> IO (Either KafkaException ())
+joinGroup kafka topic groupMember =
+  request kafka $ joinGroupRequest topic groupMember

@@ -15,6 +15,7 @@ import Kafka
 import Kafka.Common
 import Kafka.Fetch.Response
 import Kafka.ListOffsets.Response
+import Kafka.JoinGroup.Response
 import Kafka.Produce.Response
 
 main :: IO ()
@@ -64,3 +65,12 @@ iListOffsets kafka top = do
   wait <- registerDelay giveUpTime
   _ <- listOffsets kafka top [0]
   getListOffsetsResponse kafka wait
+
+iJoinGroup ::
+     Kafka
+  -> Topic
+  -> IO (Either KafkaException (Either String JoinGroupResponse))
+iJoinGroup kafka top = do
+  wait <- registerDelay giveUpTime
+  _ <- joinGroup kafka top (GroupMember (fromByteString "abcde") Nothing)
+  getJoinGroupResponse kafka wait
