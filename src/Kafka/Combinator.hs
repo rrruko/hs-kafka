@@ -10,6 +10,7 @@ module Kafka.Combinator
   , nullableByteString
   , nullableBytes
   , parseVarint
+  , sizedBytes
   ) where
 
 import Data.Attoparsec.ByteString (Parser, (<?>))
@@ -49,6 +50,11 @@ byteString :: Parser ByteString
 byteString = do
   stringLength <- int16 <?> "string length"
   AT.take (fromIntegral stringLength) <?> "string contents"
+
+sizedBytes :: Parser ByteString
+sizedBytes = do
+  bytesLength <- int32 <?> "bytes length"
+  AT.take (fromIntegral bytesLength) <?> "bytes"
 
 parseVarint :: Parser Int
 parseVarint = unZigzag <$> go 1
