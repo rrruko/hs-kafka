@@ -68,8 +68,7 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
       , build16 fetchApiKey
       , build16 fetchApiVersion
       , build32 correlationId
-      , build16 (fromIntegral clientIdLength)
-      , buildArray (fromByteString clientId) clientIdLength
+      , buildString (fromByteString clientId) clientIdLength
       -- fetch request
       , build32 defaultReplicaId
       , build32 (fromIntegral timeout) -- max_wait_time
@@ -80,8 +79,7 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
       , build32 fetchSessionEpoch
       , build32 1 -- number of following topics
 
-      , build16 (size16 topicName)
-      , buildArray topicName topicNameSize
+      , buildString topicName topicNameSize
       , build32 (fromIntegral partitionCount) -- number of following partitions
       , foldl'
           (\b p -> b <> foldBuilder

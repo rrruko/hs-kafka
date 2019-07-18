@@ -145,14 +145,12 @@ makeRequestMetadata recordBatchSectionSize timeout topic partition =
     , build16 produceApiKey
     , build16 produceApiVersion
     , build32 correlationId
-    , build16 (fromIntegral clientIdLength)
-    , buildArray (fromByteString clientId) clientIdLength
+    , buildString (fromByteString clientId) clientIdLength
     , build16 (-1) -- transactional_id length
     , build16 (acks defaultAcknowledgments) -- acks
     , build32 (fromIntegral timeout) -- timeout in ms
     , build32 1 -- following array length
-    , build16 (size16 topicName) -- following string length
-    , buildArray topicName topicNameSize -- topic_data topic
+    , buildString topicName topicNameSize -- topic_data topic
     , build32 1 -- following array [data] length
     , build32 partition -- partition
     , build32 (fromIntegral recordBatchSectionSize) -- record_set length
