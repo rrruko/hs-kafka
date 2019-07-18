@@ -51,9 +51,9 @@ iFetch ::
   -> Topic
   -> Int64
   -> IO (Either KafkaException (Either String FetchResponse))
-iFetch kafka top offset = do
+iFetch kafka top offs = do
   wait <- registerDelay giveUpTime
-  _ <- fetch kafka top requestedWaitTime [Partition 0 offset]
+  _ <- fetch kafka top requestedWaitTime [Partition 0 offs]
   getFetchResponse kafka wait
 
 iListOffsets ::
