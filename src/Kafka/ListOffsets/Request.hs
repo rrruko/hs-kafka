@@ -2,7 +2,6 @@ module Kafka.ListOffsets.Request
   ( listOffsetsRequest
   ) where
 
-import Data.Foldable (foldl')
 import Data.Int
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
@@ -72,14 +71,15 @@ listOffsetsRequest topic partitions =
       , build32 1 -- number of following topics
 
       , buildString topicName topicNameSize
-      , build32 (fromIntegral partitionCount)
-      , foldl'
-          (\b p -> b <> foldBuilder
+      , buildArray
+          (map
+            (\p -> foldBuilder
               [ build32 p
               , build32 defaultCurrentLeaderEpoch
               , build64 (kafkaTimestamp defaultTimestamp)
-              ]
-          ) mempty partitions
+              ])
+            partitions)
+          (fromIntegral partitionCount)
       ]
   in
     runUnliftedArray $ do

@@ -202,8 +202,7 @@ oneMsgProduceResponseBytes :: ByteArray
 oneMsgProduceResponseBytes = evaluate $ foldBuilder
   [ build32 0
   , build32 1
-  , build16 10
-  , buildArray (fromByteString "topic-name") 10
+  , buildString (fromByteString "topic-name") 10
   , build32 1
   , build32 10
   , build16 11
@@ -217,8 +216,7 @@ twoMsgProduceResponseBytes :: ByteArray
 twoMsgProduceResponseBytes = evaluate $ foldBuilder
   [ build32 0
   , build32 1
-  , build16 10
-  , buildArray (fromByteString "topic-name") 10
+  , buildString (fromByteString "topic-name") 10
   , build32 2
   , build32 10
   , build16 11

@@ -24,7 +24,7 @@ module Kafka.Writer
   , write16
   , write32
   , write64
-  , writeArray
+  , writeBytes
   , writeNum
   ) where
 
@@ -93,19 +93,22 @@ build32 i = Kwb 4 (write32 i)
 build64 :: Int64 -> KafkaWriterBuilder s
 build64 i = Kwb 8 (write64 i)
 
-writeArray ::
+writeBytes ::
      ByteArray
   -> Int
   -> KafkaWriter s ()
-writeArray src len = withCtx $ \index arr -> do
+writeBytes src len = withCtx $ \index arr -> do
   copyByteArray arr index src 0 len
   modify' (+len)
 
-buildArray :: ByteArray -> Int -> KafkaWriterBuilder s
-buildArray src len = Kwb len (writeArray src len)
+buildBytes :: ByteArray -> Int -> KafkaWriterBuilder s
+buildBytes src len = Kwb len (writeBytes src len)
+
+buildArray :: [KafkaWriterBuilder s] -> Int -> KafkaWriterBuilder s
+buildArray src len = build32 (fromIntegral len) <> mconcat src
 
 buildString :: ByteArray -> Int -> KafkaWriterBuilder s
-buildString src len = build16 (fromIntegral len) <> buildArray src len
+buildString src len = build16 (fromIntegral len) <> buildBytes src len
 
 evaluateWriter :: Int -> (forall s. KafkaWriter s a) -> ByteArray
 evaluateWriter n kw = runST $ do
