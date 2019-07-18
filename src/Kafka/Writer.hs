@@ -105,7 +105,7 @@ buildArray :: ByteArray -> Int -> KafkaWriterBuilder s
 buildArray src len = Kwb len (writeArray src len)
 
 buildString :: ByteArray -> Int -> KafkaWriterBuilder s
-buildString src len = Kwb len (write16 (fromIntegral len) <> writeArray src len)
+buildString src len = build16 (fromIntegral len) <> buildArray src len
 
 evaluateWriter :: Int -> (forall s. KafkaWriter s a) -> ByteArray
 evaluateWriter n kw = runST $ do
