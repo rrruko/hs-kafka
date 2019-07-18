@@ -69,8 +69,9 @@ iListOffsets kafka top = do
 iJoinGroup ::
      Kafka
   -> Topic
+  -> GroupMember
   -> IO (Either KafkaException (Either String JoinGroupResponse))
-iJoinGroup kafka top = do
+iJoinGroup kafka top member = do
   wait <- registerDelay giveUpTime
-  _ <- joinGroup kafka top (GroupMember (fromByteString "abcde") Nothing)
+  _ <- joinGroup kafka top member
   getJoinGroupResponse kafka wait
