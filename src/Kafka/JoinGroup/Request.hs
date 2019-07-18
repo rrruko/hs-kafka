@@ -33,13 +33,11 @@ defaultProtocolTypeLength = sizeofByteArray defaultProtocolType
 defaultProtocolData :: ByteArray -> forall s. KafkaWriterBuilder s
 defaultProtocolData topic = mconcat
   [ build32 1 -- 1 protocol
-  , build16 5 -- protocol name length
-  , buildArray (fromByteString "range") 5
+  , buildString (fromByteString "range") 5 -- protocol name
   , build32 16 -- metadata bytes length
   , build16 0 -- version
   , build32 1 -- number of subscriptions
-  , build16 (size16 topic) -- size of topic name
-  , buildArray topic (sizeofByteArray topic) -- topic name
+  , buildString topic (sizeofByteArray topic) -- topic name
   , build32 0 -- userdata bytes length
   ]
 
