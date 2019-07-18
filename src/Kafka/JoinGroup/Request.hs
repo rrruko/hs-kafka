@@ -68,7 +68,7 @@ joinGroupRequest (Topic topicName _ _) (GroupMember gid mid) =
       , build32 defaultSessionTimeout
       , build32 defaultRebalanceTimeout
       , maybe
-          (build16 (-1))
+          (build16 0)
           (\m -> buildString m (sizeofByteArray m))
           mid
       , buildString defaultProtocolType (fromIntegral defaultProtocolTypeLength)
