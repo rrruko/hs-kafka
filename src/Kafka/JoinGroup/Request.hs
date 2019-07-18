@@ -48,14 +48,9 @@ joinGroupRequest ::
 joinGroupRequest (Topic topicName _ _) (GroupMember gid mid) =
   let
     groupIdLength = sizeofByteArray gid
-    reqSize = fromIntegral $
-        28
-      + clientIdLength
-      + groupIdLength
-      + maybe 0 sizeofByteArray mid
+    reqSize = evaluate $ foldBuilder [build32 (fromIntegral $ sizeofByteArray req)]
     req = evaluate $ foldBuilder $
-      [ build32 reqSize
-      , build16 joinGroupApiKey
+      [ build16 joinGroupApiKey
       , build16 joinGroupApiVersion
       , build32 correlationId
       , buildString (fromByteString clientId) (fromIntegral clientIdLength)
@@ -71,6 +66,7 @@ joinGroupRequest (Topic topicName _ _) (GroupMember gid mid) =
       ]
   in
     runUnliftedArray $ do
-      arr <- newUnliftedArray 1 mempty
-      writeUnliftedArray arr 0 req
+      arr <- newUnliftedArray 2 mempty
+      writeUnliftedArray arr 0 reqSize
+      writeUnliftedArray arr 1 req
       pure arr

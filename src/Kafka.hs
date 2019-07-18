@@ -66,7 +66,7 @@ listOffsets ::
   -> Topic
   -> [Int32]
   -> IO (Either KafkaException ())
-listOffsets kafka topic partitionIndices = do
+listOffsets kafka topic partitionIndices =
   request kafka $ listOffsetsRequest topic partitionIndices
 
 joinGroup ::
