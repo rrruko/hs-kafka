@@ -15,6 +15,7 @@ module Kafka.Writer
   , build32
   , build64
   , buildArray
+  , buildMapArray
   , buildString
   , evaluate
   , evaluateWriter
@@ -106,6 +107,9 @@ buildBytes src len = Kwb len (writeBytes src len)
 
 buildArray :: [KafkaWriterBuilder s] -> Int -> KafkaWriterBuilder s
 buildArray src len = build32 (fromIntegral len) <> mconcat src
+
+buildMapArray :: Foldable t => t a -> (a -> KafkaWriterBuilder s) -> KafkaWriterBuilder s
+buildMapArray xs f = build32 (fromIntegral $ length xs) <> foldMap f xs
 
 buildString :: ByteArray -> Int -> KafkaWriterBuilder s
 buildString src len = build16 (fromIntegral len) <> buildBytes src len
