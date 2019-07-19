@@ -91,36 +91,36 @@ goldenTests = testGroup "Golden tests"
   [ testGroup "Produce"
       [ goldenVsString
           "One payload"
-          "test/produce-one-payload-request"
+          "test/golden/produce-one-payload-request"
           (BL.fromStrict <$> produceTest)
       , goldenVsString
           "Many payloads"
-          "test/produce-many-payloads-request"
+          "test/golden/produce-many-payloads-request"
           (BL.fromStrict <$> multipleProduceTest)
       ]
   , testGroup "Fetch"
       [ goldenVsString
           "One partition"
-          "test/fetch-one-partition-request"
+          "test/golden/fetch-one-partition-request"
           (BL.fromStrict <$> fetchTest)
       , goldenVsString
           "Many partitions"
-          "test/fetch-many-partitions-request"
+          "test/golden/fetch-many-partitions-request"
           (BL.fromStrict <$> multipleFetchTest)
 
       ]
   , testGroup "ListOffsets"
       [ goldenVsString
           "No partitions"
-          "test/listoffsets-no-partitions-request"
+          "test/golden/listoffsets-no-partitions-request"
           (BL.fromStrict <$> listOffsetsTest [])
       , goldenVsString
           "One partition"
-          "test/listoffsets-one-partition-request"
+          "test/golden/listoffsets-one-partition-request"
           (BL.fromStrict <$> listOffsetsTest [0])
       , goldenVsString
           "Many partitions"
-          "test/listoffsets-many-partitions-request"
+          "test/golden/listoffsets-many-partitions-request"
           (BL.fromStrict <$> listOffsetsTest [0,1,2,3,4,5])
       ]
   ]
