@@ -18,7 +18,7 @@ import Kafka.SyncGroup.Response
 
 main :: IO ()
 main = do
-  let name = fromByteString "example-consumer-group"
+  let name = fromByteString "example-consumer-group-1"
   (t, kafka) <- setup name
   case kafka of
     Nothing -> putStrLn "Failed to connect to kafka"
@@ -26,9 +26,16 @@ main = do
       let member = GroupMember name Nothing
       (genId, newMember) <- initGroupConsumer k t member
       interrupt <- registerDelay 5000000
-      void $ syncGroup k newMember genId []
-      registerDelay 3000000 >>= getSyncGroupResponse k >>= print
-      heartbeats k t newMember genId interrupt
+      case newMember of
+        GroupMember _ (Just memberName) -> do
+          void $ syncGroup k newMember genId
+            [ MemberAssignment memberName
+                [TopicAssignment (fromByteString "test") [0]]
+            ]
+          registerDelay 3000000 >>= getSyncGroupResponse k >>= print
+          heartbeats k t newMember genId interrupt
+        _ -> do
+          putStrLn "The server didn't assign a member id"
 
 setup :: ByteArray -> IO (Topic, Maybe Kafka)
 setup topicName = do
