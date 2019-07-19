@@ -2,6 +2,7 @@
 
 module Kafka.JoinGroup.Response
   ( JoinGroupResponse(..)
+  , Member(..)
   , getJoinGroupResponse
   , parseJoinGroupResponse
   ) where
