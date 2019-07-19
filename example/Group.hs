@@ -56,45 +56,57 @@ consumer name = do
     Just k -> do
       let member = GroupMember groupName Nothing
       (genId, newMember, allMembers) <- initGroupConsumer k t member
-      if not (null allMembers) then
-        leader t k (genId, newMember, allMembers)
-      else
-        follower t k name (genId, newMember)
+      when (not (null allMembers)) $ do
+        putStrLn (name <> " is the leader.")
+      runConsumer t k name genId newMember allMembers
 
-leader :: Topic -> Kafka -> (GenerationId, GroupMember, [Member]) -> IO ()
-leader t k (genId, newMember, allMembers) = do
-  let
-    Topic topicName partitionCount _ = t
-    partitions groupMembers i =
-      filter
-        (\n -> mod (n + i) (length groupMembers) == 0)
-        [0..partitionCount-1]
-    assign groupMembers =
-      fmap
-        (\(member, i) ->
-          MemberAssignment (fromByteString $ groupMemberId member)
-            [TopicAssignment (topicName) (fromIntegral <$> partitions groupMembers i)])
-        (zip groupMembers [0..])
-  interrupt <- registerDelay 30000000
-  void $ syncGroup k newMember genId $ assign allMembers
-  registerDelay 30000000 >>= getSyncGroupResponse k >>= \case
-    Right (Right sgr) -> do
-      putStrLn ("leader: my assigned partitions are " <> show (memberAssignment sgr))
-      heartbeats k t newMember genId interrupt "leader"
-    e -> do
-      print e
+thirtySeconds :: Int
+thirtySeconds = 30000000
 
-follower :: Topic -> Kafka -> String -> (GenerationId, GroupMember) -> IO ()
-follower t k name (genId, newMember) = do
-  interrupt <- registerDelay 30000000
-  void $ syncGroup k newMember genId
-    []
-  registerDelay 30000000 >>= getSyncGroupResponse k >>= \case
+assignMembers :: Int -> Topic -> [Member] -> [MemberAssignment]
+assignMembers memberCount top groupMembers =
+  fmap
+    (assignMember memberCount top)
+    (zip groupMembers [0..])
+
+assignMember :: Int -> Topic -> (Member, Int) -> MemberAssignment
+assignMember memberCount top (member, i) =
+  MemberAssignment (fromByteString $ groupMemberId member)
+    [TopicAssignment
+      topicName
+      (fromIntegral <$> assignPartitions memberCount i partitionCount)]
+  where
+    Topic topicName partitionCount _ = top
+
+assignPartitions :: Int -> Int -> Int -> [Int]
+assignPartitions memberCount i partitionCount =
+  filter
+    (\n -> mod (n + i) memberCount == 0)
+    [0..partitionCount-1]
+
+runConsumer ::
+     Topic
+  -> Kafka
+  -> String
+  -> GenerationId
+  -> GroupMember
+  -> [Member]
+  -> IO ()
+runConsumer t k name genId newMember allMembers = do
+  interrupt <- registerDelay thirtySeconds
+  void $ syncGroup k newMember genId (assignMembers (length allMembers) t allMembers)
+  delay <- registerDelay thirtySeconds
+  resp <- getSyncGroupResponse k delay
+  case resp of
     Right (Right sgr) -> do
-      putStrLn (name <> ": my assigned partitions are " <> show (memberAssignment sgr))
+      reportPartitions name sgr
       heartbeats k t newMember genId interrupt name
     e -> do
       print e
+
+reportPartitions :: String -> SyncGroupResponse -> IO ()
+reportPartitions name sgr = putStrLn
+  (name <> ": my assigned partitions are " <> show (memberAssignment sgr))
 
 setup :: ByteArray -> IO (Topic, Maybe Kafka)
 setup topicName = do
@@ -112,7 +124,7 @@ heartbeats ::
   -> String
   -> IO ()
 heartbeats kafka top member genId interrupt name = do
-  wait <- registerDelay 30000000
+  wait <- registerDelay thirtySeconds
   void $ heartbeat kafka member genId
   resp <- getHeartbeatResponse kafka wait
   threadDelay 1000000
@@ -131,7 +143,7 @@ initGroupConsumer ::
   -> GroupMember
   -> IO (GenerationId, GroupMember, [Member])
 initGroupConsumer kafka top member@(GroupMember groupName _) = do
-  wait <- registerDelay 30000000
+  wait <- registerDelay thirtySeconds
   ex <- joinGroup kafka top member
   when (isLeft ex) (fail "Encountered network exception trying to join group")
   getJoinGroupResponse kafka wait >>= \case
@@ -145,11 +157,11 @@ initGroupConsumer kafka top member@(GroupMember groupName _) = do
           print jgr2
           let genId = GenerationId (generationId jgr2)
           pure (genId, assignment, members jgr2)
-        Right (Left e) -> do
-          fail ("Failed parsing join group response: " <> show e)
-        Left e -> do
-          fail ("Encountered network exception trying to join group: " <> show e)
-    Right (Left e) -> do
-      fail ("Failed parsing join group response: " <> show e)
-    Left e -> do
-      fail ("Encountered network exception trying to join group: " <> show e)
+        Right (Left e) -> fail
+          ("Failed parsing join group response: " <> show e)
+        Left e -> fail
+          ("Encountered network exception trying to join group: " <> show e)
+    Right (Left e) -> fail
+      ("Failed parsing join group response: " <> show e)
+    Left e -> fail
+      ("Encountered network exception trying to join group: " <> show e)
