@@ -36,21 +36,33 @@ waitForChildren = do
 
 main :: IO ()
 main = do
-  forkFollower (follower "1")
-  forkFollower (follower "2")
-  leader
+  forkConsumer "1"
+  forkConsumer "2"
+  forkConsumer "3"
   waitForChildren
 
-forkFollower :: IO () -> IO ()
-forkFollower io = do
+forkConsumer :: String -> IO ()
+forkConsumer name = do
   mvar <- newEmptyMVar
   childs <- takeMVar children
   putMVar children (mvar:childs)
-  void $ forkFinally io (\_ -> putMVar mvar ())
+  void $ forkFinally (consumer name) (\_ -> putMVar mvar ())
 
-leader :: IO ()
-leader = do
+consumer :: String -> IO ()
+consumer name = do
   (t, kafka) <- setup groupName
+  case kafka of
+    Nothing -> putStrLn "Failed to connect to kafka"
+    Just k -> do
+      let member = GroupMember groupName Nothing
+      (genId, newMember, allMembers) <- initGroupConsumer k t member
+      if not (null allMembers) then
+        leader t k (genId, newMember, allMembers)
+      else
+        follower t k name (genId, newMember)
+
+leader :: Topic -> Kafka -> (GenerationId, GroupMember, [Member]) -> IO ()
+leader t k (genId, newMember, allMembers) = do
   let
     Topic topicName partitionCount _ = t
     partitions groupMembers i =
@@ -63,39 +75,26 @@ leader = do
           MemberAssignment (fromByteString $ groupMemberId member)
             [TopicAssignment (topicName) (fromIntegral <$> partitions groupMembers i)])
         (zip groupMembers [0..])
-  case kafka of
-    Nothing -> putStrLn "Failed to connect to kafka"
-    Just k -> do
-      let member = GroupMember groupName Nothing
-      (genId, newMember, allMembers) <- initGroupConsumer k t member
-      interrupt <- registerDelay 30000000
-      putStrLn "Leader is making the following assignments:"
-      print (assign allMembers)
-      void $ syncGroup k newMember genId $ assign allMembers
-      registerDelay 30000000 >>= getSyncGroupResponse k >>= \case
-        Right (Right sgr) -> do
-          putStrLn ("leader: my assigned partitions are " <> show (memberAssignment sgr))
-          heartbeats k t newMember genId interrupt "leader"
-        e -> do
-          print e
+  interrupt <- registerDelay 30000000
+  void $ syncGroup k newMember genId $ assign allMembers
+  registerDelay 30000000 >>= getSyncGroupResponse k >>= \case
+    Right (Right sgr) -> do
+      putStrLn ("leader: my assigned partitions are " <> show (memberAssignment sgr))
+      heartbeats k t newMember genId interrupt "leader"
+    e -> do
+      print e
 
-follower :: String -> IO ()
-follower name = do
-  (t, kafka) <- setup groupName
-  case kafka of
-    Nothing -> putStrLn "Failed to connect to kafka"
-    Just k -> do
-      let member = GroupMember groupName Nothing
-      (genId, newMember, _) <- initGroupConsumer k t member
-      interrupt <- registerDelay 30000000
-      void $ syncGroup k newMember genId
-        []
-      registerDelay 30000000 >>= getSyncGroupResponse k >>= \case
-        Right (Right sgr) -> do
-          putStrLn (name <> ": my assigned partitions are " <> show (memberAssignment sgr))
-          heartbeats k t newMember genId interrupt name
-        e -> do
-          print e
+follower :: Topic -> Kafka -> String -> (GenerationId, GroupMember) -> IO ()
+follower t k name (genId, newMember) = do
+  interrupt <- registerDelay 30000000
+  void $ syncGroup k newMember genId
+    []
+  registerDelay 30000000 >>= getSyncGroupResponse k >>= \case
+    Right (Right sgr) -> do
+      putStrLn (name <> ": my assigned partitions are " <> show (memberAssignment sgr))
+      heartbeats k t newMember genId interrupt name
+    e -> do
+      print e
 
 setup :: ByteArray -> IO (Topic, Maybe Kafka)
 setup topicName = do
