@@ -56,7 +56,7 @@ leader = do
     partitions groupMembers i =
       filter
         (\n -> mod (n + i) (length groupMembers) == 0)
-        [0..partitionCount]
+        [0..partitionCount-1]
     assign groupMembers =
       fmap
         (\(member, i) ->
@@ -100,7 +100,7 @@ follower name = do
 setup :: ByteArray -> IO (Topic, Maybe Kafka)
 setup topicName = do
   currentPartition <- newIORef 0
-  let t = Topic topicName 1 currentPartition
+  let t = Topic topicName 5 currentPartition
   k <- newKafka defaultKafka
   pure (t, either (const Nothing) Just k)
 
