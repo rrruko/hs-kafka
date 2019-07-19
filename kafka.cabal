@@ -28,6 +28,8 @@ library
                      , Kafka.Produce.Request
                      , Kafka.Produce.Response
                      , Kafka.Response
+                     , Kafka.SyncGroup.Request
+                     , Kafka.SyncGroup.Response
                      , Kafka.Varint
                      , Kafka.Writer
   ghc-options: -Wall -Werror -O2
