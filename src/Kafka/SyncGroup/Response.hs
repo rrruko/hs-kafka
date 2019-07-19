@@ -4,7 +4,7 @@ module Kafka.SyncGroup.Response
   , parseSyncGroupResponse
   ) where
 
-import Data.Attoparsec.ByteString (Parser, (<?>))
+import Data.Attoparsec.ByteString (Parser, (<?>), takeByteString)
 import Data.ByteString (ByteString)
 import Data.Int
 import GHC.Conc
@@ -25,7 +25,7 @@ parseSyncGroupResponse = do
   SyncGroupResponse
     <$> (int32 <?> "throttle time")
     <*> (int16 <?> "error code")
-    <*> (byteString <?> "member assignment")
+    <*> (takeByteString <?> "member assignment")
 
 getSyncGroupResponse ::
      Kafka
