@@ -4,6 +4,7 @@ module Kafka
   , joinGroup
   , listOffsets
   , produce
+  , syncGroup
   ) where
 
 import Data.Bifunctor (first)
@@ -19,6 +20,7 @@ import Kafka.Heartbeat.Request
 import Kafka.JoinGroup.Request
 import Kafka.ListOffsets.Request
 import Kafka.Produce.Request
+import Kafka.SyncGroup.Request
 
 request ::
      Kafka
@@ -86,3 +88,12 @@ heartbeat ::
   -> IO (Either KafkaException ())
 heartbeat kafka groupMember generationId =
   request kafka $ heartbeatRequest groupMember generationId
+
+syncGroup ::
+     Kafka
+  -> GroupMember
+  -> GenerationId
+  -> [MemberAssignment]
+  -> IO (Either KafkaException ())
+syncGroup kafka groupMember generationId assignments =
+  request kafka $ syncGroupRequest groupMember generationId assignments
