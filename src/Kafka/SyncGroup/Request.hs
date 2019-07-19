@@ -19,20 +19,26 @@ syncGroupApiKey :: Int16
 syncGroupApiKey = 14
 
 defaultAssignmentData :: MemberAssignment -> forall s. KafkaWriterBuilder s
-defaultAssignmentData assignment = mconcat
-  [ buildString memId memIdSize
-  , build16 0 -- version
-  , buildMapArray (assignedTopics assignment)
-      (\top -> mconcat
-        [ buildString
-            (assignedTopicName top)
-            (sizeofByteArray $ assignedTopicName top)
-        , buildMapArray
-            (assignedPartitions top)
-            (\part -> build32 part)
-        ])
-  , build32 0 -- userdata bytes length
-  ]
+defaultAssignmentData assignment =
+  let
+    assn = mconcat
+      [ build16 0 -- version
+      , buildMapArray (assignedTopics assignment)
+          (\top -> mconcat
+            [ buildString
+                (assignedTopicName top)
+                (sizeofByteArray $ assignedTopicName top)
+            , buildMapArray
+                (assignedPartitions top)
+                (\part -> build32 part)
+            ])
+      , build32 0 -- userdata bytes length
+      ]
+  in mconcat
+    [ buildString memId memIdSize
+    , build32 (size32 $ evaluate assn)
+    , assn
+    ]
   where
     memId = assignedMemberId assignment
     memIdSize = fromIntegral $ sizeofByteArray memId
