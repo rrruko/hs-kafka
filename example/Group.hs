@@ -68,13 +68,13 @@ leader = do
     Just k -> do
       let member = GroupMember groupName Nothing
       (genId, newMember, allMembers) <- initGroupConsumer k t member
-      interrupt <- registerDelay 5000000
+      interrupt <- registerDelay 30000000
       putStrLn "Leader is making the following assignments:"
       print (assign allMembers)
       void $ syncGroup k newMember genId $ assign allMembers
-      registerDelay 3000000 >>= getSyncGroupResponse k >>= \case
+      registerDelay 30000000 >>= getSyncGroupResponse k >>= \case
         Right (Right sgr) -> do
-          putStrLn ("leader: my assigned topics are " <> show (memberAssignment sgr))
+          putStrLn ("leader: my assigned partitions are " <> show (memberAssignment sgr))
           heartbeats k t newMember genId interrupt "leader"
         e -> do
           print e
@@ -87,12 +87,12 @@ follower name = do
     Just k -> do
       let member = GroupMember groupName Nothing
       (genId, newMember, _) <- initGroupConsumer k t member
-      interrupt <- registerDelay 5000000
+      interrupt <- registerDelay 30000000
       void $ syncGroup k newMember genId
         []
-      registerDelay 3000000 >>= getSyncGroupResponse k >>= \case
+      registerDelay 30000000 >>= getSyncGroupResponse k >>= \case
         Right (Right sgr) -> do
-          putStrLn (name <> ": my assigned topics are " <> show (memberAssignment sgr))
+          putStrLn (name <> ": my assigned partitions are " <> show (memberAssignment sgr))
           heartbeats k t newMember genId interrupt name
         e -> do
           print e
@@ -113,7 +113,7 @@ heartbeats ::
   -> String
   -> IO ()
 heartbeats kafka top member genId interrupt name = do
-  wait <- registerDelay 2000000
+  wait <- registerDelay 30000000
   void $ heartbeat kafka member genId
   resp <- getHeartbeatResponse kafka wait
   threadDelay 1000000
@@ -132,7 +132,7 @@ initGroupConsumer ::
   -> GroupMember
   -> IO (GenerationId, GroupMember, [Member])
 initGroupConsumer kafka top member@(GroupMember groupName _) = do
-  wait <- registerDelay 5000000
+  wait <- registerDelay 30000000
   ex <- joinGroup kafka top member
   when (isLeft ex) (fail "Encountered network exception trying to join group")
   getJoinGroupResponse kafka wait >>= \case
