@@ -44,6 +44,16 @@ data GenerationId = GenerationId
   { getGenerationId :: Int32
   } deriving (Eq, Show)
 
+data MemberAssignment = MemberAssignment
+  { assignedMemberId :: ByteArray
+  , assignedTopics :: [TopicAssignment]
+  } deriving (Eq, Show)
+
+data TopicAssignment = TopicAssignment
+  { assignedTopicName :: ByteArray
+  , assignedPartitions :: [Int32]
+  } deriving (Eq, Show)
+
 newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
 newKafka = fmap (fmap Kafka) . connect
 
