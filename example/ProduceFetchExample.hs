@@ -26,7 +26,7 @@ main = do
         Right res@(ProduceResponse [ProduceResponseMessage _ rs] _) -> do
           print res
           putStrLn "Fetch request:"
-          sendFetchRequest (testTopic ctr)
+          sendFetchRequest (TopicName testTopicName)
             (fmap
               (\r -> Partition
                 (prResponsePartition r)
@@ -44,8 +44,11 @@ main = do
       putStrLn "Failed to communicate with the Kafka server"
       print networkError
 
+testTopicName :: ByteArray
+testTopicName = fromByteString "test"
+
 testTopic :: IORef Int -> Topic
-testTopic = Topic (fromByteString "test") 1
+testTopic = Topic testTopicName 1
 
 thirtySecondsUs :: Int
 thirtySecondsUs = 30000000
@@ -67,10 +70,10 @@ sendProduceRequest topic = do
       Left exception -> do
         pure (Left exception)
 
-sendFetchRequest :: Topic -> [Partition] -> IO ()
-sendFetchRequest topic partitions = do
+sendFetchRequest :: TopicName -> [Partition] -> IO ()
+sendFetchRequest topicName partitions = do
   withDefaultKafka $ \kafka -> do
-    fetch kafka topic thirtySecondsUs partitions >>= \case
+    fetch kafka topicName thirtySecondsUs partitions >>= \case
       Right () -> do
         interrupt <- registerDelay thirtySecondsUs
         response <- getFetchResponse kafka interrupt

@@ -7,6 +7,7 @@ module Main where
 import Control.Concurrent
 import Control.Monad
 import Data.Either (isLeft)
+import Data.Foldable
 import Data.IORef
 import Data.Primitive.ByteArray (ByteArray)
 import GHC.Conc
@@ -14,6 +15,7 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import Kafka
 import Kafka.Common
+import Kafka.Fetch.Response
 import Kafka.Heartbeat.Response
 import Kafka.JoinGroup.Response
 import Kafka.SyncGroup.Response
@@ -50,12 +52,13 @@ forkConsumer name = do
 
 consumer :: String -> IO ()
 consumer name = do
-  (t, kafka) <- setup groupName
+  (t@(Topic topicName _ _), kafka) <- setup groupName
   case kafka of
     Nothing -> putStrLn "Failed to connect to kafka"
     Just k -> do
       let member = GroupMember groupName Nothing
-      (genId, newMember, allMembers) <- initGroupConsumer k t member
+      (genId, newMember, allMembers) <-
+        initGroupConsumer k (TopicName topicName) member
       when (not (null allMembers)) $ do
         putStrLn (name <> " is the leader.")
       runConsumer t k name genId newMember allMembers
@@ -100,9 +103,27 @@ runConsumer t k name genId newMember allMembers = do
   case resp of
     Right (Right sgr) -> do
       reportPartitions name sgr
+      void $ forkIO $
+        withDefaultKafka $ \k' ->
+          consumeOn k' (partitionAssignments (memberAssignment sgr))
       heartbeats k t newMember genId interrupt name
     e -> do
       print e
+
+consumeOn ::
+     Kafka
+  -> [SyncTopicAssignment]
+  -> IO ()
+consumeOn k assignments =
+  for_ assignments $ \a -> do
+    let top = TopicName (fromByteString (syncAssignedTopic a))
+        partitionOffsets = fmap (\n -> Partition n 0) (syncAssignedPartitions a)
+    void $ fetch k top thirtySeconds partitionOffsets
+    interrupt <- registerDelay thirtySeconds
+    resp <- getFetchResponse k interrupt
+    putStrLn "***"
+    print resp
+    putStrLn "***"
 
 reportPartitions :: String -> SyncGroupResponse -> IO ()
 reportPartitions name sgr = putStrLn
@@ -134,15 +155,15 @@ heartbeats kafka top member genId interrupt name = do
       halt <- atomically $ readTVar interrupt
       when (not halt) $ do
         heartbeats kafka top member genId interrupt name
-    e -> do
+    _ -> do
       putStrLn "Failed to receive heartbeat response"
 
 initGroupConsumer ::
      Kafka
-  -> Topic
+  -> TopicName
   -> GroupMember
   -> IO (GenerationId, GroupMember, [Member])
-initGroupConsumer kafka top member@(GroupMember groupName _) = do
+initGroupConsumer kafka top member@(GroupMember name _) = do
   wait <- registerDelay thirtySeconds
   ex <- joinGroup kafka top member
   when (isLeft ex) (fail "Encountered network exception trying to join group")
@@ -150,7 +171,7 @@ initGroupConsumer kafka top member@(GroupMember groupName _) = do
     Right (Right jgr) -> do
       print jgr
       let memId = Just (fromByteString (memberId jgr))
-      let assignment = GroupMember groupName memId
+      let assignment = GroupMember name memId
       void $ joinGroup kafka top assignment
       getJoinGroupResponse kafka wait >>= \case
         Right (Right jgr2) -> do

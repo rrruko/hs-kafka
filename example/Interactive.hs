@@ -49,7 +49,7 @@ iProduce kafka top byteStrings = do
 
 iFetch ::
      Kafka
-  -> Topic
+  -> TopicName
   -> Int64
   -> IO (Either KafkaException (Either String FetchResponse))
 iFetch kafka top offs = do
@@ -59,7 +59,7 @@ iFetch kafka top offs = do
 
 iListOffsets ::
      Kafka
-  -> Topic
+  -> TopicName
   -> IO (Either KafkaException (Either String ListOffsetsResponse))
 iListOffsets kafka top = do
   wait <- registerDelay giveUpTime
@@ -68,7 +68,7 @@ iListOffsets kafka top = do
 
 iJoinGroup ::
      Kafka
-  -> Topic
+  -> TopicName
   -> GroupMember
   -> IO (Either KafkaException (Either String JoinGroupResponse))
 iJoinGroup kafka top member = do
