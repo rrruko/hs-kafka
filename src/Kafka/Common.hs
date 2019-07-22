@@ -26,6 +26,8 @@ data Topic = Topic
   Int -- Number of partitions
   (IORef Int) -- incrementing number
 
+newtype TopicName = TopicName ByteArray
+
 data Partition = Partition
   { partitionIndex :: Int32
   , partitionOffset :: Int64

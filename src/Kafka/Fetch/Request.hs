@@ -27,7 +27,7 @@ isolationLevel ReadCommitted = 1
 
 sessionlessFetchRequest ::
      Int
-  -> Topic
+  -> TopicName
   -> [Partition]
   -> UnliftedArray ByteArray
 sessionlessFetchRequest = fetchRequest 0 (-1)
@@ -51,7 +51,7 @@ fetchRequest ::
      Int32
   -> Int32
   -> Int
-  -> Topic
+  -> TopicName
   -> [Partition]
   -> UnliftedArray ByteArray
 fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
@@ -98,6 +98,6 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
       writeUnliftedArray arr 0 requestMetadata
       pure arr
   where
-    Topic topicName _ _ = topic
+    TopicName topicName = topic
     topicNameSize = sizeofByteArray topicName
     partitionCount = length partitions

@@ -44,10 +44,10 @@ defaultProtocolData topic = mconcat
     topicSize = sizeofByteArray topic
 
 joinGroupRequest ::
-     Topic
+     TopicName
   -> GroupMember
   -> UnliftedArray ByteArray
-joinGroupRequest (Topic topicName _ _) (GroupMember gid mid) =
+joinGroupRequest (TopicName topicName) (GroupMember gid mid) =
   let
     groupIdLength = sizeofByteArray gid
     reqSize = evaluate $ foldBuilder [build32 (fromIntegral $ sizeofByteArray req)]

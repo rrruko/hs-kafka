@@ -46,7 +46,7 @@ kafkaTimestamp Earliest = -2
 kafkaTimestamp (At n) = n
 
 listOffsetsRequest ::
-     Topic
+     TopicName
   -> [Int32]
   -> UnliftedArray ByteArray
 listOffsetsRequest topic partitions =
@@ -87,6 +87,6 @@ listOffsetsRequest topic partitions =
       writeUnliftedArray arr 0 req
       pure arr
   where
-    Topic topicName _ _ = topic
+    TopicName topicName = topic
     topicNameSize = sizeofByteArray topicName
     partitionCount = length partitions

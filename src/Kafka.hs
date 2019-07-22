@@ -34,9 +34,13 @@ produce ::
   -> Int -- number of microseconds to wait for response
   -> UnliftedArray ByteArray -- payloads
   -> IO (Either KafkaException ())
-produce kafka topic@(Topic _ parts ctr) waitTime payloads = do
+produce kafka (Topic topicName parts ctr) waitTime payloads = do
   p <- fromIntegral <$> readIORef ctr
-  let message = produceRequest (waitTime `div` 1000) topic p payloads
+  let message = produceRequest
+        (waitTime `div` 1000)
+        (TopicName topicName)
+        p
+        payloads
   e <- request kafka message
   either (pure . Left) (\a -> increment parts ctr >> pure (Right a)) e
 
@@ -58,7 +62,7 @@ increment totalParts ref = modifyIORef' ref $ \ptr ->
 
 fetch ::
      Kafka
-  -> Topic
+  -> TopicName
   -> Int
   -> [Partition]
   -> IO (Either KafkaException ())
@@ -67,7 +71,7 @@ fetch kafka topic waitTime partitions =
 
 listOffsets ::
      Kafka
-  -> Topic
+  -> TopicName
   -> [Int32]
   -> IO (Either KafkaException ())
 listOffsets kafka topic partitionIndices =
@@ -75,7 +79,7 @@ listOffsets kafka topic partitionIndices =
 
 joinGroup ::
      Kafka
-  -> Topic
+  -> TopicName
   -> GroupMember
   -> IO (Either KafkaException ())
 joinGroup kafka topic groupMember =

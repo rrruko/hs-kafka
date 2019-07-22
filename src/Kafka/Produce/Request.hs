@@ -136,7 +136,7 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
 makeRequestMetadata ::
      Int
   -> Int
-  -> Topic
+  -> TopicName
   -> Int32
   -> ByteArray
 makeRequestMetadata recordBatchSectionSize timeout topic partition =
@@ -156,7 +156,7 @@ makeRequestMetadata recordBatchSectionSize timeout topic partition =
     , build32 (fromIntegral recordBatchSectionSize) -- record_set length
     ]
   where
-    Topic topicName _ _ = topic
+    TopicName topicName = topic
     topicNameSize = sizeofByteArray topicName
     minimumSize = 36
     size = fromIntegral $
@@ -167,7 +167,7 @@ makeRequestMetadata recordBatchSectionSize timeout topic partition =
 
 produceRequest ::
      Int
-  -> Topic
+  -> TopicName
   -> Int32
   -> UnliftedArray ByteArray
   -> UnliftedArray ByteArray

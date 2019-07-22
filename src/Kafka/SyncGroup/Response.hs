@@ -1,6 +1,7 @@
 module Kafka.SyncGroup.Response
   ( SyncGroupResponse(..)
   , SyncMemberAssignment(..)
+  , SyncTopicAssignment(..)
   , getSyncGroupResponse
   , parseSyncGroupResponse
   ) where
@@ -27,8 +28,8 @@ data SyncMemberAssignment = SyncMemberAssignment
   } deriving (Eq, Show)
 
 data SyncTopicAssignment = SyncTopicAssignment
-  { assignedTopic :: ByteString
-  , assignedPartitions :: [Int32]
+  { syncAssignedTopic :: ByteString
+  , syncAssignedPartitions :: [Int32]
   } deriving (Eq, Show)
 
 parseTopicPartitions :: Parser SyncTopicAssignment
