@@ -138,7 +138,7 @@ produceTest = do
   payloadsf <- freezeUnliftedArray payloads 0 1
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
-      req = toByteString $ unChunks $ produceRequest 30000 topic 0 payloadsf
+      req = toByteString $ unChunks $ produceRequest 30000 (TopicName topicName) 0 payloadsf
   pure req
 
 multipleProduceTest :: IO ByteString
@@ -152,7 +152,7 @@ multipleProduceTest = do
         ]
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
-      req = toByteString $ unChunks $ produceRequest 30000 topic 0 payloads
+      req = toByteString $ unChunks $ produceRequest 30000 (TopicName topicName) 0 payloads
   pure req
 
 fetchTest :: IO ByteString
@@ -161,7 +161,7 @@ fetchTest = do
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
       req = toByteString $ unChunks $
-        sessionlessFetchRequest 30000 topic [Partition 0 0]
+        sessionlessFetchRequest 30000 (TopicName topicName) [Partition 0 0]
   pure req
 
 multipleFetchTest :: IO ByteString
@@ -170,7 +170,7 @@ multipleFetchTest = do
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
       req = toByteString $ unChunks $
-        sessionlessFetchRequest 30000 topic
+        sessionlessFetchRequest 30000 (TopicName topicName)
           [Partition 0 0, Partition 1 0, Partition 2 0]
   pure req
 
@@ -180,7 +180,7 @@ listOffsetsTest partitions = do
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
       req = toByteString $ unChunks $
-        listOffsetsRequest topic partitions
+        listOffsetsRequest (TopicName topicName) partitions
   pure req
 
 produceResponseTest :: TestTree
