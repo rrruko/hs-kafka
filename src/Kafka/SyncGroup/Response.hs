@@ -18,7 +18,7 @@ import Kafka.Response
 data SyncGroupResponse = SyncGroupResponse
   { throttleTimeMs :: Int32
   , errorCode :: Int16
-  , memberAssignment :: SyncMemberAssignment
+  , memberAssignment :: Maybe SyncMemberAssignment
   } deriving (Eq, Show)
 
 data SyncMemberAssignment = SyncMemberAssignment
@@ -40,7 +40,6 @@ parseTopicPartitions =
 
 parseMemberAssignment :: Parser SyncMemberAssignment
 parseMemberAssignment = do
-  _bytesSize <- int32
   SyncMemberAssignment
     <$> (int16 <?> "assignment version")
     <*> (array parseTopicPartitions <?> "topic partitions")
@@ -52,7 +51,7 @@ parseSyncGroupResponse = do
   SyncGroupResponse
     <$> (int32 <?> "throttle time")
     <*> (int16 <?> "error code")
-    <*> (parseMemberAssignment <?> "member assignment")
+    <*> (nullableBytes parseMemberAssignment <?> "member assignment")
 
 getSyncGroupResponse ::
      Kafka
