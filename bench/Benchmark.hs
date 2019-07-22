@@ -3,7 +3,6 @@
 
 import Control.Monad.ST
 import Data.Int
-import Data.IORef
 import Data.Primitive.Unlifted.Array
 import Data.Primitive.ByteArray
 import Gauge
@@ -14,7 +13,7 @@ import Kafka.Produce.Request
 data RequestData =
   RequestData
     { timeout :: Int
-    , topic :: Topic
+    , topic :: TopicName
     , partition :: Int32
     , payloads :: UnliftedArray ByteArray
     }
@@ -25,7 +24,6 @@ produceRequest' (RequestData {..}) =
 
 main :: IO ()
 main = do
-  ioref <- newIORef 0
   let shortPayloads = unliftedArrayFromList
         [ fromByteString "aaaaa"
         , fromByteString "bbbbb"
@@ -36,7 +34,7 @@ main = do
       shortRequestData =
         RequestData
           30000000
-          (Topic (fromByteString "test") 1 ioref)
+          (TopicName (fromByteString "test"))
           0
           shortPayloads
       longPayloads = unliftedArrayFromList
@@ -45,7 +43,7 @@ main = do
       longRequestData =
         RequestData
           30000000
-          (Topic (fromByteString "test") 1 ioref)
+          (TopicName (fromByteString "test"))
           0
           longPayloads
   defaultMain
