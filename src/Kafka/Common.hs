@@ -27,11 +27,12 @@ data Topic = Topic
   (IORef Int) -- incrementing number
 
 newtype TopicName = TopicName ByteArray
+  deriving (Eq, Show)
 
 data Partition = Partition
   { partitionIndex :: Int32
   , partitionOffset :: Int64
-  }
+  } deriving (Eq, Show)
 
 data KafkaException where
   KafkaSendException :: SendException 'Uninterruptible -> KafkaException
