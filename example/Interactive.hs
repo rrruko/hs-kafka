@@ -17,6 +17,7 @@ import Kafka.Fetch.Response
 import Kafka.ListOffsets.Response
 import Kafka.JoinGroup.Response
 import Kafka.OffsetCommit.Response
+import Kafka.OffsetFetch.Response
 import Kafka.Produce.Response
 
 main :: IO ()
@@ -88,3 +89,14 @@ iOffsetCommit kafka top offs member genId = do
   wait <- registerDelay giveUpTime
   _ <- offsetCommit kafka top offs member genId
   getOffsetCommitResponse kafka wait
+
+iOffsetFetch ::
+     Kafka
+  -> TopicName
+  -> GroupMember
+  -> [Int32]
+  -> IO (Either KafkaException (Either String OffsetFetchResponse))
+iOffsetFetch kafka top member offs = do
+  wait <- registerDelay giveUpTime
+  _ <- offsetFetch kafka member top offs
+  getOffsetFetchResponse kafka wait

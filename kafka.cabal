@@ -28,6 +28,7 @@ library
                      , Kafka.OffsetCommit.Request
                      , Kafka.OffsetCommit.Response
                      , Kafka.OffsetFetch.Request
+                     , Kafka.OffsetFetch.Response
                      , Kafka.Produce.Request
                      , Kafka.Produce.Response
                      , Kafka.Response
