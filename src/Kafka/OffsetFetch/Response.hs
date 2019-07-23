@@ -28,7 +28,7 @@ data OffsetFetchTopic = OffsetFetchTopic
 
 data OffsetFetchPartition = OffsetFetchPartition
   { offsetFetchPartitionIndex :: Int32
-  , offsetFetchOffset :: Int16
+  , offsetFetchOffset :: Int64
   , offsetFetchLeaderEpoch :: Int32
   , offsetFetchMetadata :: Maybe ByteString
   , offsetFetchErrorCode :: Int16
@@ -52,7 +52,7 @@ parseOffsetFetchPartitions :: Parser OffsetFetchPartition
 parseOffsetFetchPartitions = do
   OffsetFetchPartition
     <$> (int32 <?> "partition id")
-    <*> (int16 <?> "offset")
+    <*> (int64 <?> "offset")
     <*> (int32 <?> "leader epoch")
     <*> ((int32 >>= nullableByteString . fromIntegral) <?> "metadata")
     <*> (int16 <?> "error code")
