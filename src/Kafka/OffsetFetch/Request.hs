@@ -1,7 +1,6 @@
 module Kafka.OffsetFetch.Request where
 
 import Data.Int
-import Data.List
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 
@@ -21,20 +20,18 @@ offsetFetchRequest ::
   -> UnliftedArray ByteArray
 offsetFetchRequest (GroupMember gid _) (TopicName topicName) offs =
   let
-    reqSize = evaluate $ foldBuilder [build16 (size16 req)]
+    reqSize = evaluate $ foldBuilder [build32 (size32 req)]
     req =
       evaluate $ foldBuilder
         [ build16 offsetFetchApiKey
         , build16 offsetFetchApiVersion
+        , build32 correlationId
         , buildString (fromByteString clientId) clientIdLength
         , buildString gid (sizeofByteArray gid)
         , build32 1 -- 1 topic
         , buildString topicName (sizeofByteArray topicName)
         , build32 (fromIntegral (length offs))
-        , foldl'
-            (\acc e -> acc <> build32 e)
-            mempty
-            offs
+        , foldMap build32 offs
         ]
   in
     runUnliftedArray $ do
