@@ -18,7 +18,10 @@ import Kafka.Common
 import Kafka.Fetch.Response
 import Kafka.Heartbeat.Response
 import Kafka.JoinGroup.Response
-import Kafka.SyncGroup.Response
+import Kafka.SyncGroup.Response (SyncGroupResponse, SyncTopicAssignment)
+
+import qualified Kafka.SyncGroup.Response as S
+import qualified Kafka.ListOffsets.Response as L
 
 groupName :: ByteArray
 groupName = fromByteString "example-consumer-group"
@@ -52,7 +55,7 @@ forkConsumer name = do
 
 consumer :: String -> IO ()
 consumer name = do
-  (t@(Topic topicName _ _), kafka) <- setup groupName
+  (t@(Topic topicName _ _), kafka) <- setup groupName 5
   case kafka of
     Nothing -> putStrLn "Failed to connect to kafka"
     Just k -> do
@@ -96,19 +99,24 @@ runConsumer ::
   -> [Member]
   -> IO ()
 runConsumer t k name genId newMember allMembers = do
-  interrupt <- registerDelay thirtySeconds
   void $ syncGroup k newMember genId (assignMembers (length allMembers) t allMembers)
-  delay <- registerDelay thirtySeconds
-  resp <- getSyncGroupResponse k delay
+  syncInterrupt <- registerDelay thirtySeconds
+  resp <- S.getSyncGroupResponse k syncInterrupt
   case resp of
     Right (Right sgr) -> do
       reportPartitions name sgr
       void $ forkIO $
-        withDefaultKafka $ \k' ->
-          consumeOn k' (partitionAssignments (memberAssignment sgr))
-      heartbeats k t newMember genId interrupt name
-    e -> do
-      print e
+        withDefaultKafka $ \k' -> do
+          let assigns = S.partitionAssignments <$> S.memberAssignment sgr
+          case assigns of
+            Just as -> consumeOn k' as
+            Nothing -> putStrLn "Failed to receive an assignment"
+      heartbeatInterrupt <- registerDelay thirtySeconds
+      heartbeats k t newMember genId heartbeatInterrupt name
+    Right (Left parseError) -> do
+      print parseError
+    Left networkError -> do
+      print networkError
 
 consumeOn ::
      Kafka
@@ -116,23 +124,39 @@ consumeOn ::
   -> IO ()
 consumeOn k assignments =
   for_ assignments $ \a -> do
-    let top = TopicName (fromByteString (syncAssignedTopic a))
-        partitionOffsets = fmap (\n -> Partition n 0) (syncAssignedPartitions a)
-    void $ fetch k top thirtySeconds partitionOffsets
-    interrupt <- registerDelay thirtySeconds
-    resp <- getFetchResponse k interrupt
-    putStrLn "***"
-    print resp
-    putStrLn "***"
+    let topicName = TopicName (fromByteString (S.syncAssignedTopic a))
+        partitionIndices = S.syncAssignedPartitions a
+    void $ listOffsets k topicName partitionIndices
+    offsets <- L.getListOffsetsResponse k =<< registerDelay thirtySeconds
+    case offsets of
+      Right (Right offs) -> do
+        case L.responses offs of
+          [topicResponse] -> do
+            let partitionOffsets =
+                  fmap
+                    (\r -> Partition (L.partition r) (L.offset r))
+                    (L.partitionResponses topicResponse)
+            void $ fetch k topicName thirtySeconds partitionOffsets
+            resp <- getFetchResponse k =<< registerDelay thirtySeconds
+            case resp of
+              Right (Right r) -> do
+                print r
+                threadDelay 1000000
+                consumeOn k assignments
+              err -> do
+                print err
+          _ -> putStrLn "Got unexpected number of topic responses"
+      err -> do
+        print err
 
 reportPartitions :: String -> SyncGroupResponse -> IO ()
 reportPartitions name sgr = putStrLn
-  (name <> ": my assigned partitions are " <> show (memberAssignment sgr))
+  (name <> ": my assigned partitions are " <> show (S.memberAssignment sgr))
 
-setup :: ByteArray -> IO (Topic, Maybe Kafka)
-setup topicName = do
+setup :: ByteArray -> Int -> IO (Topic, Maybe Kafka)
+setup topicName partitionCount = do
   currentPartition <- newIORef 0
-  let t = Topic topicName 5 currentPartition
+  let t = Topic topicName partitionCount currentPartition
   k <- newKafka defaultKafka
   pure (t, either (const Nothing) Just k)
 
@@ -151,7 +175,6 @@ heartbeats kafka top member genId interrupt name = do
   threadDelay 1000000
   case resp of
     Right (Right _) -> do
-      putStrLn ("heartbeat (" <> name <> ")")
       halt <- atomically $ readTVar interrupt
       when (not halt) $ do
         heartbeats kafka top member genId interrupt name
