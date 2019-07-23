@@ -29,7 +29,7 @@ data Topic = Topic
 newtype TopicName = TopicName ByteArray
   deriving (Eq, Show)
 
-data Partition = Partition
+data PartitionOffset = PartitionOffset
   { partitionIndex :: Int32
   , partitionOffset :: Int64
   } deriving (Eq, Show)

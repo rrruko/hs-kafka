@@ -28,7 +28,7 @@ isolationLevel ReadCommitted = 1
 sessionlessFetchRequest ::
      Int
   -> TopicName
-  -> [Partition]
+  -> [PartitionOffset]
   -> UnliftedArray ByteArray
 sessionlessFetchRequest = fetchRequest 0 (-1)
 
@@ -52,7 +52,7 @@ fetchRequest ::
   -> Int32
   -> Int
   -> TopicName
-  -> [Partition]
+  -> [PartitionOffset]
   -> UnliftedArray ByteArray
 fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
   let
