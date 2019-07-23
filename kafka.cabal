@@ -25,6 +25,7 @@ library
                      , Kafka.JoinGroup.Response
                      , Kafka.ListOffsets.Request
                      , Kafka.ListOffsets.Response
+                     , Kafka.OffsetCommit.Request
                      , Kafka.Produce.Request
                      , Kafka.Produce.Response
                      , Kafka.Response
