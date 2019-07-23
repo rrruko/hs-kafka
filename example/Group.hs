@@ -3,7 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
-
+ 
 import Control.Concurrent
 import Control.Monad
 import Data.Either (isLeft)
@@ -20,8 +20,9 @@ import Kafka.Heartbeat.Response
 import Kafka.JoinGroup.Response
 import Kafka.SyncGroup.Response (SyncGroupResponse, SyncTopicAssignment)
 
+import qualified Kafka.OffsetCommit.Response as C
+import qualified Kafka.OffsetFetch.Response as O
 import qualified Kafka.SyncGroup.Response as S
-import qualified Kafka.ListOffsets.Response as L
 
 groupName :: ByteArray
 groupName = fromByteString "example-consumer-group"
@@ -109,7 +110,7 @@ runConsumer t k name genId newMember allMembers = do
         withDefaultKafka $ \k' -> do
           let assigns = S.partitionAssignments <$> S.memberAssignment sgr
           case assigns of
-            Just as -> consumeOn k' as
+            Just as -> consumeOn k' newMember genId as
             Nothing -> putStrLn "Failed to receive an assignment"
       heartbeatInterrupt <- registerDelay thirtySeconds
       heartbeats k t newMember genId heartbeatInterrupt name
@@ -120,34 +121,75 @@ runConsumer t k name genId newMember allMembers = do
 
 consumeOn ::
      Kafka
+  -> GroupMember
+  -> GenerationId
   -> [SyncTopicAssignment]
   -> IO ()
-consumeOn k assignments =
+consumeOn k member genId assignments =
   for_ assignments $ \a -> do
     let topicName = TopicName (fromByteString (S.syncAssignedTopic a))
         partitionIndices = S.syncAssignedPartitions a
-    void $ listOffsets k topicName partitionIndices
-    offsets <- L.getListOffsetsResponse k =<< registerDelay thirtySeconds
+        initialOffsets = map (\ix -> PartitionOffset ix 0) partitionIndices
+
+    void $ offsetCommit k topicName initialOffsets member genId
+    commitResponse <- C.getOffsetCommitResponse k =<< registerDelay thirtySeconds
+    print commitResponse
+
+    go topicName partitionIndices initialOffsets
+  where
+  go topicName partitionIndices currentOffsets = do
+    void $ offsetFetch k member topicName partitionIndices
+    offsets <- O.getOffsetFetchResponse k =<< registerDelay thirtySeconds
     case offsets of
       Right (Right offs) -> do
-        case L.responses offs of
+        case O.topics offs of
           [topicResponse] -> do
             let partitionOffsets =
                   fmap
-                    (\r -> PartitionOffset (L.partition r) (L.offset r))
-                    (L.partitionResponses topicResponse)
+                    (\r -> PartitionOffset
+                      (O.offsetFetchPartitionIndex r)
+                      (O.offsetFetchOffset r))
+                    (O.offsetFetchPartitions topicResponse)
             void $ fetch k topicName thirtySeconds partitionOffsets
             resp <- getFetchResponse k =<< registerDelay thirtySeconds
             case resp of
               Right (Right r) -> do
                 print r
                 threadDelay 1000000
-                consumeOn k assignments
+                let newOffsets = updateOffsets topicName currentOffsets r
+                putStrLn ("Updating offsets to " <> show newOffsets)
+                void $ offsetCommit k topicName newOffsets member genId
+                commitResponse <- C.getOffsetCommitResponse k =<< registerDelay thirtySeconds
+                case commitResponse of
+                  Right (Right _) -> do
+                    putStrLn "successfully committed new offset"
+                  err -> do
+                    putStrLn "failed to commit new offset"
+                    print err
+                go topicName partitionIndices newOffsets
               err -> do
+                putStrLn "failed to obtain fetch response"
                 print err
           _ -> putStrLn "Got unexpected number of topic responses"
       err -> do
+        putStrLn "failed to obtain offsetfetch response"
         print err
+
+updateOffsets :: TopicName -> [PartitionOffset] -> FetchResponse -> [PartitionOffset]
+updateOffsets (TopicName topicName) xs r =
+  let
+    topicResps = filter
+      (\x -> fetchResponseTopic x == toByteString topicName)
+      (responses r)
+    partitionResps = concatMap partitionResponses topicResps
+    wasUpdated pid = pid `elem` map (partition . partitionHeader) partitionResps
+  in
+    fmap
+      (\(PartitionOffset pid offs) ->
+        if wasUpdated pid
+          then PartitionOffset pid (offs + 1)
+          else PartitionOffset pid offs)
+      xs
 
 reportPartitions :: String -> SyncGroupResponse -> IO ()
 reportPartitions name sgr = putStrLn
