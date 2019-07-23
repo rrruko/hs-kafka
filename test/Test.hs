@@ -161,7 +161,7 @@ fetchTest = do
   let topicName = fromByteString "test"
       topic = Topic topicName 1 ref
       req = toByteString $ unChunks $
-        sessionlessFetchRequest 30000 (TopicName topicName) [Partition 0 0]
+        sessionlessFetchRequest 30000 (TopicName topicName) [PartitionOffset 0 0]
   pure req
 
 multipleFetchTest :: IO ByteString
@@ -171,7 +171,7 @@ multipleFetchTest = do
       topic = Topic topicName 1 ref
       req = toByteString $ unChunks $
         sessionlessFetchRequest 30000 (TopicName topicName)
-          [Partition 0 0, Partition 1 0, Partition 2 0]
+          [PartitionOffset 0 0, PartitionOffset 1 0, PartitionOffset 2 0]
   pure req
 
 listOffsetsTest :: [Int32] -> IO ByteString

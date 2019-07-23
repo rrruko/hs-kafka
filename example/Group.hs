@@ -134,7 +134,7 @@ consumeOn k assignments =
           [topicResponse] -> do
             let partitionOffsets =
                   fmap
-                    (\r -> Partition (L.partition r) (L.offset r))
+                    (\r -> PartitionOffset (L.partition r) (L.offset r))
                     (L.partitionResponses topicResponse)
             void $ fetch k topicName thirtySeconds partitionOffsets
             resp <- getFetchResponse k =<< registerDelay thirtySeconds

@@ -28,7 +28,7 @@ main = do
           putStrLn "Fetch request:"
           sendFetchRequest (TopicName testTopicName)
             (fmap
-              (\r -> Partition
+              (\r -> PartitionOffset
                 (prResponsePartition r)
                 (prResponseBaseOffset r))
               rs)
@@ -70,7 +70,7 @@ sendProduceRequest topic = do
       Left exception -> do
         pure (Left exception)
 
-sendFetchRequest :: TopicName -> [Partition] -> IO ()
+sendFetchRequest :: TopicName -> [PartitionOffset] -> IO ()
 sendFetchRequest topicName partitions = do
   withDefaultKafka $ \kafka -> do
     fetch kafka topicName thirtySecondsUs partitions >>= \case
