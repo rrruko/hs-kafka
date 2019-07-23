@@ -3,7 +3,7 @@ module Kafka.OffsetCommit.Response
   , OffsetCommitResponse(..)
   , OffsetCommitTopic(..)
   , getOffsetCommitResponse
-  , parseOffsetCommitPartitions
+  , parseOffsetCommitResponse
   ) where
 
 import Data.Attoparsec.ByteString (Parser, (<?>))
@@ -22,7 +22,7 @@ data OffsetCommitResponse = OffsetCommitResponse
 
 data OffsetCommitTopic = OffsetCommitTopic
   { offsetCommitTopicName :: ByteString
-  , offsetCommitPartition :: [OffsetCommitPartition]
+  , offsetCommitPartitions :: [OffsetCommitPartition]
   } deriving (Eq, Show)
 
 data OffsetCommitPartition = OffsetCommitPartition
