@@ -54,7 +54,7 @@ parseOffsetFetchPartitions = do
     <$> (int32 <?> "partition id")
     <*> (int64 <?> "offset")
     <*> (int32 <?> "leader epoch")
-    <*> ((int32 >>= nullableByteString . fromIntegral) <?> "metadata")
+    <*> ((int16 >>= nullableByteString . fromIntegral) <?> "metadata")
     <*> (int16 <?> "error code")
 
 getOffsetFetchResponse ::
