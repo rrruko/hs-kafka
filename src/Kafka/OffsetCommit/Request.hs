@@ -2,6 +2,7 @@ module Kafka.OffsetCommit.Request
   ( offsetCommitRequest
   ) where
 
+import Data.Int
 import Data.List
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
@@ -17,6 +18,12 @@ serializePartition a = foldBuilder
   , build32 (-1) -- metadata
   ]
 
+offsetCommitApiKey :: Int16
+offsetCommitApiKey = 8
+
+offsetCommitApiVersion :: Int16
+offsetCommitApiVersion = 6
+
 offsetCommitRequest ::
      TopicName
   -> [PartitionOffset]
@@ -31,7 +38,10 @@ offsetCommitRequest topic offs groupMember generationId =
     reqSize = evaluate $ foldBuilder [build32 (size32 req)]
     req =
       evaluate $ foldBuilder
-        [ buildString gid (sizeofByteArray gid)
+        [ build16 offsetCommitApiKey
+        , build16 offsetCommitApiVersion
+        , build32 correlationId
+        , buildString gid (sizeofByteArray gid)
         , build32 genId
         , maybe
             (build16 0)
