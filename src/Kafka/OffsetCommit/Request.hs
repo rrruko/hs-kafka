@@ -15,7 +15,7 @@ serializePartition a = foldBuilder
   [ build32 (partitionIndex a)
   , build64 (partitionOffset a)
   , build32 (-1) -- leader epoch
-  , build32 (-1) -- metadata
+  , build16 (-1) -- metadata
   ]
 
 offsetCommitApiKey :: Int16
