@@ -41,6 +41,7 @@ offsetCommitRequest topic offs groupMember generationId =
         [ build16 offsetCommitApiKey
         , build16 offsetCommitApiVersion
         , build32 correlationId
+        , buildString (fromByteString clientId) clientIdLength
         , buildString gid (sizeofByteArray gid)
         , build32 genId
         , maybe
