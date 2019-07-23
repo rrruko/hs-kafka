@@ -3,6 +3,7 @@ module Kafka
   , heartbeat
   , joinGroup
   , listOffsets
+  , offsetCommit
   , produce
   , syncGroup
   ) where
@@ -19,6 +20,7 @@ import Kafka.Fetch.Request
 import Kafka.Heartbeat.Request
 import Kafka.JoinGroup.Request
 import Kafka.ListOffsets.Request
+import Kafka.OffsetCommit.Request
 import Kafka.Produce.Request
 import Kafka.SyncGroup.Request
 
@@ -101,3 +103,13 @@ syncGroup ::
   -> IO (Either KafkaException ())
 syncGroup kafka groupMember generationId assignments =
   request kafka $ syncGroupRequest groupMember generationId assignments
+
+offsetCommit ::
+     Kafka
+  -> TopicName
+  -> [PartitionOffset]
+  -> GroupMember
+  -> GenerationId
+  -> IO (Either KafkaException ())
+offsetCommit kafka top offs groupMember generationId =
+  request kafka $ offsetCommitRequest top offs groupMember generationId
