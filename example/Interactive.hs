@@ -16,6 +16,7 @@ import Kafka.Common
 import Kafka.Fetch.Response
 import Kafka.ListOffsets.Response
 import Kafka.JoinGroup.Response
+import Kafka.OffsetCommit.Response
 import Kafka.Produce.Response
 
 main :: IO ()
@@ -54,7 +55,7 @@ iFetch ::
   -> IO (Either KafkaException (Either String FetchResponse))
 iFetch kafka top offs = do
   wait <- registerDelay giveUpTime
-  _ <- fetch kafka top requestedWaitTime [Partition 0 offs]
+  _ <- fetch kafka top requestedWaitTime [PartitionOffset 0 offs]
   getFetchResponse kafka wait
 
 iListOffsets ::
@@ -75,3 +76,15 @@ iJoinGroup kafka top member = do
   wait <- registerDelay giveUpTime
   _ <- joinGroup kafka top member
   getJoinGroupResponse kafka wait
+
+iOffsetCommit ::
+     Kafka
+  -> TopicName
+  -> [PartitionOffset]
+  -> GroupMember
+  -> GenerationId
+  -> IO (Either KafkaException (Either String OffsetCommitResponse))
+iOffsetCommit kafka top offs member genId = do
+  wait <- registerDelay giveUpTime
+  _ <- offsetCommit kafka top offs member genId
+  getOffsetCommitResponse kafka wait
