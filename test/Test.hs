@@ -7,6 +7,7 @@ import Data.IORef
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 import Data.Word
+import System.IO.Unsafe
 import Test.Tasty
 import Test.Tasty.Ingredients.ConsoleReporter
 import Test.Tasty.Golden
@@ -15,16 +16,20 @@ import Test.Tasty.HUnit
 import qualified Data.Attoparsec.ByteString as AT
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as BC
 
 import Kafka
 import Kafka.Combinator
 import Kafka.Common
 import Kafka.Fetch.Request
+import Kafka.Fetch.Response (FetchResponse)
 import Kafka.ListOffsets.Request
 import Kafka.Produce.Request
 import Kafka.Produce.Response
 import Kafka.Writer
 import Kafka.Varint
+
+import qualified Kafka.Fetch.Response as Fetch
 
 main :: IO ()
 main = defaultMain (testGroup "Tests" [unitTests, goldenTests])
@@ -86,6 +91,7 @@ parserTests = testGroup "Parsers"
 responseParserTests :: TestTree
 responseParserTests = testGroup "Response parsers"
   [ produceResponseTest
+  , fetchResponseTest
   ]
 
 goldenTests :: TestTree
@@ -109,7 +115,6 @@ goldenTests = testGroup "Golden tests"
           "Many partitions"
           "test/golden/fetch-many-partitions-request"
           (BL.fromStrict <$> multipleFetchTest)
-
       ]
   , testGroup "ListOffsets"
       [ goldenVsString
@@ -279,3 +284,15 @@ twoMsgProduceResponse =
         ]
     , throttleTimeMs = 1
     }
+
+fetchResponseTest :: TestTree
+fetchResponseTest = testGroup "Fetch"
+  [ goldenVsString
+      "Many batches"
+      "test/golden/fetch-response-parsed"
+      (do
+        bytes <- B.readFile "test/golden/fetch-response-bytes"
+        case AT.parseOnly Fetch.parseFetchResponse bytes of
+          Right res -> pure (BC.pack (show res))
+          Left e -> fail ("Parse failed with " <> e))
+  ]
