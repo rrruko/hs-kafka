@@ -1,15 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Data.ByteString (ByteString)
-import Data.Foldable
 import Data.Int
-import Data.IORef
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 import Data.Word
-import System.IO.Unsafe
 import Test.Tasty
-import Test.Tasty.Ingredients.ConsoleReporter
 import Test.Tasty.Golden
 import Test.Tasty.HUnit
 
@@ -18,11 +14,9 @@ import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
 
-import Kafka
 import Kafka.Combinator
 import Kafka.Common
 import Kafka.Fetch.Request
-import Kafka.Fetch.Response (FetchResponse)
 import Kafka.ListOffsets.Request
 import Kafka.Produce.Request
 import Kafka.Produce.Response
@@ -137,20 +131,17 @@ unChunks = foldrUnliftedArray (<>) mempty
 
 produceTest :: IO ByteString
 produceTest = do
-  ref <- newIORef 0
   let payload = fromByteString $
         "\"im not owned! im not owned!!\", i continue to insist as i slowly" <>
         "shrink and transform into a corn cob"
   payloads <- newUnliftedArray 1 payload
   payloadsf <- freezeUnliftedArray payloads 0 1
   let topicName = fromByteString "test"
-      topic = Topic topicName 1 ref
       req = toByteString $ unChunks $ produceRequest 30000 (TopicName topicName) 0 payloadsf
   pure req
 
 multipleProduceTest :: IO ByteString
 multipleProduceTest = do
-  ref <- newIORef 0
   let payloads = unliftedArrayFromList
         [ fromByteString "i'm dying"
         , fromByteString "is it blissful?"
@@ -158,24 +149,19 @@ multipleProduceTest = do
         , fromByteString "i want to dream"
         ]
   let topicName = fromByteString "test"
-      topic = Topic topicName 1 ref
       req = toByteString $ unChunks $ produceRequest 30000 (TopicName topicName) 0 payloads
   pure req
 
 fetchTest :: IO ByteString
 fetchTest = do
-  ref <- newIORef 0
   let topicName = fromByteString "test"
-      topic = Topic topicName 1 ref
       req = toByteString $ unChunks $
         sessionlessFetchRequest 30000 (TopicName topicName) [PartitionOffset 0 0]
   pure req
 
 multipleFetchTest :: IO ByteString
 multipleFetchTest = do
-  ref <- newIORef 0
   let topicName = fromByteString "test"
-      topic = Topic topicName 1 ref
       req = toByteString $ unChunks $
         sessionlessFetchRequest 30000 (TopicName topicName)
           [PartitionOffset 0 0, PartitionOffset 1 0, PartitionOffset 2 0]
@@ -183,9 +169,7 @@ multipleFetchTest = do
 
 listOffsetsTest :: [Int32] -> IO ByteString
 listOffsetsTest partitions = do
-  ref <- newIORef 0
   let topicName = fromByteString "test"
-      topic = Topic topicName 1 ref
       req = toByteString $ unChunks $
         listOffsetsRequest (TopicName topicName) partitions
   pure req
