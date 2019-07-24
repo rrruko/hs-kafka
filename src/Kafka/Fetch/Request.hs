@@ -3,7 +3,6 @@ module Kafka.Fetch.Request
   , sessionlessFetchRequest
   ) where
 
-import Data.Foldable (foldl')
 import Data.Int
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
@@ -81,15 +80,15 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
 
       , buildString topicName topicNameSize
       , build32 (fromIntegral partitionCount) -- number of following partitions
-      , foldl'
-          (\b p -> b <> foldBuilder
+      , foldMap
+          (\p -> foldBuilder
               [ build32 (partitionIndex p)
               , build32 defaultCurrentLeaderEpoch
               , build64 (partitionOffset p)
               , build64 defaultLogStartOffset
               , build32 defaultMaxBytes -- partition_max_bytes
               ]
-          ) mempty partitions
+          ) partitions
       , build32 0
       ]
   in
