@@ -139,6 +139,7 @@ test-suite tests
                      , tasty
                      , tasty-golden
                      , tasty-hunit
+  ghc-options: -Wall -Werror -O2
 
 benchmark bench
   type:                exitcode-stdio-1.0
