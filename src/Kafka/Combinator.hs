@@ -7,12 +7,15 @@ module Kafka.Combinator
   , int32
   , int64
   , networkByteOrder
+  , nullableArray
   , nullableByteString
   , nullableBytes
+  , nullableSequence
   , parseVarint
   , sizedBytes
   ) where
 
+import Control.Applicative (many)
 import Data.Attoparsec.ByteString (Parser, (<?>))
 import Data.Bits
 import Data.ByteString (ByteString)
@@ -45,6 +48,13 @@ array :: Parser a -> Parser [a]
 array p = do
   arraySize <- int32
   count arraySize p
+
+nullableArray :: Parser a -> Parser [a]
+nullableArray p = do
+  arraySize <- int32
+  if arraySize <= 0
+    then pure []
+    else count arraySize p
 
 byteString :: Parser ByteString
 byteString = do
@@ -81,7 +91,18 @@ nullableByteString n
 nullableBytes :: Parser a -> Parser (Maybe a)
 nullableBytes p = do
   bytesLength <- int32
-  if bytesLength == 0 then
+  if bytesLength <= 0 then
     pure Nothing
   else
     Just <$> p
+
+nullableSequence :: Parser a -> Parser (Maybe [a])
+nullableSequence p = do
+  bytesLength <- int32
+  bytes <- AT.take (fromIntegral bytesLength)
+  if bytesLength <= 0 then
+    pure Nothing
+  else
+    case AT.parseOnly (many p) bytes of
+      Right r -> pure (Just r)
+      Left e -> fail e
