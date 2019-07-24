@@ -36,7 +36,7 @@ data FetchResponseMessage = FetchResponseMessage
 
 data PartitionResponse = PartitionResponse
   { partitionHeader :: PartitionHeader
-  , recordSet :: Maybe RecordBatch
+  , recordSet :: Maybe [RecordBatch]
   } deriving (Eq, Show)
 
 data PartitionHeader = PartitionHeader
@@ -95,32 +95,32 @@ parseFetchResponse = do
     <$> int32
     <*> int16
     <*> int32
-    <*> array parseFetchResponseMessage
+    <*> nullableArray parseFetchResponseMessage
 
 parseFetchResponseMessage :: Parser FetchResponseMessage
 parseFetchResponseMessage = do
   topicName <- byteString <?> "topic name"
-  rs <- array parsePartitionResponse
+  rs <- nullableArray parsePartitionResponse
   pure (FetchResponseMessage topicName rs)
 
 parsePartitionResponse :: Parser PartitionResponse
 parsePartitionResponse = PartitionResponse
-  <$> parsePartitionHeader
-  <*> (nullableBytes parseRecordBatch)
+  <$> (parsePartitionHeader <?> "partition header")
+  <*> (nullableSequence parseRecordBatch <?> "record batch")
 
 parsePartitionHeader :: Parser PartitionHeader
 parsePartitionHeader = PartitionHeader
-  <$> int32
-  <*> int16
-  <*> int64
-  <*> int64
-  <*> int64
-  <*> array parseAbortedTransaction
+  <$> (int32 <?> "partition")
+  <*> (int16 <?> "error code")
+  <*> (int64 <?> "high watermark")
+  <*> (int64 <?> "last stable offset")
+  <*> (int64 <?> "log start offset")
+  <*> (nullableArray parseAbortedTransaction <?> "aborted transactions")
 
 parseAbortedTransaction :: Parser AbortedTransaction
 parseAbortedTransaction = AbortedTransaction
-  <$> int64
-  <*> int64
+  <$> (int64 <?> "producer id")
+  <*> (int64 <?> "first offset")
 
 parseRecordBatch :: Parser RecordBatch
 parseRecordBatch =
@@ -137,7 +137,7 @@ parseRecordBatch =
     <*> int64
     <*> int16
     <*> int32
-    <*> array parseRecord
+    <*> nullableArray parseRecord
 
 parseRecord :: Parser Record
 parseRecord = do
