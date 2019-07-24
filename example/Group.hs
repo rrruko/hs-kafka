@@ -8,6 +8,8 @@ import Control.Concurrent
 import Control.Monad
 import Data.Either (isLeft)
 import Data.Foldable
+import Data.Function
+import Data.Int
 import Data.IORef
 import Data.Primitive.ByteArray (ByteArray)
 import GHC.Conc
@@ -155,25 +157,39 @@ consumeOn k member genId assignments =
             case resp of
               Right (Right r) -> do
                 print r
-                threadDelay 1000000
                 let newOffsets = updateOffsets topicName currentOffsets r
                 putStrLn ("Updating offsets to " <> show newOffsets)
-                void $ offsetCommit k topicName newOffsets member genId
-                commitResponse <- C.getOffsetCommitResponse k =<< registerDelay thirtySeconds
-                case commitResponse of
-                  Right (Right _) -> do
-                    putStrLn "successfully committed new offset"
-                  err -> do
-                    putStrLn "failed to commit new offset"
-                    print err
+                threadDelay 1000000
+                commitOffsets k topicName newOffsets member genId
                 go topicName partitionIndices newOffsets
               err -> do
-                putStrLn "failed to obtain fetch response"
                 print err
-          _ -> putStrLn "Got unexpected number of topic responses"
-      err -> do
-        putStrLn "failed to obtain offsetfetch response"
-        print err
+                putStrLn "failed to obtain fetch response"
+          _ -> fail "Got unexpected number of topic responses"
+      _ -> do
+        fail "failed to obtain offsetfetch response"
+
+commitOffsets ::
+     Kafka
+  -> TopicName
+  -> [PartitionOffset]
+  -> GroupMember
+  -> GenerationId
+  -> IO ()
+commitOffsets k topicName offs member genId = do
+  void $ offsetCommit k topicName offs member genId
+  commitResponse <- C.getOffsetCommitResponse k =<< registerDelay thirtySeconds
+  case commitResponse of
+    Right (Right _) -> do
+      putStrLn "successfully committed new offset"
+    err -> do
+      print err
+      fail "failed to commit new offset"
+
+nextOffset :: [RecordBatch] -> Int64
+nextOffset batches =
+  let lastBatch = maximumBy (compare `on` baseOffset) batches
+  in  baseOffset lastBatch + fromIntegral (lastOffsetDelta lastBatch) + 1
 
 updateOffsets :: TopicName -> [PartitionOffset] -> FetchResponse -> [PartitionOffset]
 updateOffsets (TopicName topicName) xs r =
@@ -182,13 +198,18 @@ updateOffsets (TopicName topicName) xs r =
       (\x -> fetchResponseTopic x == toByteString topicName)
       (responses r)
     partitionResps = concatMap partitionResponses topicResps
-    wasUpdated pid = pid `elem` map (partition . partitionHeader) partitionResps
+    getPartitionResponse pid =
+      find
+        (\resp -> pid == partition (partitionHeader resp))
+        partitionResps
   in
     fmap
       (\(PartitionOffset pid offs) ->
-        if wasUpdated pid
-          then PartitionOffset pid (offs + 1)
-          else PartitionOffset pid offs)
+        case getPartitionResponse pid of
+          Just res | Just sets <- recordSet res ->
+            PartitionOffset pid (nextOffset sets)
+          _ ->
+            PartitionOffset pid offs)
       xs
 
 reportPartitions :: String -> SyncGroupResponse -> IO ()
