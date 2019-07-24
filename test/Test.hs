@@ -17,6 +17,7 @@ import qualified Data.ByteString.Lazy.Char8 as BC
 import Kafka.Combinator
 import Kafka.Common
 import Kafka.Fetch.Request
+import Kafka.JoinGroup.Request
 import Kafka.ListOffsets.Request
 import Kafka.Produce.Request
 import Kafka.Produce.Response
@@ -124,6 +125,20 @@ goldenTests = testGroup "Golden tests"
           "test/golden/listoffsets-many-partitions-request"
           (BL.fromStrict <$> listOffsetsTest [0,1,2,3,4,5])
       ]
+  , testGroup "JoinGroup"
+      [ goldenVsString
+          "null member id"
+          "test/golden/joingroup-null-member-id-request"
+          (BL.fromStrict <$> joinGroupTest
+            (GroupMember (fromByteString "test-group") Nothing))
+      , goldenVsString
+          "with member id"
+          "test/golden/joingroup-with-member-id-request"
+          (BL.fromStrict <$> joinGroupTest
+            (GroupMember
+              (fromByteString "test-group")
+              (Just $ fromByteString "test-member-id")))
+      ]
   ]
 
 unChunks :: UnliftedArray ByteArray -> ByteArray
@@ -172,6 +187,15 @@ listOffsetsTest partitions = do
   let topicName = fromByteString "test"
       req = toByteString $ unChunks $
         listOffsetsRequest (TopicName topicName) partitions
+  pure req
+
+joinGroupTest :: GroupMember -> IO ByteString
+joinGroupTest groupMember = do
+  let topicName = fromByteString "test"
+      req = toByteString $ unChunks $
+        joinGroupRequest
+          (TopicName topicName)
+          groupMember
   pure req
 
 produceResponseTest :: TestTree
