@@ -78,7 +78,9 @@ parserTests = testGroup "Parsers"
   , testCase
       "parseVarint (zigzag 1000) is 1000"
       (AT.parseOnly parseVarint (toByteString $ zigzag 1000) @?= Right 1000)
-
+  , testCase
+      "parseVarint (zigzag (-1)) is (-1)"
+      (AT.parseOnly parseVarint (toByteString $ zigzag (-1)) @?= Right (-1))
   ]
 
 responseParserTests :: TestTree
