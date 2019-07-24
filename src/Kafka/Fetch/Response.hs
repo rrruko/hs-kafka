@@ -11,6 +11,7 @@ module Kafka.Fetch.Response
   , Record(..)
   , RecordBatch(..)
   , getFetchResponse
+  , parseFetchResponse
   ) where
 
 import Data.Attoparsec.ByteString (Parser, (<?>))
