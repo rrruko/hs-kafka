@@ -104,40 +104,50 @@ consumeOn k member genId assignments =
     initialOffsets <- getInitialOffsets k topicName partitionIndices
     print initialOffsets
     case initialOffsets of
-      Just ios -> go topicName partitionIndices ios
+      Just ios -> consumerLoop k member genId topicName partitionIndices ios
       Nothing -> fail "Failed to get valid offsets for this topic"
   where
-  go topicName partitionIndices currentOffsets = do
-    void $ offsetFetch k member topicName partitionIndices
-    offsets <- O.getOffsetFetchResponse k =<< registerDelay thirtySeconds
-    print offsets
-    case offsets of
-      Right (Right offs) -> do
-        case O.topics offs of
-          [topicResponse] -> do
-            let partitions = O.offsetFetchPartitions topicResponse
+
+consumerLoop ::
+     Kafka
+  -> GroupMember
+  -> GenerationId
+  -> TopicName
+  -> [Int32]
+  -> [PartitionOffset]
+  -> IO ()
+consumerLoop k member genId topicName partitionIndices currentOffsets = do
+  void $ fetch k topicName thirtySeconds currentOffsets
+  resp <- getFetchResponse k =<< registerDelay thirtySeconds
+  case resp of
+    Right (Right r) -> do
+      print r
+      commitOffsets k topicName currentOffsets member genId
+      void $ offsetFetch k member topicName partitionIndices
+      offsets <- O.getOffsetFetchResponse k =<< registerDelay thirtySeconds
+      print offsets
+      case offsets of
+        Right (Right offs) -> do
+          case O.topics offs of
+            [topicResponse] -> do
+              let
+                partitions = O.offsetFetchPartitions topicResponse
                 partitionOffsets =
                   fmap
-                    (\r -> PartitionOffset
-                      (O.offsetFetchPartitionIndex r)
-                      (O.offsetFetchOffset r))
+                    (\part -> PartitionOffset
+                      (O.offsetFetchPartitionIndex part)
+                      (O.offsetFetchOffset part))
                     partitions
-            void $ fetch k topicName thirtySeconds partitionOffsets
-            resp <- getFetchResponse k =<< registerDelay thirtySeconds
-            case resp of
-              Right (Right r) -> do
-                print r
-                let newOffsets = updateOffsets topicName partitionOffsets currentOffsets r
-                putStrLn ("Updating offsets to " <> show newOffsets)
-                threadDelay 1000000
-                commitOffsets k topicName newOffsets member genId
-                go topicName partitionIndices newOffsets
-              err -> do
-                print err
-                putStrLn "failed to obtain fetch response"
-          _ -> fail "Got unexpected number of topic responses"
-      _ -> do
-        fail "failed to obtain offsetfetch response"
+                newOffsets = updateOffsets topicName partitionOffsets currentOffsets r
+              putStrLn ("Updating offsets to " <> show newOffsets)
+              threadDelay 1000000
+              consumerLoop k member genId topicName partitionIndices newOffsets
+            _ -> fail "Got unexpected number of topic responses"
+        _ -> do
+          fail "failed to obtain offsetfetch response"
+    err -> do
+      print err
+      putStrLn "failed to obtain fetch response"
 
 getInitialOffsets ::
      Kafka
@@ -249,7 +259,7 @@ consume ::
 consume kafka top@(Topic n _ _) member name = do
   let topicName = TopicName n
   (genId, me, members) <- joinG kafka topicName member
-  assignment <- sync kafka top me members genId name
+  (newGenId, assignment) <- sync kafka top me members genId name
   putStrLn "Starting consumption"
   void $ forkIO $
     withDefaultKafka $ \k' -> do
@@ -258,7 +268,7 @@ consume kafka top@(Topic n _ _) member name = do
         Nothing -> putStrLn "Failed to receive an assignment"
   putStrLn "Starting heartbeats"
   heartbeatInterrupt <- registerDelay thirtySeconds
-  heartbeats kafka top me genId heartbeatInterrupt name
+  heartbeats kafka top me newGenId heartbeatInterrupt name
   putStrLn "Leaving group"
   void $ leaveGroup kafka me
   print =<< getLeaveGroupResponse kafka =<< registerDelay thirtySeconds
@@ -279,7 +289,7 @@ sync ::
   -> [Member]
   -> GenerationId
   -> String
-  -> IO (Maybe [SyncTopicAssignment])
+  -> IO (GenerationId, Maybe [SyncTopicAssignment])
 sync kafka top@(Topic n _ _) member members genId name = do
   let topicName = TopicName n
       assignments = assignMembers (length members) top members
@@ -301,7 +311,7 @@ sync kafka top@(Topic n _ _) member members genId name = do
     Right (Right sgr) | S.errorCode sgr == 0 -> do
       print sgr
       reportPartitions name sgr
-      pure (S.partitionAssignments <$> S.memberAssignment sgr)
+      pure (genId, S.partitionAssignments <$> S.memberAssignment sgr)
     Right (Right sgr) -> do
       print sgr
       fail ("Unexpected error from kafka during sync")
