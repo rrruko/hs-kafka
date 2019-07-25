@@ -273,6 +273,9 @@ consume kafka top@(Topic n _ _) member name = do
   void $ leaveGroup kafka me
   print =<< getLeaveGroupResponse kafka =<< registerDelay thirtySeconds
 
+noError :: Int16
+noError = 0
+
 errorUnknownMemberId :: Int16
 errorUnknownMemberId = 25
 
@@ -308,7 +311,7 @@ sync kafka top@(Topic n _ _) member members genId name = do
       threadDelay 1000000
       (newGenId, newMember, newMembers) <- joinG kafka topicName member
       sync kafka top newMember newMembers newGenId name
-    Right (Right sgr) | S.errorCode sgr == 0 -> do
+    Right (Right sgr) | S.errorCode sgr == noError -> do
       print sgr
       reportPartitions name sgr
       pure (genId, S.partitionAssignments <$> S.memberAssignment sgr)
@@ -331,13 +334,13 @@ joinG kafka top member@(GroupMember name _) = do
       <> show ex))
   wait <- registerDelay thirtySeconds
   getJoinGroupResponse kafka wait >>= \case
-    Right (Right jgr) | J.errorCode jgr == 79 -> do
+    Right (Right jgr) | J.errorCode jgr == errorMemberIdRequired -> do
       print jgr
       threadDelay 1000000
       let memId = Just (fromByteString (J.memberId jgr))
       let assignment = GroupMember name memId
       joinG kafka top assignment
-    Right (Right jgr) | J.errorCode jgr == 0 -> do
+    Right (Right jgr) | J.errorCode jgr == noError -> do
       print jgr
       let genId = GenerationId (J.generationId jgr)
       let memId = Just (fromByteString (J.memberId jgr))
