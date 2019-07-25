@@ -2,6 +2,7 @@ module Kafka
   ( fetch
   , heartbeat
   , joinGroup
+  , leaveGroup
   , listOffsets
   , offsetCommit
   , offsetFetch
@@ -20,6 +21,7 @@ import Kafka.Common
 import Kafka.Fetch.Request
 import Kafka.Heartbeat.Request
 import Kafka.JoinGroup.Request
+import Kafka.LeaveGroup.Request
 import Kafka.ListOffsets.Request
 import Kafka.OffsetCommit.Request
 import Kafka.OffsetFetch.Request
@@ -124,3 +126,10 @@ offsetFetch ::
   -> IO (Either KafkaException ())
 offsetFetch kafka groupMember top offs =
   request kafka $ offsetFetchRequest groupMember top offs
+
+leaveGroup ::
+     Kafka
+  -> GroupMember
+  -> IO (Either KafkaException ())
+leaveGroup kafka groupMember =
+  request kafka $ leaveGroupRequest groupMember

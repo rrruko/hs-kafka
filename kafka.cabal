@@ -23,6 +23,8 @@ library
                      , Kafka.Heartbeat.Response
                      , Kafka.JoinGroup.Request
                      , Kafka.JoinGroup.Response
+                     , Kafka.LeaveGroup.Request
+                     , Kafka.LeaveGroup.Response
                      , Kafka.ListOffsets.Request
                      , Kafka.ListOffsets.Response
                      , Kafka.OffsetCommit.Request
