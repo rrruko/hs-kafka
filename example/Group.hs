@@ -8,7 +8,6 @@ import Control.Concurrent
 import Control.Monad
 import Data.Either (isLeft)
 import Data.Foldable
-import Data.Function
 import Data.Int
 import Data.IORef
 import Data.Primitive.ByteArray (ByteArray)
@@ -24,6 +23,7 @@ import Kafka.LeaveGroup.Response
 import Kafka.SyncGroup.Response (SyncGroupResponse, SyncTopicAssignment)
 
 import qualified Kafka.JoinGroup.Response as J
+import qualified Kafka.ListOffsets.Response as L
 import qualified Kafka.OffsetCommit.Response as C
 import qualified Kafka.OffsetFetch.Response as O
 import qualified Kafka.SyncGroup.Response as S
@@ -101,8 +101,11 @@ consumeOn k member genId assignments =
   for_ assignments $ \a -> do
     let topicName = TopicName (fromByteString (S.syncAssignedTopic a))
         partitionIndices = S.syncAssignedPartitions a
-        initialOffsets = map (\ix -> PartitionOffset ix 0) partitionIndices
-    go topicName partitionIndices initialOffsets
+    initialOffsets <- getInitialOffsets k topicName partitionIndices
+    print initialOffsets
+    case initialOffsets of
+      Just ios -> go topicName partitionIndices ios
+      Nothing -> fail "Failed to get valid offsets for this topic"
   where
   go topicName partitionIndices currentOffsets = do
     void $ offsetFetch k member topicName partitionIndices
@@ -124,7 +127,7 @@ consumeOn k member genId assignments =
             case resp of
               Right (Right r) -> do
                 print r
-                let newOffsets = updateOffsets topicName currentOffsets r
+                let newOffsets = updateOffsets topicName partitionOffsets currentOffsets r
                 putStrLn ("Updating offsets to " <> show newOffsets)
                 threadDelay 1000000
                 commitOffsets k topicName newOffsets member genId
@@ -135,6 +138,26 @@ consumeOn k member genId assignments =
           _ -> fail "Got unexpected number of topic responses"
       _ -> do
         fail "failed to obtain offsetfetch response"
+
+getInitialOffsets ::
+     Kafka
+  -> TopicName
+  -> [Int32]
+  -> IO (Maybe [PartitionOffset])
+getInitialOffsets k t@(TopicName topicName) indices = do
+  void $ listOffsets k t indices
+  resp <- L.getListOffsetsResponse k =<< registerDelay thirtySeconds
+  case resp of
+    Right (Right lor) -> do
+      let topics = L.responses lor
+          thisTopic = find (\top -> L.topic top == toByteString topicName) topics
+      pure $
+        fmap
+          (map (\pr ->
+              PartitionOffset (L.partition pr) (L.offset pr))
+            . L.partitionResponses)
+          thisTopic
+    _ -> pure Nothing
 
 commitOffsets ::
      Kafka
@@ -153,13 +176,13 @@ commitOffsets k topicName offs member genId = do
       print err
       fail "failed to commit new offset"
 
-nextOffset :: [RecordBatch] -> Int64
-nextOffset batches =
-  let lastBatch = maximumBy (compare `on` baseOffset) batches
-  in  baseOffset lastBatch + fromIntegral (lastOffsetDelta lastBatch) + 1
-
-updateOffsets :: TopicName -> [PartitionOffset] -> FetchResponse -> [PartitionOffset]
-updateOffsets (TopicName topicName) xs r =
+updateOffsets ::
+     TopicName
+  -> [PartitionOffset]
+  -> [PartitionOffset]
+  -> FetchResponse
+  -> [PartitionOffset]
+updateOffsets (TopicName topicName) current valid r =
   let
     topicResps = filter
       (\x -> fetchResponseTopic x == toByteString topicName)
@@ -172,12 +195,17 @@ updateOffsets (TopicName topicName) xs r =
   in
     fmap
       (\(PartitionOffset pid offs) ->
-        case getPartitionResponse pid of
-          Just res ->
-            PartitionOffset pid (highWatermark (partitionHeader res))
-          _ ->
-            PartitionOffset pid offs)
-      xs
+        if offs == -1 then
+          case find (\v -> partitionIndex v == pid) valid of
+            Just v -> PartitionOffset pid (partitionOffset v)
+            Nothing -> PartitionOffset pid (-1)
+        else
+          case getPartitionResponse pid of
+            Just res ->
+              PartitionOffset pid (highWatermark (partitionHeader res))
+            _ ->
+              PartitionOffset pid offs)
+      current
 
 reportPartitions :: String -> SyncGroupResponse -> IO ()
 reportPartitions name sgr = putStrLn
@@ -235,6 +263,15 @@ consume kafka top@(Topic n _ _) member name = do
   void $ leaveGroup kafka me
   print =<< getLeaveGroupResponse kafka =<< registerDelay thirtySeconds
 
+errorUnknownMemberId :: Int16
+errorUnknownMemberId = 25
+
+errorRebalanceInProgress :: Int16
+errorRebalanceInProgress = 27
+
+errorMemberIdRequired :: Int16
+errorMemberIdRequired = 79
+
 sync ::
      Kafka
   -> Topic
@@ -245,7 +282,8 @@ sync ::
   -> IO (Maybe [SyncTopicAssignment])
 sync kafka top@(Topic n _ _) member members genId name = do
   let topicName = TopicName n
-  let assignments = assignMembers (length members) top members
+      assignments = assignMembers (length members) top members
+      syncErrors = [errorUnknownMemberId, errorRebalanceInProgress, errorMemberIdRequired]
   ex <- syncGroup kafka member genId assignments
   when
     (isLeft ex)
@@ -254,7 +292,7 @@ sync kafka top@(Topic n _ _) member members genId name = do
   wait <- registerDelay thirtySeconds
   putStrLn "Syncing"
   S.getSyncGroupResponse kafka wait >>= \case
-    Right (Right sgr) | S.errorCode sgr == 79 || S.errorCode sgr == 25 || S.errorCode sgr == 27 -> do
+    Right (Right sgr) | S.errorCode sgr `elem` syncErrors -> do
       putStrLn "Rejoining group"
       print sgr
       threadDelay 1000000
