@@ -29,6 +29,9 @@ data Topic = Topic
 newtype TopicName = TopicName ByteArray
   deriving (Eq, Show)
 
+getTopicName :: Topic -> TopicName
+getTopicName (Topic name _ _) = TopicName name
+
 data PartitionOffset = PartitionOffset
   { partitionIndex :: Int32
   , partitionOffset :: Int64
