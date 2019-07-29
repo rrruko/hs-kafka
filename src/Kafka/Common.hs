@@ -40,6 +40,8 @@ data PartitionOffset = PartitionOffset
 data KafkaException where
   KafkaSendException :: SendException 'Uninterruptible -> KafkaException
   KafkaReceiveException :: ReceiveException 'Interruptible -> KafkaException
+  KafkaParseException :: String -> KafkaException
+  KafkaUnexpectedErrorCodeException :: Int16 -> KafkaException
 
 deriving stock instance Show KafkaException
 

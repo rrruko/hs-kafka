@@ -52,7 +52,9 @@ consumer name = do
     Nothing -> putStrLn "Failed to connect to kafka"
     Just k -> do
       let member = GroupMember groupName Nothing
-      consumerSession k t member name
+      consumerSession k t member name >>= \case
+        Left err -> print err
+        Right () -> pure ()
 
 setup :: ByteArray -> Int -> IO (Topic, Maybe Kafka)
 setup topicName partitionCount = do

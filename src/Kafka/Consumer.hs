@@ -7,7 +7,6 @@ module Kafka.Consumer
 
 import Control.Monad
 import Data.ByteString (ByteString)
-import Data.Either
 import Data.Foldable
 import Data.Int
 import Data.IntMap (IntMap)
@@ -25,7 +24,7 @@ import Kafka.JoinGroup.Response (Member, getJoinGroupResponse)
 import Kafka.LeaveGroup.Response
 import Kafka.ListOffsets.Response (ListOffsetsResponse)
 import Kafka.OffsetFetch.Response (OffsetFetchResponse)
-import Kafka.SyncGroup.Response (SyncGroupResponse, SyncTopicAssignment)
+import Kafka.SyncGroup.Response (SyncTopicAssignment)
 
 import qualified Kafka.Fetch.Response as F
 import qualified Kafka.JoinGroup.Response as J
@@ -61,7 +60,6 @@ getInitialOffsets kafka member topic indices = do
       case (listOffsetsMap name' lor, fetchOffsetsMap name' ofr) of
         (Just lm, Just om) -> do
           let res = merge lm om
-          print res
           pure (Just res)
         _ -> pure Nothing
     _ -> pure Nothing
@@ -131,29 +129,32 @@ consumerSession ::
   -> Topic
   -> GroupMember
   -> String
-  -> IO ()
+  -> IO (Either KafkaException ())
 consumerSession kafka top oldMe name = do
   let topicName = getTopicName top
-  (genId, me, members) <- joinG kafka topicName oldMe
-  (newGenId, assigns) <- sync kafka top me members genId name
-  case assigns of
-    Nothing -> pure ()
-    Just as -> do
-      case partitionsForTopic topicName as of
-        Just indices -> do
-          offs <- getInitialOffsets kafka me top indices
-          print offs
-          case offs of
-            Just initialOffsets -> forever $
-              loop kafka top me initialOffsets indices newGenId name
-            Nothing -> fail "The topic was not present in the listed offset set"
-        Nothing -> fail "The topic was not present in the assignment set"
-  putStrLn "Leaving group"
-  void $ leaveGroup kafka me
-  wait <- registerDelay defaultTimeout
-  leaveResp <- getLeaveGroupResponse kafka wait
-  pure ()
-  print leaveResp
+  joinG kafka topicName oldMe >>= \case
+    Right (genId, me, members) -> do
+      sync kafka top me members genId name >>= \case
+        Right (newGenId, assigns) -> do
+          case assigns of
+            Nothing -> pure ()
+            Just as -> do
+              case partitionsForTopic topicName as of
+                Just indices -> do
+                  offs <- getInitialOffsets kafka me top indices
+                  case offs of
+                    Just initialOffsets -> forever $
+                      loop kafka top me initialOffsets indices newGenId name
+                    Nothing -> fail "The topic was not present in the listed offset set"
+                Nothing -> fail "The topic was not present in the assignment set"
+          void $ leaveGroup kafka me
+          wait <- registerDelay defaultTimeout
+          void $ getLeaveGroupResponse kafka wait
+          pure (Right ())
+        Left e ->
+          pure (Left e)
+    Left e ->
+      pure (Left e)
 
 partitionsForTopic ::
      TopicName
@@ -171,35 +172,28 @@ loop ::
   -> [Int32]
   -> GenerationId
   -> String
-  -> IO ()
+  -> IO (Either KafkaException ())
 loop kafka top member offsets indices genId name = do
   let topicName = getTopicName top
   rebalanceInterrupt <- registerDelay fiveSeconds
   fetchResp <- getMessages kafka top offsets rebalanceInterrupt
-  print offsets
   case fetchResp of
     Right (Right r) -> do
       traverse_ B.putStrLn (fetchResponseContents r)
-      newOffsets <- updateOffsets' kafka topicName member indices r
-      commitOffsets kafka topicName newOffsets member genId
+      newOffsets <- either (const offsets) id <$>
+        updateOffsets' kafka topicName member indices r
+      void $ commitOffsets kafka topicName newOffsets member genId
       wait <- registerDelay defaultTimeout
       void $ heartbeat kafka member genId
       resp <- getHeartbeatResponse kafka wait
-      putStrLn (name <> ": " <> show resp)
       case (fmap . fmap) heartbeatErrorCode resp of
-        Right (Right 0)  -> loop kafka top member newOffsets indices genId name
         Right (Right 27) -> consumerSession kafka top member name
-        Right (Right e)  ->
-          fail ("Unexpected error code from heartbeat: " <> show e)
-        Right (Left parseError) -> do
-          fail ("Failed to parse, expected heartbeat (" <> parseError <> ")")
-        Left netError -> do
-          fail ("Unexpected network error (" <> show netError <> ")")
-    Right (Left parseError) -> do
-      fail ("Couldn't parse fetch response: " <> show parseError)
-    Left networkError -> do
-      putStrLn ("Encountered network error: " <> show networkError)
-      loop kafka top member offsets indices genId name
+        Right (Right 0)  -> loop kafka top member newOffsets indices genId name
+        Right (Right e)  -> pure (Left (KafkaUnexpectedErrorCodeException e))
+        Right (Left parseError) -> pure (Left (KafkaParseException parseError))
+        Left netError -> pure (Left netError)
+    Right (Left parseError) -> pure (Left (KafkaParseException parseError))
+    Left _ -> loop kafka top member offsets indices genId name
 
 getMessages ::
      Kafka
@@ -217,11 +211,10 @@ updateOffsets' ::
   -> GroupMember
   -> [Int32]
   -> FetchResponse
-  -> IO (IntMap Int64)
+  -> IO (Either KafkaException (IntMap Int64))
 updateOffsets' k topicName member partitionIndices r = do
   void $ offsetFetch k member topicName partitionIndices
   offsets <- O.getOffsetFetchResponse k =<< registerDelay defaultTimeout
-  print offsets
   case offsets of
     Right (Right offs) -> do
       case O.topics offs of
@@ -234,10 +227,11 @@ updateOffsets' k topicName member partitionIndices r = do
                   (fromIntegral $ O.offsetFetchPartitionIndex part
                   , O.offsetFetchOffset part))
                 partitions
-          pure (updateOffsets topicName fetchedOffsets r)
-        _ -> fail "Got unexpected number of topic responses"
-    _ -> do
-      fail "failed to obtain offsetfetch response"
+          pure (Right (updateOffsets topicName fetchedOffsets r))
+        _ -> fail 
+          ("Got unexpected number of topic responses: " <> show offs)
+    Right (Left parseError) -> pure (Left (KafkaParseException parseError))
+    Left networkError -> pure (Left networkError)
 
 commitOffsets ::
      Kafka
@@ -245,20 +239,14 @@ commitOffsets ::
   -> IntMap Int64
   -> GroupMember
   -> GenerationId
-  -> IO ()
+  -> IO (Either KafkaException ())
 commitOffsets k topicName offs member genId = do
   void $ offsetCommit k topicName (toOffsetList offs) member genId
   commitResponse <- C.getOffsetCommitResponse k =<< registerDelay defaultTimeout
   case commitResponse of
-    Right (Right _) -> do
-      putStrLn ("successfully committed new offset (" <> show offs <> ")")
-    err -> do
-      print err
-      fail "failed to commit new offset"
-
-reportPartitions :: String -> SyncGroupResponse -> IO ()
-reportPartitions name sgr = putStrLn
-  (name <> ": my assigned partitions are " <> show (S.memberAssignment sgr))
+    Right (Right _) -> pure (Right ())
+    Right (Left parseError) -> pure (Left (KafkaParseException parseError))
+    Left networkError -> pure (Left networkError)
 
 assignMembers :: Int -> Topic -> [Member] -> [MemberAssignment]
 assignMembers memberCount top groupMembers =
@@ -315,61 +303,44 @@ sync ::
   -> [Member]
   -> GenerationId
   -> String
-  -> IO (GenerationId, Maybe [SyncTopicAssignment])
+  -> IO (Either KafkaException (GenerationId, Maybe [SyncTopicAssignment]))
 sync kafka top member members genId name = do
   let topicName = getTopicName top
       assignments = assignMembers (length members) top members
-  ex <- syncGroup kafka member genId assignments
-  when
-    (isLeft ex)
-    (fail ("Encountered network exception sending sync group request: "
-      <> show ex))
+  void $ syncGroup kafka member genId assignments
   wait <- registerDelay defaultTimeout
-  putStrLn "Syncing"
   S.getSyncGroupResponse kafka wait >>= \case
     Right (Right sgr) | S.errorCode sgr `elem` expectedSyncErrors -> do
-      putStrLn "Rejoining group"
-      print sgr
-      (newGenId, newMember, newMembers) <- joinG kafka topicName member
-      sync kafka top newMember newMembers newGenId name
+      joinG kafka topicName member >>= \case
+        Right (newGenId, newMember, newMembers) ->
+          sync kafka top newMember newMembers newGenId name
+        Left e -> pure (Left e)
     Right (Right sgr) | S.errorCode sgr == noError -> do
-      print sgr
-      reportPartitions name sgr
-      pure (genId, S.partitionAssignments <$> S.memberAssignment sgr)
+      pure (Right (genId, S.partitionAssignments <$> S.memberAssignment sgr))
     Right (Right sgr) -> do
-      print sgr
-      fail ("Unexpected error from kafka during sync")
-    Right (Left parseError) -> fail (show parseError)
-    Left networkError -> fail (show networkError)
+      pure (Left (KafkaUnexpectedErrorCodeException (S.errorCode sgr)))
+    Right (Left parseError) -> pure (Left (KafkaParseException parseError))
+    Left networkError -> pure (Left networkError)
 
 joinG ::
      Kafka
   -> TopicName
   -> GroupMember
-  -> IO (GenerationId, GroupMember, [Member])
+  -> IO (Either KafkaException (GenerationId, GroupMember, [Member]))
 joinG kafka top member@(GroupMember name _) = do
-  ex <- joinGroup kafka top member
-  when
-    (isLeft ex)
-    (fail ("Encountered network exception sending join group request: "
-      <> show ex))
+  void $ joinGroup kafka top member
   wait <- registerDelay defaultTimeout
   getJoinGroupResponse kafka wait >>= \case
     Right (Right jgr) | J.errorCode jgr == errorMemberIdRequired -> do
-      print jgr
       let memId = Just (fromByteString (J.memberId jgr))
       let assignment = GroupMember name memId
       joinG kafka top assignment
     Right (Right jgr) | J.errorCode jgr == noError -> do
-      print jgr
       let genId = GenerationId (J.generationId jgr)
       let memId = Just (fromByteString (J.memberId jgr))
       let assignment = GroupMember name memId
-      pure (genId, assignment, J.members jgr)
-    Right (Right jgr) -> do
-      print jgr
-      fail ("Unexpected error from kafka during join")
-    Right (Left e) -> fail
-      ("Failed parsing join group response: " <> show e)
-    Left e -> fail
-      ("Encountered network exception trying to join group: " <> show e)
+      pure (Right (genId, assignment, J.members jgr))
+    Right (Right jgr) -> 
+      pure (Left (KafkaUnexpectedErrorCodeException (J.errorCode jgr)))
+    Right (Left parseError) -> pure (Left (KafkaParseException parseError))
+    Left networkError -> pure (Left networkError)
