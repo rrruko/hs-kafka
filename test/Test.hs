@@ -13,9 +13,11 @@ import qualified Data.Attoparsec.ByteString as AT
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
+import qualified Data.IntMap as IM
 
 import Kafka.Combinator
 import Kafka.Common
+import Kafka.Consumer
 import Kafka.Fetch.Request
 import Kafka.JoinGroup.Request
 import Kafka.ListOffsets.Request
@@ -34,6 +36,7 @@ unitTests = testGroup "Unit tests"
   [ zigzagTests
   , parserTests
   , responseParserTests
+  , consumerTests
   ]
 
 zigzagTests :: TestTree
@@ -304,3 +307,17 @@ fetchResponseTest = testGroup "Fetch"
           Right res -> pure (BC.pack (show res))
           Left e -> fail ("Parse failed with " <> e))
   ]
+
+consumerTests :: TestTree
+consumerTests = testGroup "Consumer"
+  [ testCase
+      "merge replaces -1 and keeps other values"
+      mergeTest
+  ]
+  where
+  mergeTest =
+    let actual =
+          merge
+            (IM.fromList [(0, 5), (1, 6), (2, 7)])
+            (IM.fromList [(0, -1), (1, 3), (2, -1)])
+    in  actual @=? (IM.fromList [(0, 5), (1, 3), (2, 7)])
