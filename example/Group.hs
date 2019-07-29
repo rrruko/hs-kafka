@@ -87,8 +87,8 @@ consumerSession kafka top oldMe name = do
     Just as -> do
       case partitionsForTopic topicName as of
         Just indices -> do
-          offs <- do
-            getInitialOffsets kafka topicName indices
+          offs <- getInitialOffsets kafka topicName indices
+          print offs
           case offs of
             Just initialOffsets -> forever $
               loop kafka top me initialOffsets indices newGenId name
@@ -121,9 +121,10 @@ loop kafka top member offsets indices genId name = do
   let topicName = getTopicName top
   rebalanceInterrupt <- registerDelay 10000000
   fetchResp <- getMessages kafka top offsets rebalanceInterrupt
+  print fetchResp
   case fetchResp of
     Right (Right r) -> do
-      newOffsets <- updateOffsets' kafka topicName member indices offsets r
+      newOffsets <- updateOffsets' kafka topicName member indices r
       commitOffsets kafka topicName offsets member genId
       wait <- registerDelay thirtySeconds
       void $ heartbeat kafka member genId
@@ -153,7 +154,6 @@ getMessages ::
 getMessages kafka top offsets interrupt = do
   void $ fetch kafka (getTopicName top) 5000000 offsets
   resp <- getFetchResponse kafka interrupt
-  print resp
   pure resp
 
 updateOffsets' ::
@@ -161,10 +161,9 @@ updateOffsets' ::
   -> TopicName
   -> GroupMember
   -> [Int32]
-  -> [PartitionOffset]
   -> FetchResponse
   -> IO [PartitionOffset]
-updateOffsets' k topicName member partitionIndices currentOffsets r = do
+updateOffsets' k topicName member partitionIndices r = do
   void $ offsetFetch k member topicName partitionIndices
   offsets <- O.getOffsetFetchResponse k =<< registerDelay thirtySeconds
   print offsets
@@ -180,7 +179,7 @@ updateOffsets' k topicName member partitionIndices currentOffsets r = do
                   (O.offsetFetchPartitionIndex part)
                   (O.offsetFetchOffset part))
                 partitions
-          pure (updateOffsets topicName fetchedOffsets currentOffsets r)
+          pure (updateOffsets topicName fetchedOffsets r)
         _ -> fail "Got unexpected number of topic responses"
     _ -> do
       fail "failed to obtain offsetfetch response"
@@ -225,10 +224,9 @@ commitOffsets k topicName offs member genId = do
 updateOffsets ::
      TopicName
   -> [PartitionOffset]
-  -> [PartitionOffset]
   -> FetchResponse
   -> [PartitionOffset]
-updateOffsets (TopicName topicName) current valid r =
+updateOffsets (TopicName topicName) current r =
   let
     topicResps = filter
       (\x -> fetchResponseTopic x == toByteString topicName)
@@ -241,16 +239,11 @@ updateOffsets (TopicName topicName) current valid r =
   in
     fmap
       (\(PartitionOffset pid offs) ->
-        if offs == -1 then
-          case find (\v -> partitionIndex v == pid) valid of
-            Just v -> PartitionOffset pid (partitionOffset v)
-            Nothing -> PartitionOffset pid (-1)
-        else
-          case getPartitionResponse pid of
-            Just res ->
-              PartitionOffset pid (highWatermark (partitionHeader res))
-            _ ->
-              PartitionOffset pid offs)
+        case getPartitionResponse pid of
+          Just res ->
+            PartitionOffset pid (highWatermark (partitionHeader res))
+          _ ->
+            PartitionOffset pid offs)
       current
 
 reportPartitions :: String -> SyncGroupResponse -> IO ()
