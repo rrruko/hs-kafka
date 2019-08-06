@@ -143,13 +143,70 @@ consumerSession kafka top oldMe name = do
                 Just indices -> do
                   offs <- getInitialOffsets kafka me top indices
                   case offs of
-                    Just initialOffsets -> forever $
-                      loop kafka top me initialOffsets indices newGenId name
+                    Just initialOffsets -> do
+                      heartbeatResult <- newTVarIO undefined
+                      currentMember <- newTVarIO me
+                      currentGenId <- newTVarIO newGenId
+                      currentIndices <- newTVarIO indices
+                      interruptFetch <- newTVarIO False
+                      void $ forkIO $ withDefaultKafka $ \k ->
+                        heartbeats
+                          k
+                          currentMember
+                          currentGenId
+                          name
+                          heartbeatResult
+                          interruptFetch
+                      void $ loop
+                        kafka
+                        top
+                        currentMember
+                        initialOffsets
+                        currentIndices
+                        currentGenId
+                        name
+                        heartbeatResult
+                        interruptFetch
                     Nothing -> fail "The topic was not present in the listed offset set"
                 Nothing -> fail "The topic was not present in the assignment set"
           void $ leaveGroup kafka me
           wait <- registerDelay defaultTimeout
           void $ getLeaveGroupResponse kafka wait
+          pure (Right ())
+        Left e ->
+          pure (Left e)
+    Left e ->
+      pure (Left e)
+
+rejoin ::
+     Kafka
+  -> Topic
+  -> TVar GroupMember
+  -> TVar GenerationId
+  -> TVar [Int32]
+  -> String
+  -> IO (Either KafkaException ())
+rejoin kafka top currentMember currentGenId currentIndices name = do
+  let topicName = getTopicName top
+  member <- readTVarIO currentMember
+  joinG kafka topicName member >>= \case
+    Right (newGenId, newMember, members) -> do
+      sync kafka top newMember members newGenId name >>= \case
+        Right (newNewGenId, assigns) -> do
+          case assigns of
+            Nothing -> pure ()
+            Just as -> do
+              case partitionsForTopic topicName as of
+                Just indices -> do
+                  offs <- getInitialOffsets kafka newMember top indices
+                  case offs of
+                    Just _ -> do
+                      atomically $ do
+                        writeTVar currentMember newMember
+                        writeTVar currentGenId newNewGenId
+                        writeTVar currentIndices indices
+                    Nothing -> fail "The topic was not present in the listed offset set"
+                Nothing -> fail "The topic was not present in the assignment set"
           pure (Right ())
         Left e ->
           pure (Left e)
@@ -164,36 +221,64 @@ partitionsForTopic (TopicName n) assigns =
   S.syncAssignedPartitions
   <$> find (\a -> S.syncAssignedTopic a == toByteString n) assigns
 
+heartbeats ::
+     Kafka
+  -> TVar GroupMember
+  -> TVar GenerationId
+  -> String
+  -> TVar (Either KafkaException (Either String HeartbeatResponse))
+  -> TVar Bool
+  -> IO ()
+heartbeats kafka me genId name heartbeatResult interruptFetch = do
+  currentMember <- readTVarIO me
+  currentGenId <- readTVarIO genId
+  void $ heartbeat kafka currentMember currentGenId
+  wait <- registerDelay fiveSeconds
+  resp <- getHeartbeatResponse kafka wait
+  atomically $ writeTVar heartbeatResult resp
+  threadDelay 500000
+  case (fmap . fmap) heartbeatErrorCode resp of
+    Right (Right 0) -> atomically $ writeTVar interruptFetch False
+    Right (Right _) -> atomically $ writeTVar interruptFetch True
+    _ -> pure ()
+  heartbeats kafka me genId name heartbeatResult interruptFetch
+
 loop ::
      Kafka
   -> Topic
-  -> GroupMember
+  -> TVar GroupMember
   -> IntMap Int64
-  -> [Int32]
-  -> GenerationId
+  -> TVar [Int32]
+  -> TVar GenerationId
   -> String
+  -> TVar (Either KafkaException (Either String HeartbeatResponse))
+  -> TVar Bool
   -> IO (Either KafkaException ())
-loop kafka top member offsets indices genId name = do
+loop kafka top currentMember offsets currentIndices currentGenId name handle interruptFetch = do
   let topicName = getTopicName top
-  rebalanceInterrupt <- registerDelay fiveSeconds
-  fetchResp <- getMessages kafka top offsets rebalanceInterrupt
+  member <- readTVarIO currentMember
+  genId <- readTVarIO currentGenId
+  indices <- readTVarIO currentIndices
+  fetchResp <- getMessages kafka top offsets =<< registerDelay 10000000
   case fetchResp of
     Right (Right r) -> do
       traverse_ B.putStrLn (fetchResponseContents r)
       newOffsets <- either (const offsets) id <$>
         updateOffsets' kafka topicName member indices r
       void $ commitOffsets kafka topicName newOffsets member genId
-      wait <- registerDelay defaultTimeout
-      void $ heartbeat kafka member genId
-      resp <- getHeartbeatResponse kafka wait
-      case (fmap . fmap) heartbeatErrorCode resp of
-        Right (Right 27) -> consumerSession kafka top member name
-        Right (Right 0)  -> loop kafka top member newOffsets indices genId name
-        Right (Right e)  -> pure (Left (KafkaUnexpectedErrorCodeException e))
+      heartbeatStatus <- readTVarIO handle
+      case (fmap . fmap) heartbeatErrorCode heartbeatStatus of
+        Right (Right e) | e == errorRebalanceInProgress -> do
+          void $ rejoin kafka top currentMember currentGenId currentIndices name
+          loop kafka top currentMember newOffsets currentIndices currentGenId name handle interruptFetch
+        Right (Right 0) -> do
+          loop kafka top currentMember newOffsets currentIndices currentGenId name handle interruptFetch
+        Right (Right e) -> pure (Left (KafkaUnexpectedErrorCodeException e))
         Right (Left parseError) -> pure (Left (KafkaParseException parseError))
         Left netError -> pure (Left netError)
     Right (Left parseError) -> pure (Left (KafkaParseException parseError))
-    Left _ -> loop kafka top member offsets indices genId name
+    Left e -> do
+      pure (Left e)
 
 getMessages ::
      Kafka
@@ -202,7 +287,7 @@ getMessages ::
   -> TVar Bool
   -> IO (Either KafkaException (Either String FetchResponse))
 getMessages kafka top offsets interrupt = do
-  void $ fetch kafka (getTopicName top) defaultTimeout (toOffsetList offsets)
+  void $ fetch kafka (getTopicName top) 5000000 (toOffsetList offsets)
   getFetchResponse kafka interrupt
 
 updateOffsets' ::
@@ -228,7 +313,7 @@ updateOffsets' k topicName member partitionIndices r = do
                   , O.offsetFetchOffset part))
                 partitions
           pure (Right (updateOffsets topicName fetchedOffsets r))
-        _ -> fail 
+        _ -> fail
           ("Got unexpected number of topic responses: " <> show offs)
     Right (Left parseError) -> pure (Left (KafkaParseException parseError))
     Left networkError -> pure (Left networkError)
@@ -340,7 +425,7 @@ joinG kafka top member@(GroupMember name _) = do
       let memId = Just (fromByteString (J.memberId jgr))
       let assignment = GroupMember name memId
       pure (Right (genId, assignment, J.members jgr))
-    Right (Right jgr) -> 
+    Right (Right jgr) ->
       pure (Left (KafkaUnexpectedErrorCodeException (J.errorCode jgr)))
     Right (Left parseError) -> pure (Left (KafkaParseException parseError))
     Left networkError -> pure (Left networkError)
