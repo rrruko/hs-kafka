@@ -7,8 +7,8 @@ module Kafka.Consumer
   ) where
 
 import Control.Concurrent.STM.TVar
-import Control.Monad
-import Control.Monad.Except
+import Control.Monad hiding (join)
+import Control.Monad.Except hiding (join)
 import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Int
@@ -155,7 +155,7 @@ consumerSession ::
   -> IO (Either KafkaException ())
 consumerSession kafka top oldMe callback = runExceptT $ runConsumer $ do
   let topicName = getTopicName top
-  (genId, me, members) <- joinG kafka topicName oldMe
+  (genId, me, members) <- join kafka topicName oldMe
   (newGenId, assigns) <- sync kafka top me members genId
   case partitionsForTopic topicName assigns of
     Just indices -> do
@@ -185,7 +185,7 @@ rejoin ::
 rejoin kafka top currentState = do
   let topicName = getTopicName top
   ConsumerState member _ _ <- liftIO $ readTVarIO currentState
-  (genId, newMember, members) <- joinG kafka topicName member
+  (genId, newMember, members) <- join kafka topicName member
   (newGenId, assigns) <- sync kafka top newMember members genId
   case partitionsForTopic topicName assigns of
     Just indices -> do
@@ -344,7 +344,7 @@ sync kafka top member members genId = do
   wait <- liftIO (registerDelay defaultTimeout)
   sgr <- liftConsumer $ tryParse <$> S.getSyncGroupResponse kafka wait
   if S.errorCode sgr `elem` expectedSyncErrors then do
-    (newGenId, newMember, newMembers) <- joinG kafka topicName member
+    (newGenId, newMember, newMembers) <- join kafka topicName member
     sync kafka top newMember newMembers newGenId
   else if S.errorCode sgr == noError then do
     let assigns = S.partitionAssignments <$> S.memberAssignment sgr
@@ -352,19 +352,19 @@ sync kafka top member members genId = do
   else
     throwConsumer (KafkaUnexpectedErrorCodeException (S.errorCode sgr))
 
-joinG ::
+join ::
      Kafka
   -> TopicName
   -> GroupMember
   -> Consumer (GenerationId, GroupMember, [Member])
-joinG kafka top member@(GroupMember name _) = do
+join kafka top member@(GroupMember name _) = do
   liftConsumer $ joinGroup kafka top member
   wait <- liftIO (registerDelay defaultTimeout)
   jgr <- liftConsumer $ tryParse <$> getJoinGroupResponse kafka wait
   if J.errorCode jgr == errorMemberIdRequired then do
     let memId = Just (fromByteString (J.memberId jgr))
     let assignment = GroupMember name memId
-    joinG kafka top assignment
+    join kafka top assignment
   else if J.errorCode jgr == noError then do
     let genId = GenerationId (J.generationId jgr)
     let memId = Just (fromByteString (J.memberId jgr))
