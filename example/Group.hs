@@ -11,6 +11,7 @@ import Data.IORef
 import Data.Maybe
 import Data.Primitive.ByteArray (ByteArray)
 import Data.Foldable
+import GHC.Conc
 import System.IO.Unsafe (unsafePerformIO)
 
 import Kafka.Common
@@ -40,7 +41,7 @@ main = do
   forkConsumer "1"
   forkConsumer "2"
   forkConsumer "3"
-  threadDelay 20000000
+  threadDelay 5000000
   forkConsumer "4"
   waitForChildren
 
@@ -58,7 +59,8 @@ consumer name = do
     Nothing -> putStrLn "Failed to connect to kafka"
     Just k -> do
       let member = GroupMember groupName Nothing
-      consumerSession k t member (callback name) >>= \case
+      interrupt <- registerDelay 10000000
+      consumerSession k t member (callback name) interrupt >>= \case
         Left err -> print err
         Right () -> pure ()
 

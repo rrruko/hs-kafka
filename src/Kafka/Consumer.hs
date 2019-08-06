@@ -145,33 +145,32 @@ data ConsumerState = ConsumerState
   , currentAssignments :: [Int32]
   } deriving (Show)
 
--- | Consume on a topic forever. Takes a callback parameter that will be called
--- when a response is received from Kafka. Responses might be empty.
+-- | Consume on a topic until terminated. Takes a callback parameter that will
+-- be called when a response is received from Kafka. Responses might be empty.
 consumerSession ::
      Kafka
   -> Topic
   -> GroupMember
   -> (FetchResponse -> IO ())
+  -> TVar Bool
   -> IO (Either KafkaException ())
-consumerSession kafka top oldMe callback = runExceptT $ runConsumer $ do
+consumerSession kafka top oldMe callback leave = runExceptT $ runConsumer $ do
   let topicName = getTopicName top
   (genId, me, members) <- join kafka topicName oldMe
   (newGenId, assigns) <- sync kafka top me members genId
   case partitionsForTopic topicName assigns of
     Just indices -> do
-      offs <- liftIO $ getInitialOffsets kafka me top indices
-      case offs of
-        Just initialOffsets -> do
+      liftIO (getInitialOffsets kafka me top indices) >>= \case
+        Just offsets -> do
           let initialState = ConsumerState me newGenId indices
           currentState <- liftIO $ newTVarIO initialState
-          let runHeartbeats k = heartbeats k top currentState
-          void . liftIO . forkIO . withDefaultKafka $ runHeartbeats
-          void $ doFetches kafka top currentState initialOffsets callback
+          let runHeartbeats k = heartbeats k top currentState leave
+              runFetches k = doFetches k top currentState offsets callback
+          void . liftIO . forkIO . void $ withDefaultKafka
+            (runExceptT . runConsumer . runFetches)
+          void . liftIO $ runHeartbeats kafka
         Nothing -> fail "The topic was not present in the listed offset set"
     Nothing -> fail "The topic was not present in the assignment set"
-  void $ liftIO $ leaveGroup kafka me
-  wait <- liftIO $ registerDelay defaultTimeout
-  void $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka wait
 
 -- | rejoin is called when the client receives a "rebalance in progress"
 -- error code, triggered by another client joining or leaving the group.
@@ -207,8 +206,8 @@ partitionsForTopic (TopicName n) assigns =
 -- spawns a thread which calls this function to manage heartbeats and respond
 -- to error codes in the heartbeat response. In particular, if a "rebalance in
 -- progress" error is received, the client will rejoin the group.
-heartbeats :: Kafka -> Topic -> TVar ConsumerState -> IO ()
-heartbeats kafka top currentState = do
+heartbeats :: Kafka -> Topic -> TVar ConsumerState -> TVar Bool -> IO ()
+heartbeats kafka top currentState leave = do
   ConsumerState member genId _ <- readTVarIO currentState
   void $ heartbeat kafka member genId
   wait <- registerDelay fiveSeconds
@@ -224,7 +223,13 @@ heartbeats kafka top currentState = do
     Left kafkaException ->
       fail ("Kafka exception encountered: " <> show kafkaException)
   threadDelay 500000
-  heartbeats kafka top currentState
+  l <- liftIO $ readTVarIO leave
+  if l then do
+    void $ leaveGroup kafka member
+    timeout <- registerDelay defaultTimeout
+    void $ getLeaveGroupResponse kafka timeout
+  else
+    heartbeats kafka top currentState leave
 
 -- | Repeatedly fetch messages from kafka and commit the new offsets.
 -- Read any updates that have been made to the consumer state by the
@@ -238,7 +243,8 @@ doFetches ::
   -> Consumer ()
 doFetches kafka top currentState offsets callback = do
   let topicName = getTopicName top
-  fetchResp <- getMessages kafka top offsets =<< liftIO (newTVarIO False)
+  timeout <- liftIO (newTVarIO False)
+  fetchResp <- getMessages kafka top offsets timeout
   liftIO $ callback fetchResp
   ConsumerState member genId indices <- liftIO (readTVarIO currentState)
   newOffsets <- updateOffsets' kafka topicName member indices fetchResp
@@ -252,8 +258,10 @@ getMessages ::
   -> TVar Bool
   -> Consumer FetchResponse
 getMessages kafka top offsets interrupt = do
-  liftConsumer $ fetch kafka (getTopicName top) 5000000 (toOffsetList offsets)
+  liftConsumer $ fetch kafka (getTopicName top) defaultTimeout offsetList
   liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
+  where
+  offsetList = toOffsetList offsets
 
 updateOffsets' ::
      Kafka
@@ -264,8 +272,8 @@ updateOffsets' ::
   -> Consumer (IntMap Int64)
 updateOffsets' k topicName member partitionIndices r = do
   liftConsumer $ offsetFetch k member topicName partitionIndices
-  offs <- liftConsumer $ tryParse <$>
-    (O.getOffsetFetchResponse k =<< registerDelay defaultTimeout)
+  timeout <- liftIO $ registerDelay defaultTimeout
+  offs <- liftConsumer $ tryParse <$> O.getOffsetFetchResponse k timeout
   case O.topics offs of
     [topicResponse] -> do
       let
@@ -289,8 +297,8 @@ commitOffsets ::
   -> Consumer ()
 commitOffsets k topicName offs member genId = do
   liftConsumer $ offsetCommit k topicName (toOffsetList offs) member genId
-  void $ liftConsumer $ tryParse <$>
-    (C.getOffsetCommitResponse k =<< registerDelay defaultTimeout)
+  timeout <- liftIO $ registerDelay defaultTimeout
+  void $ liftConsumer $ tryParse <$> C.getOffsetCommitResponse k timeout
 
 assignMembers :: Int -> Topic -> [Member] -> [MemberAssignment]
 assignMembers memberCount top groupMembers =
