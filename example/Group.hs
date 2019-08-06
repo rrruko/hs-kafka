@@ -6,12 +6,18 @@ module Main where
 
 import Control.Concurrent
 import Control.Monad
+import Data.ByteString (ByteString)
 import Data.IORef
+import Data.Maybe
 import Data.Primitive.ByteArray (ByteArray)
+import Data.Foldable
 import System.IO.Unsafe (unsafePerformIO)
 
 import Kafka.Common
 import Kafka.Consumer
+import Kafka.Fetch.Response (FetchResponse)
+
+import qualified Kafka.Fetch.Response as F
 
 groupName :: ByteArray
 groupName = fromByteString "example-consumer-group"
@@ -52,9 +58,25 @@ consumer name = do
     Nothing -> putStrLn "Failed to connect to kafka"
     Just k -> do
       let member = GroupMember groupName Nothing
-      consumerSession k t member name >>= \case
+      consumerSession k t member (callback name) >>= \case
         Left err -> print err
         Right () -> pure ()
+
+callback :: String -> FetchResponse -> IO ()
+callback name response =
+  traverse_
+    (\message -> putStrLn (name <> ": " <> show message))
+    (fetchResponseContents response)
+
+fetchResponseContents :: FetchResponse -> [ByteString]
+fetchResponseContents fetchResponse =
+    mapMaybe F.recordValue
+  . concatMap F.records
+  . concat
+  . mapMaybe F.recordSet
+  . concatMap F.partitionResponses
+  . F.responses
+  $ fetchResponse
 
 setup :: ByteArray -> Int -> IO (Topic, Maybe Kafka)
 setup topicName partitionCount = do

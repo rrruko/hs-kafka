@@ -16,7 +16,6 @@ import Data.IntMap (IntMap)
 import Data.Maybe
 import GHC.Conc
 
-import qualified Data.ByteString.Char8 as B
 import qualified Data.IntMap as IM
 
 import Kafka
@@ -36,6 +35,9 @@ import qualified Kafka.OffsetCommit.Response as C
 import qualified Kafka.OffsetFetch.Response as O
 import qualified Kafka.SyncGroup.Response as S
 
+-- | This module provides a high-level interface to the Kafka API for
+-- consumers by wrapping the low-level request and response type modules.
+
 newtype Consumer a
   = Consumer { runConsumer :: ExceptT KafkaException IO a }
   deriving (Functor, Applicative, Monad)
@@ -54,9 +56,6 @@ liftConsumer = Consumer . ExceptT
 
 throwConsumer :: KafkaException -> Consumer a
 throwConsumer = Consumer . throwError
-
--- | This module provides a high-level interface to the Kafka API for
--- consumers by wrapping the low-level request and response type modules.
 
 -- | Get the earliest offsets corresponding to unread messages on the topic.
 -- The group may not have committed an offset on a given partition yet, so we
@@ -118,25 +117,25 @@ defaultTimeout = 30000000
 fiveSeconds :: Int
 fiveSeconds = 5000000
 
+partitionHighWatermark :: TopicName -> FetchResponse -> Int32 -> Maybe Int64
+partitionHighWatermark (TopicName topicName) fetchResponse partitionId =
+  highWatermark . partitionHeader <$> getPartitionResponse partitionId
+  where
+  topicResps = filter
+    (\x -> F.fetchResponseTopic x == toByteString topicName)
+    (F.responses fetchResponse)
+  partitionResps = concatMap partitionResponses topicResps
+  getPartitionResponse pid =
+    find
+      (\resp -> pid == partition (partitionHeader resp))
+      partitionResps
+
 updateOffsets :: TopicName -> IntMap Int64 -> FetchResponse -> IntMap Int64
-updateOffsets (TopicName topicName) current r =
-  let
-    topicResps = filter
-      (\x -> F.fetchResponseTopic x == toByteString topicName)
-      (F.responses r)
-    partitionResps = concatMap partitionResponses topicResps
-    getPartitionResponse pid =
-      find
-        (\resp -> pid == partition (partitionHeader resp))
-        partitionResps
-  in
-    IM.mapWithKey
-      (\pid offs ->
-        maybe
-          offs
-          (highWatermark . partitionHeader)
-          (getPartitionResponse (fromIntegral pid)))
-      current
+updateOffsets topicName current r =
+  IM.mapWithKey
+    (\pid offs -> fromMaybe offs
+      (partitionHighWatermark topicName r (fromIntegral pid)))
+    current
 
 data ConsumerState = ConsumerState
   { currentMember :: GroupMember
@@ -144,44 +143,48 @@ data ConsumerState = ConsumerState
   , currentAssignments :: [Int32]
   } deriving (Show)
 
+-- | Consume on a topic forever. Takes a callback parameter that will be called
+-- when a response is received from Kafka. Responses might be empty.
 consumerSession ::
      Kafka
   -> Topic
   -> GroupMember
-  -> String
+  -> (FetchResponse -> IO ())
   -> IO (Either KafkaException ())
-consumerSession kafka top oldMe name = runExceptT $ runConsumer $ do
+consumerSession kafka top oldMe callback = runExceptT $ runConsumer $ do
   let topicName = getTopicName top
   (genId, me, members) <- joinG kafka topicName oldMe
-  (newGenId, assigns) <- sync kafka top me members genId name
+  (newGenId, assigns) <- sync kafka top me members genId
   case partitionsForTopic topicName assigns of
     Just indices -> do
       offs <- liftIO $ getInitialOffsets kafka me top indices
       case offs of
         Just initialOffsets -> do
-          currentState <- liftIO $ newTVarIO
-            (ConsumerState me newGenId indices)
-          void $ liftIO $ forkIO $ withDefaultKafka $ \k ->
-            heartbeats k top currentState name
-          void $
-            loop kafka top currentState initialOffsets name
+          let initialState = ConsumerState me newGenId indices
+          currentState <- liftIO $ newTVarIO initialState
+          let runHeartbeats k = heartbeats k top currentState
+          void . liftIO . forkIO . withDefaultKafka $ runHeartbeats
+          void $ doFetches kafka top currentState initialOffsets callback
         Nothing -> fail "The topic was not present in the listed offset set"
     Nothing -> fail "The topic was not present in the assignment set"
   void $ liftIO $ leaveGroup kafka me
   wait <- liftIO $ registerDelay defaultTimeout
   void $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka wait
 
+-- | rejoin is called when the client receives a "rebalance in progress"
+-- error code, triggered by another client joining or leaving the group.
+-- It sends join and sync requests and receives a new member id, generation
+-- id, and set of assigned topics.
 rejoin ::
      Kafka
   -> Topic
   -> TVar ConsumerState
-  -> String
   -> Consumer [Int32]
-rejoin kafka top currentState name = do
+rejoin kafka top currentState = do
   let topicName = getTopicName top
   ConsumerState member _ _ <- liftIO $ readTVarIO currentState
   (genId, newMember, members) <- joinG kafka topicName member
-  (newGenId, assigns) <- sync kafka top newMember members genId name
+  (newGenId, assigns) <- sync kafka top newMember members genId
   case partitionsForTopic topicName assigns of
     Just indices -> do
       liftIO $ atomically $ modifyTVar' currentState
@@ -198,17 +201,20 @@ partitionsForTopic (TopicName n) assigns =
   S.syncAssignedPartitions
   <$> find (\a -> S.syncAssignedTopic a == toByteString n) assigns
 
-heartbeats :: Kafka -> Topic -> TVar ConsumerState -> String -> IO ()
-heartbeats kafka top currentState name = do
+-- | A client in a consumer group has to send heartbeats. Starting a session
+-- spawns a thread which calls this function to manage heartbeats and respond
+-- to error codes in the heartbeat response. In particular, if a "rebalance in
+-- progress" error is received, the client will rejoin the group.
+heartbeats :: Kafka -> Topic -> TVar ConsumerState -> IO ()
+heartbeats kafka top currentState = do
   ConsumerState member genId _ <- readTVarIO currentState
   void $ heartbeat kafka member genId
   wait <- registerDelay fiveSeconds
   resp <- getHeartbeatResponse kafka wait
-  putStrLn (name <> ": " <> show resp)
   let errCode = fmap heartbeatErrorCode (tryParse resp)
   case errCode of
     Right e | e == errorRebalanceInProgress ->
-      void $ runExceptT $ runConsumer $ rejoin kafka top currentState name
+      void $ runExceptT $ runConsumer $ rejoin kafka top currentState
     Right e | e == noError ->
       pure ()
     Right e ->
@@ -216,23 +222,26 @@ heartbeats kafka top currentState name = do
     Left kafkaException ->
       fail ("Kafka exception encountered: " <> show kafkaException)
   threadDelay 500000
-  heartbeats kafka top currentState name
+  heartbeats kafka top currentState
 
-loop ::
+-- | Repeatedly fetch messages from kafka and commit the new offsets.
+-- Read any updates that have been made to the consumer state by the
+-- heartbeats thread.
+doFetches ::
      Kafka
   -> Topic
   -> TVar ConsumerState
   -> IntMap Int64
-  -> String
+  -> (FetchResponse -> IO ())
   -> Consumer ()
-loop kafka top currentState offsets name = do
+doFetches kafka top currentState offsets callback = do
   let topicName = getTopicName top
   fetchResp <- getMessages kafka top offsets =<< liftIO (newTVarIO False)
+  liftIO $ callback fetchResp
   ConsumerState member genId indices <- liftIO (readTVarIO currentState)
-  liftIO $ traverse_ B.putStrLn (fetchResponseContents fetchResp)
   newOffsets <- updateOffsets' kafka topicName member indices fetchResp
   void $ commitOffsets kafka topicName newOffsets member genId
-  loop kafka top currentState newOffsets name
+  doFetches kafka top currentState newOffsets callback
 
 getMessages ::
      Kafka
@@ -319,25 +328,14 @@ expectedSyncErrors =
   , errorMemberIdRequired
   ]
 
-fetchResponseContents :: FetchResponse -> [ByteString]
-fetchResponseContents fetchResponse =
-    mapMaybe recordValue
-  . concatMap F.records
-  . concat
-  . mapMaybe F.recordSet
-  . concatMap F.partitionResponses
-  . F.responses
-  $ fetchResponse
-
 sync ::
      Kafka
   -> Topic
   -> GroupMember
   -> [Member]
   -> GenerationId
-  -> String
   -> Consumer (GenerationId, [SyncTopicAssignment])
-sync kafka top member members genId name = do
+sync kafka top member members genId = do
   let topicName = getTopicName top
       assignments = assignMembers (length members) top members
   liftConsumer $ syncGroup kafka member genId assignments
@@ -345,7 +343,7 @@ sync kafka top member members genId name = do
   sgr <- liftConsumer $ tryParse <$> S.getSyncGroupResponse kafka wait
   if S.errorCode sgr `elem` expectedSyncErrors then do
     (newGenId, newMember, newMembers) <- joinG kafka topicName member
-    sync kafka top newMember newMembers newGenId name
+    sync kafka top newMember newMembers newGenId
   else if S.errorCode sgr == noError then
     pure (genId, fromMaybe [] $ S.partitionAssignments <$> S.memberAssignment sgr)
   else
