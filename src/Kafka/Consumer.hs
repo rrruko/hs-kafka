@@ -141,7 +141,7 @@ updateOffsets (TopicName topicName) current r =
 data ConsumerState = ConsumerState
   { currentMember :: GroupMember
   , currentGenId :: GenerationId
-  , currentHeartbeat :: Maybe (Either KafkaException Int16)
+  , currentAssignments :: [Int32]
   } deriving (Show)
 
 consumerSession ::
@@ -160,11 +160,11 @@ consumerSession kafka top oldMe name = runExceptT $ runConsumer $ do
       case offs of
         Just initialOffsets -> do
           currentState <- liftIO $ newTVarIO
-            (ConsumerState me newGenId Nothing)
+            (ConsumerState me newGenId indices)
           void $ liftIO $ forkIO $ withDefaultKafka $ \k ->
-            heartbeats k currentState name
+            heartbeats k top currentState name
           void $
-            loop kafka top currentState initialOffsets indices name
+            loop kafka top currentState initialOffsets name
         Nothing -> fail "The topic was not present in the listed offset set"
     Nothing -> fail "The topic was not present in the assignment set"
   void $ liftIO $ leaveGroup kafka me
@@ -181,13 +181,14 @@ rejoin kafka top currentState name = do
   let topicName = getTopicName top
   ConsumerState member _ _ <- liftIO $ readTVarIO currentState
   (genId, newMember, members) <- joinG kafka topicName member
-  (newGenId, assigns) <- sync kafka top newMember members newGenId name
+  (newGenId, assigns) <- sync kafka top newMember members genId name
   case partitionsForTopic topicName assigns of
     Just indices -> do
       liftIO $ atomically $ modifyTVar' currentState
         (\state -> state
           { currentMember = newMember
           , currentGenId = newGenId
+          , currentAssignments = indices
           })
       pure indices
     Nothing -> fail "The topic was not present in the assignment set"
@@ -197,45 +198,41 @@ partitionsForTopic (TopicName n) assigns =
   S.syncAssignedPartitions
   <$> find (\a -> S.syncAssignedTopic a == toByteString n) assigns
 
-heartbeats :: Kafka -> TVar ConsumerState -> String -> IO ()
-heartbeats kafka currentState name = do
+heartbeats :: Kafka -> Topic -> TVar ConsumerState -> String -> IO ()
+heartbeats kafka top currentState name = do
   ConsumerState member genId _ <- readTVarIO currentState
   void $ heartbeat kafka member genId
   wait <- registerDelay fiveSeconds
   resp <- getHeartbeatResponse kafka wait
-  atomically $ modifyTVar' currentState
-    (\state -> state
-      { currentHeartbeat = Just $ tryParse $
-          (fmap . fmap) heartbeatErrorCode resp
-      })
+  putStrLn (name <> ": " <> show resp)
+  let errCode = fmap heartbeatErrorCode (tryParse resp)
+  case errCode of
+    Right e | e == errorRebalanceInProgress ->
+      void $ runExceptT $ runConsumer $ rejoin kafka top currentState name
+    Right e | e == noError ->
+      pure ()
+    Right e ->
+      fail ("Unknown heartbeat error code " <> show e)
+    Left kafkaException ->
+      fail ("Kafka exception encountered: " <> show kafkaException)
   threadDelay 500000
-  heartbeats kafka currentState name
+  heartbeats kafka top currentState name
 
 loop ::
      Kafka
   -> Topic
   -> TVar ConsumerState
   -> IntMap Int64
-  -> [Int32]
   -> String
   -> Consumer ()
-loop kafka top currentState offsets indices name = do
+loop kafka top currentState offsets name = do
   let topicName = getTopicName top
-  fetchResp <- getMessages kafka top offsets =<< liftIO (registerDelay 10000000)
-  ConsumerState member genId heartbeatStatus <- liftIO (readTVarIO currentState)
+  fetchResp <- getMessages kafka top offsets =<< liftIO (newTVarIO False)
+  ConsumerState member genId indices <- liftIO (readTVarIO currentState)
   liftIO $ traverse_ B.putStrLn (fetchResponseContents fetchResp)
   newOffsets <- updateOffsets' kafka topicName member indices fetchResp
   void $ commitOffsets kafka topicName newOffsets member genId
-  case heartbeatStatus of
-    Just x -> case x of
-      Right e | e == errorRebalanceInProgress -> do
-        newIndices <- rejoin kafka top currentState name
-        loop kafka top currentState newOffsets newIndices name
-      Right e | e == noError -> do
-        loop kafka top currentState newOffsets indices name
-      Right e -> throwConsumer (KafkaUnexpectedErrorCodeException e)
-      Left kafkaException -> throwConsumer kafkaException
-    Nothing -> loop kafka top currentState newOffsets indices name
+  loop kafka top currentState newOffsets name
 
 getMessages ::
      Kafka
