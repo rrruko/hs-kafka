@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 
 module Kafka.Consumer
@@ -7,6 +8,7 @@ module Kafka.Consumer
 
 import Control.Concurrent.STM.TVar
 import Control.Monad
+import Control.Monad.Except
 import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Int
@@ -33,6 +35,25 @@ import qualified Kafka.ListOffsets.Response as L
 import qualified Kafka.OffsetCommit.Response as C
 import qualified Kafka.OffsetFetch.Response as O
 import qualified Kafka.SyncGroup.Response as S
+
+newtype Consumer a
+  = Consumer { runConsumer :: ExceptT KafkaException IO a }
+  deriving (Functor, Applicative, Monad)
+
+tryParse :: Either KafkaException (Either String a) -> Either KafkaException a
+tryParse = \case
+  Right (Right parsed) -> Right parsed
+  Right (Left parseError) -> Left (KafkaParseException parseError)
+  Left networkError -> Left networkError
+
+instance MonadIO Consumer where
+  liftIO = Consumer . ExceptT . fmap Right
+
+liftConsumer :: IO (Either KafkaException a) -> Consumer a
+liftConsumer = Consumer . ExceptT
+
+throwConsumer :: KafkaException -> Consumer a
+throwConsumer = Consumer . throwError
 
 -- | This module provides a high-level interface to the Kafka API for
 -- consumers by wrapping the low-level request and response type modules.
@@ -129,60 +150,47 @@ consumerSession ::
   -> GroupMember
   -> String
   -> IO (Either KafkaException ())
-consumerSession kafka top oldMe name = do
+consumerSession kafka top oldMe name = runExceptT $ runConsumer $ do
   let topicName = getTopicName top
-  joinG kafka topicName oldMe >>= \case
-    Right (genId, me, members) -> do
-      sync kafka top me members genId name >>= \case
-        Right (newGenId, assigns) -> do
-          case partitionsForTopic topicName assigns of
-            Just indices -> do
-              offs <- getInitialOffsets kafka me top indices
-              case offs of
-                Just initialOffsets -> do
-                  currentState <- newTVarIO
-                    (ConsumerState me newGenId Nothing)
-                  void $ forkIO $ withDefaultKafka $ \k ->
-                    heartbeats k currentState name
-                  void $
-                    loop kafka top currentState initialOffsets indices name
-                Nothing -> fail "The topic was not present in the listed offset set"
-            Nothing -> fail "The topic was not present in the assignment set"
-          void $ leaveGroup kafka me
-          wait <- registerDelay defaultTimeout
-          void $ getLeaveGroupResponse kafka wait
-          pure (Right ())
-        Left e ->
-          pure (Left e)
-    Left e ->
-      pure (Left e)
+  (genId, me, members) <- joinG kafka topicName oldMe
+  (newGenId, assigns) <- sync kafka top me members genId name
+  case partitionsForTopic topicName assigns of
+    Just indices -> do
+      offs <- liftIO $ getInitialOffsets kafka me top indices
+      case offs of
+        Just initialOffsets -> do
+          currentState <- liftIO $ newTVarIO
+            (ConsumerState me newGenId Nothing)
+          void $ liftIO $ forkIO $ withDefaultKafka $ \k ->
+            heartbeats k currentState name
+          void $
+            loop kafka top currentState initialOffsets indices name
+        Nothing -> fail "The topic was not present in the listed offset set"
+    Nothing -> fail "The topic was not present in the assignment set"
+  void $ liftIO $ leaveGroup kafka me
+  wait <- liftIO $ registerDelay defaultTimeout
+  void $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka wait
 
 rejoin ::
      Kafka
   -> Topic
   -> TVar ConsumerState
   -> String
-  -> IO (Either KafkaException [Int32])
+  -> Consumer [Int32]
 rejoin kafka top currentState name = do
   let topicName = getTopicName top
-  ConsumerState member _ _ <- readTVarIO currentState
-  joinG kafka topicName member >>= \case
-    Right (newGenId, newMember, members) -> do
-      sync kafka top newMember members newGenId name >>= \case
-        Right (newNewGenId, assigns) -> do
-          case partitionsForTopic topicName assigns of
-            Just indices -> do
-              atomically $ modifyTVar' currentState
-                (\state -> state
-                  { currentMember = newMember
-                  , currentGenId = newNewGenId
-                  })
-              pure (Right indices)
-            Nothing -> fail "The topic was not present in the assignment set"
-        Left e ->
-          pure (Left e)
-    Left e ->
-      pure (Left e)
+  ConsumerState member _ _ <- liftIO $ readTVarIO currentState
+  (newGenId, newMember, members) <- joinG kafka topicName member
+  (newNewGenId, assigns) <- sync kafka top newMember members newGenId name
+  case partitionsForTopic topicName assigns of
+    Just indices -> do
+      liftIO $ atomically $ modifyTVar' currentState
+        (\state -> state
+          { currentMember = newMember
+          , currentGenId = newNewGenId
+          })
+      pure indices
+    Nothing -> fail "The topic was not present in the assignment set"
 
 partitionsForTopic :: TopicName -> [SyncTopicAssignment] -> Maybe [Int32]
 partitionsForTopic (TopicName n) assigns =
@@ -197,11 +205,8 @@ heartbeats kafka currentState name = do
   resp <- getHeartbeatResponse kafka wait
   atomically $ modifyTVar' currentState
     (\state -> state
-      { currentHeartbeat = Just $
-          case (fmap . fmap) heartbeatErrorCode resp of
-            Right (Right e) -> Right e
-            Right (Left p) -> Left (KafkaParseException p)
-            Left n -> Left n
+      { currentHeartbeat = Just $ tryParse $
+          (fmap . fmap) heartbeatErrorCode resp
       })
   threadDelay 500000
   heartbeats kafka currentState name
@@ -213,42 +218,34 @@ loop ::
   -> IntMap Int64
   -> [Int32]
   -> String
-  -> IO (Either KafkaException ())
+  -> Consumer ()
 loop kafka top currentState offsets indices name = do
   let topicName = getTopicName top
-  fetchResp <- getMessages kafka top offsets =<< registerDelay 10000000
-  ConsumerState member genId heartbeatStatus <- readTVarIO currentState
-  case fetchResp of
-    Right (Right r) -> do
-      traverse_ B.putStrLn (fetchResponseContents r)
-      newOffsets <- either (const offsets) id <$>
-        updateOffsets' kafka topicName member indices r
-      void $ commitOffsets kafka topicName newOffsets member genId
-      case heartbeatStatus of
-        Just x -> case x of
-          Right e | e == errorRebalanceInProgress -> do
-            newIndices <- rejoin kafka top currentState name
-            case newIndices of
-              Right i -> loop kafka top currentState newOffsets i name
-              Left netError -> pure (Left netError)
-          Right e | e == noError -> do
-            loop kafka top currentState newOffsets indices name
-          Right e -> pure (Left (KafkaUnexpectedErrorCodeException e))
-          Left kafkaException -> pure (Left kafkaException)
-        Nothing -> loop kafka top currentState newOffsets indices name
-    Right (Left parseError) -> pure (Left (KafkaParseException parseError))
-    Left e -> do
-      pure (Left e)
+  fetchResp <- getMessages kafka top offsets =<< liftIO (registerDelay 10000000)
+  ConsumerState member genId heartbeatStatus <- liftIO (readTVarIO currentState)
+  liftIO $ traverse_ B.putStrLn (fetchResponseContents fetchResp)
+  newOffsets <- updateOffsets' kafka topicName member indices fetchResp
+  void $ commitOffsets kafka topicName newOffsets member genId
+  case heartbeatStatus of
+    Just x -> case x of
+      Right e | e == errorRebalanceInProgress -> do
+        newIndices <- rejoin kafka top currentState name
+        loop kafka top currentState newOffsets newIndices name
+      Right e | e == noError -> do
+        loop kafka top currentState newOffsets indices name
+      Right e -> throwConsumer (KafkaUnexpectedErrorCodeException e)
+      Left kafkaException -> throwConsumer kafkaException
+    Nothing -> loop kafka top currentState newOffsets indices name
 
 getMessages ::
      Kafka
   -> Topic
   -> IntMap Int64
   -> TVar Bool
-  -> IO (Either KafkaException (Either String FetchResponse))
+  -> Consumer FetchResponse
 getMessages kafka top offsets interrupt = do
-  void $ fetch kafka (getTopicName top) 5000000 (toOffsetList offsets)
-  getFetchResponse kafka interrupt
+  liftConsumer $ fetch kafka (getTopicName top) 5000000 (toOffsetList offsets)
+  liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
 
 updateOffsets' ::
      Kafka
@@ -256,27 +253,23 @@ updateOffsets' ::
   -> GroupMember
   -> [Int32]
   -> FetchResponse
-  -> IO (Either KafkaException (IntMap Int64))
+  -> Consumer (IntMap Int64)
 updateOffsets' k topicName member partitionIndices r = do
-  void $ offsetFetch k member topicName partitionIndices
-  offsets <- O.getOffsetFetchResponse k =<< registerDelay defaultTimeout
-  case offsets of
-    Right (Right offs) -> do
-      case O.topics offs of
-        [topicResponse] -> do
-          let
-            partitions = O.offsetFetchPartitions topicResponse
-            fetchedOffsets = IM.fromList $
-              fmap
-                (\part ->
-                  (fromIntegral $ O.offsetFetchPartitionIndex part
-                  , O.offsetFetchOffset part))
-                partitions
-          pure (Right (updateOffsets topicName fetchedOffsets r))
-        _ -> fail
-          ("Got unexpected number of topic responses: " <> show offs)
-    Right (Left parseError) -> pure (Left (KafkaParseException parseError))
-    Left networkError -> pure (Left networkError)
+  liftConsumer $ offsetFetch k member topicName partitionIndices
+  offs <- liftConsumer $ tryParse <$> (O.getOffsetFetchResponse k =<< registerDelay defaultTimeout)
+  case O.topics offs of
+    [topicResponse] -> do
+      let
+        partitions = O.offsetFetchPartitions topicResponse
+        fetchedOffsets = IM.fromList $
+          fmap
+            (\part ->
+              (fromIntegral $ O.offsetFetchPartitionIndex part
+              , O.offsetFetchOffset part))
+            partitions
+      pure (updateOffsets topicName fetchedOffsets r)
+    _ -> fail
+      ("Got unexpected number of topic responses: " <> show offs)
 
 commitOffsets ::
      Kafka
@@ -284,14 +277,10 @@ commitOffsets ::
   -> IntMap Int64
   -> GroupMember
   -> GenerationId
-  -> IO (Either KafkaException ())
+  -> Consumer ()
 commitOffsets k topicName offs member genId = do
-  void $ offsetCommit k topicName (toOffsetList offs) member genId
-  commitResponse <- C.getOffsetCommitResponse k =<< registerDelay defaultTimeout
-  case commitResponse of
-    Right (Right _) -> pure (Right ())
-    Right (Left parseError) -> pure (Left (KafkaParseException parseError))
-    Left networkError -> pure (Left networkError)
+  liftConsumer $ offsetCommit k topicName (toOffsetList offs) member genId
+  void $ liftConsumer $ tryParse <$> (C.getOffsetCommitResponse k =<< registerDelay defaultTimeout)
 
 assignMembers :: Int -> Topic -> [Member] -> [MemberAssignment]
 assignMembers memberCount top groupMembers =
@@ -348,44 +337,38 @@ sync ::
   -> [Member]
   -> GenerationId
   -> String
-  -> IO (Either KafkaException (GenerationId, [SyncTopicAssignment]))
+  -> Consumer (GenerationId, [SyncTopicAssignment])
 sync kafka top member members genId name = do
   let topicName = getTopicName top
       assignments = assignMembers (length members) top members
-  void $ syncGroup kafka member genId assignments
-  wait <- registerDelay defaultTimeout
-  S.getSyncGroupResponse kafka wait >>= \case
-    Right (Right sgr) | S.errorCode sgr `elem` expectedSyncErrors -> do
-      joinG kafka topicName member >>= \case
-        Right (newGenId, newMember, newMembers) ->
-          sync kafka top newMember newMembers newGenId name
-        Left e -> pure (Left e)
-    Right (Right sgr) | S.errorCode sgr == noError -> do
-      pure (Right (genId, fromMaybe [] $ S.partitionAssignments <$> S.memberAssignment sgr))
-    Right (Right sgr) -> do
-      pure (Left (KafkaUnexpectedErrorCodeException (S.errorCode sgr)))
-    Right (Left parseError) -> pure (Left (KafkaParseException parseError))
-    Left networkError -> pure (Left networkError)
+  liftConsumer $ syncGroup kafka member genId assignments
+  wait <- liftIO (registerDelay defaultTimeout)
+  sgr <- liftConsumer $ tryParse <$> S.getSyncGroupResponse kafka wait
+  if S.errorCode sgr `elem` expectedSyncErrors then do
+    (newGenId, newMember, newMembers) <- joinG kafka topicName member
+    sync kafka top newMember newMembers newGenId name
+  else if S.errorCode sgr == noError then
+    pure (genId, fromMaybe [] $ S.partitionAssignments <$> S.memberAssignment sgr)
+  else
+    throwConsumer (KafkaUnexpectedErrorCodeException (S.errorCode sgr))
 
 joinG ::
      Kafka
   -> TopicName
   -> GroupMember
-  -> IO (Either KafkaException (GenerationId, GroupMember, [Member]))
+  -> Consumer (GenerationId, GroupMember, [Member])
 joinG kafka top member@(GroupMember name _) = do
-  void $ joinGroup kafka top member
-  wait <- registerDelay defaultTimeout
-  getJoinGroupResponse kafka wait >>= \case
-    Right (Right jgr) | J.errorCode jgr == errorMemberIdRequired -> do
-      let memId = Just (fromByteString (J.memberId jgr))
-      let assignment = GroupMember name memId
-      joinG kafka top assignment
-    Right (Right jgr) | J.errorCode jgr == noError -> do
-      let genId = GenerationId (J.generationId jgr)
-      let memId = Just (fromByteString (J.memberId jgr))
-      let assignment = GroupMember name memId
-      pure (Right (genId, assignment, J.members jgr))
-    Right (Right jgr) ->
-      pure (Left (KafkaUnexpectedErrorCodeException (J.errorCode jgr)))
-    Right (Left parseError) -> pure (Left (KafkaParseException parseError))
-    Left networkError -> pure (Left networkError)
+  liftConsumer $ joinGroup kafka top member
+  wait <- liftIO (registerDelay defaultTimeout)
+  jgr <- liftConsumer $ tryParse <$> getJoinGroupResponse kafka wait
+  if J.errorCode jgr == errorMemberIdRequired then do
+    let memId = Just (fromByteString (J.memberId jgr))
+    let assignment = GroupMember name memId
+    joinG kafka top assignment
+  else if J.errorCode jgr == noError then do
+    let genId = GenerationId (J.generationId jgr)
+    let memId = Just (fromByteString (J.memberId jgr))
+    let assignment = GroupMember name memId
+    pure (genId, assignment, J.members jgr)
+  else
+    throwConsumer (KafkaUnexpectedErrorCodeException (J.errorCode jgr))
