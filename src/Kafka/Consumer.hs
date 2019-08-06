@@ -180,14 +180,14 @@ rejoin ::
 rejoin kafka top currentState name = do
   let topicName = getTopicName top
   ConsumerState member _ _ <- liftIO $ readTVarIO currentState
-  (newGenId, newMember, members) <- joinG kafka topicName member
-  (newNewGenId, assigns) <- sync kafka top newMember members newGenId name
+  (genId, newMember, members) <- joinG kafka topicName member
+  (newGenId, assigns) <- sync kafka top newMember members newGenId name
   case partitionsForTopic topicName assigns of
     Just indices -> do
       liftIO $ atomically $ modifyTVar' currentState
         (\state -> state
           { currentMember = newMember
-          , currentGenId = newNewGenId
+          , currentGenId = newGenId
           })
       pure indices
     Nothing -> fail "The topic was not present in the assignment set"
@@ -256,7 +256,8 @@ updateOffsets' ::
   -> Consumer (IntMap Int64)
 updateOffsets' k topicName member partitionIndices r = do
   liftConsumer $ offsetFetch k member topicName partitionIndices
-  offs <- liftConsumer $ tryParse <$> (O.getOffsetFetchResponse k =<< registerDelay defaultTimeout)
+  offs <- liftConsumer $ tryParse <$>
+    (O.getOffsetFetchResponse k =<< registerDelay defaultTimeout)
   case O.topics offs of
     [topicResponse] -> do
       let
@@ -280,7 +281,8 @@ commitOffsets ::
   -> Consumer ()
 commitOffsets k topicName offs member genId = do
   liftConsumer $ offsetCommit k topicName (toOffsetList offs) member genId
-  void $ liftConsumer $ tryParse <$> (C.getOffsetCommitResponse k =<< registerDelay defaultTimeout)
+  void $ liftConsumer $ tryParse <$>
+    (C.getOffsetCommitResponse k =<< registerDelay defaultTimeout)
 
 assignMembers :: Int -> Topic -> [Member] -> [MemberAssignment]
 assignMembers memberCount top groupMembers =
