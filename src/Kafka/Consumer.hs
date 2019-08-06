@@ -73,9 +73,11 @@ getInitialOffsets kafka member topic indices = do
   let topicName = TopicName name
   let name' = toByteString name
   void $ listOffsets kafka topicName indices
-  listedOffs <- L.getListOffsetsResponse kafka =<< registerDelay defaultTimeout
+  listOffsetsTimeout <- registerDelay defaultTimeout
+  listedOffs <- L.getListOffsetsResponse kafka listOffsetsTimeout
   void $ offsetFetch kafka member topicName indices
-  committedOffs <- O.getOffsetFetchResponse kafka =<< registerDelay defaultTimeout
+  offsetFetchTimeout <- registerDelay defaultTimeout
+  committedOffs <- O.getOffsetFetchResponse kafka offsetFetchTimeout
   case (listedOffs, committedOffs) of
     (Right (Right lor), Right (Right ofr)) ->
       case (listOffsetsMap name' lor, fetchOffsetsMap name' ofr) of
@@ -344,8 +346,9 @@ sync kafka top member members genId = do
   if S.errorCode sgr `elem` expectedSyncErrors then do
     (newGenId, newMember, newMembers) <- joinG kafka topicName member
     sync kafka top newMember newMembers newGenId
-  else if S.errorCode sgr == noError then
-    pure (genId, fromMaybe [] $ S.partitionAssignments <$> S.memberAssignment sgr)
+  else if S.errorCode sgr == noError then do
+    let assigns = S.partitionAssignments <$> S.memberAssignment sgr
+    pure (genId, fromMaybe [] assigns)
   else
     throwConsumer (KafkaUnexpectedErrorCodeException (S.errorCode sgr))
 
