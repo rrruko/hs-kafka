@@ -165,7 +165,7 @@ consumerSession kafka top oldMe callback leave = runExceptT $ runConsumer $ do
           let initialState = ConsumerState me newGenId indices
           currentState <- liftIO $ newTVarIO initialState
           let runHeartbeats k = heartbeats k top currentState leave
-              runFetches k = doFetches k top currentState offsets callback
+              runFetches k = doFetches k top currentState offsets callback leave
           void . liftIO . forkIO . void $ withDefaultKafka
             (runExceptT . runConsumer . runFetches)
           void . liftIO $ runHeartbeats kafka
@@ -240,16 +240,16 @@ doFetches ::
   -> TVar ConsumerState
   -> IntMap Int64
   -> (FetchResponse -> IO ())
+  -> TVar Bool
   -> Consumer ()
-doFetches kafka top currentState offsets callback = do
+doFetches kafka top currentState offsets callback leave = do
   let topicName = getTopicName top
-  timeout <- liftIO (newTVarIO False)
-  fetchResp <- getMessages kafka top offsets timeout
+  fetchResp <- getMessages kafka top offsets leave
   liftIO $ callback fetchResp
   ConsumerState member genId indices <- liftIO (readTVarIO currentState)
   newOffsets <- updateOffsets' kafka topicName member indices fetchResp
   void $ commitOffsets kafka topicName newOffsets member genId
-  doFetches kafka top currentState newOffsets callback
+  doFetches kafka top currentState newOffsets callback leave
 
 getMessages ::
      Kafka
