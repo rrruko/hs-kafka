@@ -1,5 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Kafka.Consumer
   ( consumerSession
@@ -7,6 +8,7 @@ module Kafka.Consumer
   ) where
 
 import Control.Concurrent.STM.TVar
+import Control.Concurrent.MVar
 import Control.Monad hiding (join)
 import Control.Monad.Except hiding (join)
 import Data.ByteString (ByteString)
@@ -14,8 +16,9 @@ import Data.Foldable
 import Data.Int
 import Data.IntMap (IntMap)
 import Data.Maybe
-import GHC.Conc
+import GHC.Conc (forkIO, atomically, threadDelay)
 
+import qualified Data.ByteString.Char8 as B
 import qualified Data.IntMap as IM
 
 import Kafka
@@ -164,10 +167,10 @@ consumerSession kafka top oldMe callback leave = runExceptT $ runConsumer $ do
         Just offsets -> do
           let initialState = ConsumerState me newGenId indices
           currentState <- liftIO $ newTVarIO initialState
-          let runHeartbeats k = heartbeats k top currentState leave
-              runFetches k = doFetches k top currentState offsets callback leave
-          void . liftIO . forkIO . void $ withDefaultKafka
-            (runExceptT . runConsumer . runFetches)
+          sock <- liftIO $ newMVar ()
+          let runHeartbeats k = heartbeats k top currentState leave sock
+              runFetches k = doFetches k top currentState offsets callback leave sock
+          void . liftIO . forkIO . void . runExceptT . runConsumer $ runFetches kafka
           void . liftIO $ runHeartbeats kafka
         Nothing -> fail "The topic was not present in the listed offset set"
     Nothing -> fail "The topic was not present in the assignment set"
@@ -206,30 +209,40 @@ partitionsForTopic (TopicName n) assigns =
 -- spawns a thread which calls this function to manage heartbeats and respond
 -- to error codes in the heartbeat response. In particular, if a "rebalance in
 -- progress" error is received, the client will rejoin the group.
-heartbeats :: Kafka -> Topic -> TVar ConsumerState -> TVar Bool -> IO ()
-heartbeats kafka top currentState leave = do
+heartbeats :: Kafka -> Topic -> TVar ConsumerState -> TVar Bool -> MVar () -> IO ()
+heartbeats kafka top currentState leave sock = do
   ConsumerState member genId _ <- readTVarIO currentState
-  void $ heartbeat kafka member genId
-  wait <- registerDelay fiveSeconds
-  resp <- getHeartbeatResponse kafka wait
-  let errCode = fmap heartbeatErrorCode (tryParse resp)
-  case errCode of
-    Right e | e == errorRebalanceInProgress ->
-      void $ runExceptT $ runConsumer $ rejoin kafka top currentState
-    Right e | e == noError ->
-      pure ()
-    Right e ->
-      fail ("Unknown heartbeat error code " <> show e)
-    Left kafkaException ->
-      fail ("Kafka exception encountered: " <> show kafkaException)
-  threadDelay 500000
+  withMVar sock $ \_ -> do
+    let GroupMember _ mId = member
+    void $ heartbeat kafka member genId
+    wait <- registerDelay fiveSeconds
+    resp <- getHeartbeatResponse kafka wait
+    let errCode = fmap heartbeatErrorCode (tryParse resp)
+    case errCode of
+      Right e | e == errorRebalanceInProgress -> do
+        liftIO $ B.putStrLn (maybe "NULL" toByteString mId <> ": Rejoining")
+        void $ runExceptT $ runConsumer $ rejoin kafka top currentState
+        liftIO $ B.putStrLn (maybe "NULL" toByteString mId <> ": Rejoined")
+      Right e | e == noError ->
+        pure ()
+      Right e ->
+        fail ("Unknown heartbeat error code " <> show e)
+      Left kafkaException ->
+        fail ("Kafka exception encountered: " <> show kafkaException)
   l <- liftIO $ readTVarIO leave
   if l then do
     void $ leaveGroup kafka member
     timeout <- registerDelay defaultTimeout
     void $ getLeaveGroupResponse kafka timeout
-  else
-    heartbeats kafka top currentState leave
+  else do
+    threadDelay 500000
+    heartbeats kafka top currentState leave sock
+
+mapConsumer ::
+     (IO (Either KafkaException a) -> IO (Either KafkaException b))
+  -> Consumer a
+  -> Consumer b
+mapConsumer f c = liftConsumer $ f (runExceptT $ runConsumer c)
 
 -- | Repeatedly fetch messages from kafka and commit the new offsets.
 -- Read any updates that have been made to the consumer state by the
@@ -241,15 +254,26 @@ doFetches ::
   -> IntMap Int64
   -> (FetchResponse -> IO ())
   -> TVar Bool
+  -> MVar ()
   -> Consumer ()
-doFetches kafka top currentState offsets callback leave = do
+doFetches kafka top currentState offsets callback leave sock = do
   let topicName = getTopicName top
-  fetchResp <- getMessages kafka top offsets leave
-  liftIO $ callback fetchResp
-  ConsumerState member genId indices <- liftIO (readTVarIO currentState)
-  newOffsets <- updateOffsets' kafka topicName member indices fetchResp
-  void $ commitOffsets kafka topicName newOffsets member genId
-  doFetches kafka top currentState newOffsets callback leave
+  neverInterrupt <- liftIO $ newTVarIO False
+  newOffsets <- mapConsumer (withMVar sock . const) $ do
+    ConsumerState member genId indices <- liftIO (readTVarIO currentState)
+    latestOffs <- latestOffsets kafka topicName member indices
+    let GroupMember _ mId = member
+    liftIO $ B.putStrLn (maybe "NULL" toByteString mId <> ": Requesting stuff with offsets " <> B.pack (show offsets))
+    fetchResp <- getMessages kafka top latestOffs neverInterrupt
+    liftIO $ callback fetchResp
+    liftIO $ B.putStrLn (maybe "NULL" toByteString mId <> ": Got stuff")
+    newOffsets <- updateOffsets' kafka topicName member indices fetchResp
+    void $ commitOffsets kafka topicName newOffsets member genId
+    liftIO $ B.putStrLn (maybe "NULL" toByteString mId <> ": Committed offsets " <> B.pack (show newOffsets))
+    pure newOffsets
+  l <- liftIO $ readTVarIO leave
+  when (not l) $
+    doFetches kafka top currentState newOffsets callback leave sock
 
 getMessages ::
      Kafka
@@ -258,7 +282,7 @@ getMessages ::
   -> TVar Bool
   -> Consumer FetchResponse
 getMessages kafka top offsets interrupt = do
-  liftConsumer $ fetch kafka (getTopicName top) defaultTimeout offsetList
+  liftConsumer $ fetch kafka (getTopicName top) 1000000 offsetList
   liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
   where
   offsetList = toOffsetList offsets
@@ -271,22 +295,29 @@ updateOffsets' ::
   -> FetchResponse
   -> Consumer (IntMap Int64)
 updateOffsets' k topicName member partitionIndices r = do
-  liftConsumer $ offsetFetch k member topicName partitionIndices
-  timeout <- liftIO $ registerDelay defaultTimeout
-  offs <- liftConsumer $ tryParse <$> O.getOffsetFetchResponse k timeout
+  fetchedOffsets <- latestOffsets k topicName member partitionIndices
+  pure (updateOffsets topicName fetchedOffsets r)
+
+latestOffsets ::
+     Kafka
+  -> TopicName
+  -> GroupMember
+  -> [Int32]
+  -> Consumer (IntMap Int64)
+latestOffsets kafka topicName member indices = do
+  liftConsumer $ offsetFetch kafka member topicName indices
+  timeout <- liftIO $ registerDelay fiveSeconds
+  offs <- liftConsumer $ tryParse <$> O.getOffsetFetchResponse kafka timeout
   case O.topics offs of
     [topicResponse] -> do
-      let
-        partitions = O.offsetFetchPartitions topicResponse
-        fetchedOffsets = IM.fromList $
-          fmap
-            (\part ->
-              (fromIntegral $ O.offsetFetchPartitionIndex part
-              , O.offsetFetchOffset part))
-            partitions
-      pure (updateOffsets topicName fetchedOffsets r)
-    _ -> fail
-      ("Got unexpected number of topic responses: " <> show offs)
+      let partitions = O.offsetFetchPartitions topicResponse
+      pure $ IM.fromList $
+        fmap
+          (\part ->
+            (fromIntegral $ O.offsetFetchPartitionIndex part
+            , O.offsetFetchOffset part))
+          partitions
+    _ -> fail ("Got unexpected number of topic responses: " <> show offs)
 
 commitOffsets ::
      Kafka

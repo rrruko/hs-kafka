@@ -54,7 +54,7 @@ forkConsumer name = do
 
 consumer :: String -> IO ()
 consumer name = do
-  (t, kafka) <- setup groupName 5
+  (t, kafka) <- setup groupName 8
   case kafka of
     Nothing -> putStrLn "Failed to connect to kafka"
     Just k -> do
