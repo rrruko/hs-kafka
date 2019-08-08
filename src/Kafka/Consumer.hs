@@ -73,7 +73,7 @@ getListedOffsets kafka topic indices = do
   let Topic name _ _ = topic
   let topicName = TopicName name
   let name' = toByteString name
-  liftConsumer $ listOffsets kafka topicName indices
+  liftConsumer $ listOffsets kafka topicName indices Earliest
   listOffsetsTimeout <- liftIO (registerDelay fiveSeconds)
   listedOffs <- liftConsumer $ tryParse <$>
     L.getListOffsetsResponse kafka listOffsetsTimeout

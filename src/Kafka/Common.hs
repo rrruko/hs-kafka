@@ -37,6 +37,11 @@ data PartitionOffset = PartitionOffset
   , partitionOffset :: Int64
   } deriving (Eq, Show)
 
+data KafkaTimestamp
+  = Latest
+  | Earliest
+  | At Int64
+
 data KafkaException where
   KafkaSendException :: SendException 'Uninterruptible -> KafkaException
   KafkaReceiveException :: ReceiveException 'Interruptible -> KafkaException

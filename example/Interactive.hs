@@ -62,10 +62,11 @@ iFetch kafka top offs = do
 iListOffsets ::
      Kafka
   -> TopicName
+  -> KafkaTimestamp
   -> IO (Either KafkaException (Either String ListOffsetsResponse))
-iListOffsets kafka top = do
+iListOffsets kafka top time = do
   wait <- registerDelay giveUpTime
-  _ <- listOffsets kafka top [0]
+  _ <- listOffsets kafka top [0] time
   getListOffsetsResponse kafka wait
 
 iJoinGroup ::

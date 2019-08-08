@@ -79,9 +79,10 @@ listOffsets ::
      Kafka
   -> TopicName
   -> [Int32]
+  -> KafkaTimestamp
   -> IO (Either KafkaException ())
-listOffsets kafka topic partitionIndices =
-  request kafka $ listOffsetsRequest topic partitionIndices
+listOffsets kafka topic partitionIndices timestamp =
+  request kafka $ listOffsetsRequest topic partitionIndices timestamp
 
 joinGroup ::
      Kafka

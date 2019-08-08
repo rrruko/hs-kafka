@@ -24,7 +24,7 @@ thirtySecondsUs = 30000000
 sendListOffsetsRequest :: TopicName -> [Int32] -> IO ()
 sendListOffsetsRequest topicName partitionIndices = do
   withDefaultKafka $ \kafka -> do
-    listOffsets kafka topicName partitionIndices >>= \case
+    listOffsets kafka topicName partitionIndices Latest >>= \case
       Right () -> do
         interrupt <- registerDelay thirtySecondsUs
         response <- getListOffsetsResponse kafka interrupt

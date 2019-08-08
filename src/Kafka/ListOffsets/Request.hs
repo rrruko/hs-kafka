@@ -32,14 +32,6 @@ defaultIsolationLevel = isolationLevel ReadUncommitted
 defaultCurrentLeaderEpoch :: Int32
 defaultCurrentLeaderEpoch = -1
 
-data KafkaTimestamp
-  = Latest
-  | Earliest
-  | At Int64
-
-defaultTimestamp :: KafkaTimestamp
-defaultTimestamp = Earliest
-
 kafkaTimestamp :: KafkaTimestamp -> Int64
 kafkaTimestamp Latest = -1
 kafkaTimestamp Earliest = -2
@@ -48,8 +40,9 @@ kafkaTimestamp (At n) = n
 listOffsetsRequest ::
      TopicName
   -> [Int32]
+  -> KafkaTimestamp
   -> UnliftedArray ByteArray
-listOffsetsRequest topic partitions =
+listOffsetsRequest topic partitions timestamp =
   let
     minimumReqSize = 25
     partitionMessageSize = 16
@@ -76,7 +69,7 @@ listOffsetsRequest topic partitions =
             (\p -> foldBuilder
               [ build32 p
               , build32 defaultCurrentLeaderEpoch
-              , build64 (kafkaTimestamp defaultTimestamp)
+              , build64 (kafkaTimestamp timestamp)
               ])
             partitions)
           (fromIntegral partitionCount)
