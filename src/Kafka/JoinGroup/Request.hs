@@ -19,10 +19,10 @@ joinGroupApiKey :: Int16
 joinGroupApiKey = 11
 
 defaultSessionTimeout :: Int32
-defaultSessionTimeout = 30000
+defaultSessionTimeout = 10000
 
 defaultRebalanceTimeout :: Int32
-defaultRebalanceTimeout = 30000
+defaultRebalanceTimeout = 10000
 
 defaultProtocolType :: ByteArray
 defaultProtocolType = fromByteString "consumer"

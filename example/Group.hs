@@ -38,19 +38,19 @@ waitForChildren = do
 
 main :: IO ()
 main = do
-  forkConsumer "1"
-  forkConsumer "2"
-  forkConsumer "3"
+  fork consumer "C1"
+  fork consumer "C2"
+  fork consumer "C3"
   threadDelay 5000000
-  forkConsumer "4"
+  fork consumer "C4"
   waitForChildren
 
-forkConsumer :: String -> IO ()
-forkConsumer name = do
+fork :: (String -> IO ()) -> String -> IO ()
+fork f name = do
   mvar <- newEmptyMVar
   childs <- takeMVar children
   putMVar children (mvar:childs)
-  void $ forkFinally (consumer name) (\_ -> putMVar mvar ())
+  void $ forkFinally (f name) (\_ -> putMVar mvar ())
 
 consumer :: String -> IO ()
 consumer name = do
@@ -65,10 +65,11 @@ consumer name = do
         Right () -> pure ()
 
 callback :: String -> FetchResponse -> IO ()
-callback name response =
-  traverse_
-    (\message -> putStrLn (name <> ": " <> show message))
-    (fetchResponseContents response)
+callback name response = 
+  putStrLn (name <> ": got " <> show (length (fetchResponseContents response)) <> " messages")
+--  traverse_
+--    (\message -> putStrLn (name <> ": " <> show message))
+--    (fetchResponseContents response)
 
 fetchResponseContents :: FetchResponse -> [ByteString]
 fetchResponseContents fetchResponse =
