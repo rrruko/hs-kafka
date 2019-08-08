@@ -60,6 +60,12 @@ liftConsumer = Consumer . ExceptT
 throwConsumer :: KafkaException -> Consumer a
 throwConsumer = Consumer . throwError
 
+mapConsumer ::
+     (IO (Either KafkaException a) -> IO (Either KafkaException b))
+  -> Consumer a
+  -> Consumer b
+mapConsumer f c = liftConsumer $ f (runExceptT $ runConsumer c)
+
 -- | Get the earliest offsets corresponding to unread messages on the topic.
 -- The group may not have committed an offset on a given partition yet, so we
 -- need to send a ListOffsets request to find out which offsets are even valid
@@ -220,9 +226,7 @@ heartbeats kafka top currentState leave sock = do
     let errCode = fmap heartbeatErrorCode (tryParse resp)
     case errCode of
       Right e | e == errorRebalanceInProgress -> do
-        liftIO $ B.putStrLn (maybe "NULL" toByteString mId <> ": Rejoining")
         void $ runExceptT $ runConsumer $ rejoin kafka top currentState
-        liftIO $ B.putStrLn (maybe "NULL" toByteString mId <> ": Rejoined")
       Right e | e == noError ->
         pure ()
       Right e ->
@@ -237,12 +241,6 @@ heartbeats kafka top currentState leave sock = do
   else do
     threadDelay 500000
     heartbeats kafka top currentState leave sock
-
-mapConsumer ::
-     (IO (Either KafkaException a) -> IO (Either KafkaException b))
-  -> Consumer a
-  -> Consumer b
-mapConsumer f c = liftConsumer $ f (runExceptT $ runConsumer c)
 
 -- | Repeatedly fetch messages from kafka and commit the new offsets.
 -- Read any updates that have been made to the consumer state by the
@@ -263,13 +261,10 @@ doFetches kafka top currentState offsets callback leave sock = do
     ConsumerState member genId indices <- liftIO (readTVarIO currentState)
     latestOffs <- latestOffsets kafka topicName member indices
     let GroupMember _ mId = member
-    liftIO $ B.putStrLn (maybe "NULL" toByteString mId <> ": Requesting stuff with offsets " <> B.pack (show offsets))
     fetchResp <- getMessages kafka top latestOffs neverInterrupt
     liftIO $ callback fetchResp
-    liftIO $ B.putStrLn (maybe "NULL" toByteString mId <> ": Got stuff")
     newOffsets <- updateOffsets' kafka topicName member indices fetchResp
     void $ commitOffsets kafka topicName newOffsets member genId
-    liftIO $ B.putStrLn (maybe "NULL" toByteString mId <> ": Committed offsets " <> B.pack (show newOffsets))
     pure newOffsets
   l <- liftIO $ readTVarIO leave
   when (not l) $
