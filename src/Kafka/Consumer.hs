@@ -304,14 +304,17 @@ latestOffsets kafka topicName member indices = do
   timeout <- liftIO $ registerDelay fiveSeconds
   offs <- liftConsumer $ tryParse <$> O.getOffsetFetchResponse kafka timeout
   case O.topics offs of
+    [] -> pure IM.empty
     [topicResponse] -> do
       let partitions = O.offsetFetchPartitions topicResponse
-      pure $ IM.fromList $
-        fmap
-          (\part ->
-            (fromIntegral $ O.offsetFetchPartitionIndex part
-            , O.offsetFetchOffset part))
-          partitions
+          fetchedOffsets = 
+            IM.fromList $
+              fmap
+                (\part ->
+                  (fromIntegral $ O.offsetFetchPartitionIndex part
+                  , O.offsetFetchOffset part))
+                partitions
+      pure fetchedOffsets
     _ -> fail ("Got unexpected number of topic responses: " <> show offs)
 
 commitOffsets ::
