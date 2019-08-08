@@ -38,7 +38,7 @@ data KafkaTimestamp
   | At Int64
 
 defaultTimestamp :: KafkaTimestamp
-defaultTimestamp = Latest
+defaultTimestamp = Earliest
 
 kafkaTimestamp :: KafkaTimestamp -> Int64
 kafkaTimestamp Latest = -1

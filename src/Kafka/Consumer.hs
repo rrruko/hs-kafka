@@ -18,7 +18,6 @@ import Data.IntMap (IntMap)
 import Data.Maybe
 import GHC.Conc (forkIO, atomically, threadDelay)
 
-import qualified Data.ByteString.Char8 as B
 import qualified Data.IntMap as IM
 
 import Kafka
@@ -28,7 +27,6 @@ import Kafka.Heartbeat.Response
 import Kafka.JoinGroup.Response (Member, getJoinGroupResponse)
 import Kafka.LeaveGroup.Response
 import Kafka.ListOffsets.Response (ListOffsetsResponse)
-import Kafka.OffsetFetch.Response (OffsetFetchResponse)
 import Kafka.SyncGroup.Response (SyncTopicAssignment)
 
 import qualified Kafka.Fetch.Response as F
@@ -66,35 +64,42 @@ mapConsumer ::
   -> Consumer b
 mapConsumer f c = liftConsumer $ f (runExceptT $ runConsumer c)
 
--- | Get the earliest offsets corresponding to unread messages on the topic.
--- The group may not have committed an offset on a given partition yet, so we
--- need to send a ListOffsets request to find out which offsets are even valid
--- on the topic and default to that offset if a committed offset is not
--- present.
-getInitialOffsets ::
+getListedOffsets ::
      Kafka
-  -> GroupMember
   -> Topic
   -> [Int32]
-  -> IO (Maybe (IntMap Int64))
-getInitialOffsets kafka member topic indices = do
+  -> Consumer (Maybe (IntMap Int64))
+getListedOffsets kafka topic indices = do
   let Topic name _ _ = topic
   let topicName = TopicName name
   let name' = toByteString name
-  void $ listOffsets kafka topicName indices
-  listOffsetsTimeout <- registerDelay defaultTimeout
-  listedOffs <- L.getListOffsetsResponse kafka listOffsetsTimeout
-  void $ offsetFetch kafka member topicName indices
-  offsetFetchTimeout <- registerDelay defaultTimeout
-  committedOffs <- O.getOffsetFetchResponse kafka offsetFetchTimeout
-  case (listedOffs, committedOffs) of
-    (Right (Right lor), Right (Right ofr)) ->
-      case (listOffsetsMap name' lor, fetchOffsetsMap name' ofr) of
-        (Just lm, Just om) -> do
-          let res = merge lm om
-          pure (Just res)
-        _ -> pure Nothing
-    _ -> pure Nothing
+  liftConsumer $ listOffsets kafka topicName indices
+  listOffsetsTimeout <- liftIO (registerDelay fiveSeconds)
+  listedOffs <- liftConsumer $ tryParse <$>
+    L.getListOffsetsResponse kafka listOffsetsTimeout
+  pure (listOffsetsMap name' listedOffs)
+
+initializeOffsets ::
+     Kafka
+  -> Topic
+  -> GroupMember
+  -> GenerationId
+  -> Consumer ()
+initializeOffsets kafka topic member genId = do
+  let Topic name' partitionCount _ = topic
+      topicName = TopicName name'
+      allIndices = [0..fromIntegral partitionCount - 1]
+  getListedOffsets kafka topic allIndices >>= \case
+    Just initialOffs -> do
+      latestOffs <- latestOffsets kafka topicName member allIndices
+      let validOffs = merge initialOffs latestOffs
+      commitOffsets kafka topicName validOffs member genId
+    Nothing -> fail "initializeOffsets"
+
+merge :: IntMap Int64 -> IntMap Int64 -> IntMap Int64
+merge lor ofr = mergeId (\l o -> Just $ if o < 0 then l else o) lor ofr
+  where
+  mergeId f a b = IM.mergeWithKey (\_ left right -> f left right) id id a b
 
 toOffsetList :: IntMap Int64 -> [PartitionOffset]
 toOffsetList = map (\(k, v) -> PartitionOffset (fromIntegral k) v) . IM.toList
@@ -106,21 +111,6 @@ listOffsetsMap topicName lor = do
     map
       (\pr -> (fromIntegral (L.partition pr), L.offset pr))
       (L.partitionResponses thisTopic)
-
-fetchOffsetsMap :: ByteString -> OffsetFetchResponse -> Maybe (IntMap Int64)
-fetchOffsetsMap topicName ofr = do
-  thisTopic <- find (\t -> O.offsetFetchTopic t == topicName) (O.topics ofr)
-  pure . IM.fromList $
-    map
-      (\pr ->
-        (fromIntegral (O.offsetFetchPartitionIndex pr)
-        , O.offsetFetchOffset pr))
-      (O.offsetFetchPartitions thisTopic)
-
-merge :: IntMap Int64 -> IntMap Int64 -> IntMap Int64
-merge lor ofr = mergeId (\l o -> Just $ if o < 0 then l else o) lor ofr
-  where
-  mergeId f a b = IM.mergeWithKey (\_ left right -> f left right) id id a b
 
 defaultTimeout :: Int
 defaultTimeout = 30000000
@@ -167,18 +157,16 @@ consumerSession kafka top oldMe callback leave = runExceptT $ runConsumer $ do
   let topicName = getTopicName top
   (genId, me, members) <- join kafka topicName oldMe
   (newGenId, assigns) <- sync kafka top me members genId
+  initializeOffsets kafka top me newGenId
   case partitionsForTopic topicName assigns of
     Just indices -> do
-      liftIO (getInitialOffsets kafka me top indices) >>= \case
-        Just offsets -> do
-          let initialState = ConsumerState me newGenId indices
-          currentState <- liftIO $ newTVarIO initialState
-          sock <- liftIO $ newMVar ()
-          let runHeartbeats k = heartbeats k top currentState leave sock
-              runFetches k = doFetches k top currentState offsets callback leave sock
-          void . liftIO . forkIO . void . runExceptT . runConsumer $ runFetches kafka
-          void . liftIO $ runHeartbeats kafka
-        Nothing -> fail "The topic was not present in the listed offset set"
+      let initialState = ConsumerState me newGenId indices
+      currentState <- liftIO $ newTVarIO initialState
+      sock <- liftIO $ newMVar ()
+      let runHeartbeats k = heartbeats k top currentState leave sock
+          runFetches k = doFetches k top currentState callback leave sock
+      void . liftIO . forkIO . void . runExceptT . runConsumer $ runFetches kafka
+      void . liftIO $ runHeartbeats kafka
     Nothing -> fail "The topic was not present in the assignment set"
 
 -- | rejoin is called when the client receives a "rebalance in progress"
@@ -219,7 +207,6 @@ heartbeats :: Kafka -> Topic -> TVar ConsumerState -> TVar Bool -> MVar () -> IO
 heartbeats kafka top currentState leave sock = do
   ConsumerState member genId _ <- readTVarIO currentState
   withMVar sock $ \_ -> do
-    let GroupMember _ mId = member
     void $ heartbeat kafka member genId
     wait <- registerDelay fiveSeconds
     resp <- getHeartbeatResponse kafka wait
@@ -249,18 +236,16 @@ doFetches ::
      Kafka
   -> Topic
   -> TVar ConsumerState
-  -> IntMap Int64
   -> (FetchResponse -> IO ())
   -> TVar Bool
   -> MVar ()
   -> Consumer ()
-doFetches kafka top currentState offsets callback leave sock = do
+doFetches kafka top currentState callback leave sock = do
   let topicName = getTopicName top
   neverInterrupt <- liftIO $ newTVarIO False
-  newOffsets <- mapConsumer (withMVar sock . const) $ do
+  void $ mapConsumer (withMVar sock . const) $ do
     ConsumerState member genId indices <- liftIO (readTVarIO currentState)
     latestOffs <- latestOffsets kafka topicName member indices
-    let GroupMember _ mId = member
     fetchResp <- getMessages kafka top latestOffs neverInterrupt
     liftIO $ callback fetchResp
     newOffsets <- updateOffsets' kafka topicName member indices fetchResp
@@ -268,7 +253,7 @@ doFetches kafka top currentState offsets callback leave sock = do
     pure newOffsets
   l <- liftIO $ readTVarIO leave
   when (not l) $
-    doFetches kafka top currentState newOffsets callback leave sock
+    doFetches kafka top currentState callback leave sock
 
 getMessages ::
      Kafka
@@ -307,14 +292,12 @@ latestOffsets kafka topicName member indices = do
     [] -> pure IM.empty
     [topicResponse] -> do
       let partitions = O.offsetFetchPartitions topicResponse
-          fetchedOffsets = 
-            IM.fromList $
-              fmap
-                (\part ->
-                  (fromIntegral $ O.offsetFetchPartitionIndex part
-                  , O.offsetFetchOffset part))
-                partitions
-      pure fetchedOffsets
+      pure $ IM.fromList $
+        fmap
+          (\part ->
+            (fromIntegral $ O.offsetFetchPartitionIndex part
+            , O.offsetFetchOffset part))
+          partitions
     _ -> fail ("Got unexpected number of topic responses: " <> show offs)
 
 commitOffsets ::
@@ -326,7 +309,7 @@ commitOffsets ::
   -> Consumer ()
 commitOffsets k topicName offs member genId = do
   liftConsumer $ offsetCommit k topicName (toOffsetList offs) member genId
-  timeout <- liftIO $ registerDelay defaultTimeout
+  timeout <- liftIO $ registerDelay fiveSeconds
   void $ liftConsumer $ tryParse <$> C.getOffsetCommitResponse k timeout
 
 assignMembers :: Int -> Topic -> [Member] -> [MemberAssignment]
