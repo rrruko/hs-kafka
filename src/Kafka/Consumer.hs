@@ -243,7 +243,7 @@ doFetches top currentState callback leave sock = do
         n <- now
         atomically $ modifyTVar' currentState (\cs -> cs { lastRequestTime = n })
       liftIO $ callback fetchResp
-      newOffsets <- updateOffsets' kafka topicName member indices fetchResp
+      let newOffsets = updateOffsets topicName latestOffs fetchResp
       void $ commitOffsets kafka topicName newOffsets member genId
       pure (F.errorCode fetchResp)
   l <- liftIO $ readTVarIO leave
@@ -265,17 +265,6 @@ getMessages kafka top offsets interrupt = do
   liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
   where
   offsetList = toOffsetList offsets
-
-updateOffsets' ::
-     Kafka
-  -> TopicName
-  -> GroupMember
-  -> [Int32]
-  -> FetchResponse
-  -> Consumer (IntMap Int64)
-updateOffsets' k topicName member partitionIndices r = do
-  fetchedOffsets <- latestOffsets k topicName member partitionIndices
-  pure (updateOffsets topicName fetchedOffsets r)
 
 latestOffsets ::
      Kafka
