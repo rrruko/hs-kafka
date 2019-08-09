@@ -7,6 +7,7 @@ module Kafka.Consumer
   , merge
   ) where
 
+import Chronos
 import Control.Concurrent.STM.TVar
 import Control.Concurrent.MVar
 import Control.Monad hiding (join)
@@ -15,13 +16,15 @@ import Data.Foldable
 import Data.Int
 import Data.IntMap (IntMap)
 import Data.Maybe
-import GHC.Conc (forkIO, atomically, threadDelay)
+import GHC.Conc (forkIO, atomically)
+import Torsor
 
 import qualified Data.IntMap as IM
 
 import Kafka
 import Kafka.Common
 import Kafka.Fetch.Response
+import Kafka.Heartbeat.Response (getHeartbeatResponse)
 import Kafka.JoinGroup.Response (Member, getJoinGroupResponse)
 import Kafka.LeaveGroup.Response
 import Kafka.ListOffsets.Response (ListOffsetsResponse)
@@ -128,6 +131,7 @@ data ConsumerState = ConsumerState
   { currentMember :: GroupMember
   , currentGenId :: GenerationId
   , currentAssignments :: [Int32]
+  , lastRequestTime :: Time
   } deriving (Show)
 
 -- | Consume on a topic until terminated. Takes a callback parameter that will
@@ -146,7 +150,7 @@ consumerSession kafka top oldMe callback leave = runExceptT $ runConsumer $ do
   initializeOffsets kafka top me newGenId
   case partitionsForTopic topicName assigns of
     Just indices -> do
-      let initialState = ConsumerState me newGenId indices
+      let initialState = ConsumerState me newGenId indices epoch
       currentState <- liftIO $ newTVarIO initialState
       sock <- liftIO $ newMVar 0
       let runHeartbeats k = heartbeats k top currentState leave sock
@@ -166,7 +170,7 @@ rejoin ::
   -> Consumer [Int32]
 rejoin kafka top currentState = do
   let topicName = getTopicName top
-  ConsumerState member _ _ <- liftIO $ readTVarIO currentState
+  ConsumerState member _ _ _ <- liftIO $ readTVarIO currentState
   (genId, newMember, members) <- join kafka topicName member
   (newGenId, assigns) <- sync kafka top newMember members genId
   case partitionsForTopic topicName assigns of
@@ -191,7 +195,7 @@ partitionsForTopic (TopicName n) assigns =
 -- progress" error is received, the client will rejoin the group.
 heartbeats :: Kafka -> Topic -> TVar ConsumerState -> TVar Bool -> MVar Int16 -> IO ()
 heartbeats kafka top currentState leave sock = do
-  ConsumerState member _ _ <- readTVarIO currentState
+  ConsumerState member genId _ lastReqTime <- readTVarIO currentState
   withMVar sock $ \case
     e | e == errorRebalanceInProgress -> do
       void $ runExceptT $ runConsumer $ rejoin kafka top currentState
@@ -200,12 +204,18 @@ heartbeats kafka top currentState leave sock = do
     e ->
       fail ("Unknown error code " <> show e)
   l <- liftIO $ readTVarIO leave
+  now' <- now
+  when (difference now' lastReqTime > scale 5 second) $ do
+    void $ heartbeat kafka member genId
+    timeout <- registerDelay fiveSeconds
+    void $ getHeartbeatResponse kafka timeout
+    n <- now
+    atomically $ modifyTVar' currentState (\cs -> cs { lastRequestTime = n })
   if l then do
     void $ leaveGroup kafka member
     timeout <- registerDelay defaultTimeout
     void $ getLeaveGroupResponse kafka timeout
   else do
-    threadDelay 500000
     heartbeats kafka top currentState leave sock
 
 -- | Repeatedly fetch messages from kafka and commit the new offsets.
@@ -224,9 +234,12 @@ doFetches kafka top currentState callback leave sock = do
   neverInterrupt <- liftIO $ newTVarIO False
   liftConsumer $ modifyMVar sock $ \err -> 
     updateError err $ runExceptT $ runConsumer $ do
-      ConsumerState member genId indices <- liftIO (readTVarIO currentState)
+      ConsumerState member genId indices _ <- liftIO (readTVarIO currentState)
       latestOffs <- latestOffsets kafka topicName member indices
       fetchResp <- getMessages kafka top latestOffs neverInterrupt
+      liftIO $ do
+        n <- now
+        atomically $ modifyTVar' currentState (\cs -> cs { lastRequestTime = n })
       liftIO $ callback fetchResp
       newOffsets <- updateOffsets' kafka topicName member indices fetchResp
       void $ commitOffsets kafka topicName newOffsets member genId
