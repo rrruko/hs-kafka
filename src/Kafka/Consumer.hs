@@ -152,11 +152,11 @@ consumerSession kafka top oldMe callback leave = runExceptT $ runConsumer $ do
     Just indices -> do
       let initialState = ConsumerState me newGenId indices epoch
       currentState <- liftIO $ newTVarIO initialState
-      sock <- liftIO $ newMVar 0
-      let runHeartbeats k = heartbeats k top currentState leave sock
-          runFetches k = doFetches k top currentState callback leave sock
-      void . liftIO . forkIO . void . runExceptT . runConsumer $ runFetches kafka
-      void . liftIO $ runHeartbeats kafka
+      sock <- liftIO $ newMVar (kafka, 0)
+      let runHeartbeats = heartbeats top currentState leave sock
+          runFetches = doFetches top currentState callback leave sock
+      void . liftIO . forkIO . void . runExceptT . runConsumer $ runFetches
+      void . liftIO $ runHeartbeats
     Nothing -> fail "The topic was not present in the assignment set"
 
 -- | rejoin is called when the client receives a "rebalance in progress"
@@ -193,47 +193,49 @@ partitionsForTopic (TopicName n) assigns =
 -- spawns a thread which calls this function to manage heartbeats and respond
 -- to error codes in the heartbeat response. In particular, if a "rebalance in
 -- progress" error is received, the client will rejoin the group.
-heartbeats :: Kafka -> Topic -> TVar ConsumerState -> TVar Bool -> MVar Int16 -> IO ()
-heartbeats kafka top currentState leave sock = do
+heartbeats :: Topic -> TVar ConsumerState -> TVar Bool -> MVar (Kafka, Int16) -> IO ()
+heartbeats top currentState leave sock = do
   ConsumerState member genId _ lastReqTime <- readTVarIO currentState
-  withMVar sock $ \case
-    e | e == errorRebalanceInProgress -> do
-      void $ runExceptT $ runConsumer $ rejoin kafka top currentState
-    e | e == noError ->
-      pure ()
-    e ->
-      fail ("Unknown error code " <> show e)
-  l <- liftIO $ readTVarIO leave
-  now' <- now
-  when (difference now' lastReqTime > scale 5 second) $ do
-    void $ heartbeat kafka member genId
-    timeout <- registerDelay fiveSeconds
-    void $ getHeartbeatResponse kafka timeout
-    n <- now
-    atomically $ modifyTVar' currentState (\cs -> cs { lastRequestTime = n })
+  l <- withMVar sock $ \(kafka, errCode) -> do
+    case errCode of
+      e | e == errorRebalanceInProgress -> do
+        void $ runExceptT $ runConsumer $ rejoin kafka top currentState
+      e | e == noError ->
+        pure ()
+      e ->
+        fail ("Unknown error code " <> show e)
+    l <- liftIO $ readTVarIO leave
+    now' <- now
+    when (difference now' lastReqTime > scale 5 second) $ do
+      void $ heartbeat kafka member genId
+      timeout <- registerDelay fiveSeconds
+      void $ getHeartbeatResponse kafka timeout
+      n <- now
+      atomically $ modifyTVar' currentState (\cs -> cs { lastRequestTime = n })
+    pure l
   if l then do
-    void $ leaveGroup kafka member
-    timeout <- registerDelay defaultTimeout
-    void $ getLeaveGroupResponse kafka timeout
+    withMVar sock $ \(kafka, _) -> do
+      void $ leaveGroup kafka member
+      timeout <- registerDelay defaultTimeout
+      void $ getLeaveGroupResponse kafka timeout
   else do
-    heartbeats kafka top currentState leave sock
+    heartbeats top currentState leave sock
 
 -- | Repeatedly fetch messages from kafka and commit the new offsets.
 -- Read any updates that have been made to the consumer state by the
 -- heartbeats thread.
 doFetches ::
-     Kafka
-  -> Topic
+     Topic
   -> TVar ConsumerState
   -> (FetchResponse -> IO ())
   -> TVar Bool
-  -> MVar Int16
+  -> MVar (Kafka, Int16)
   -> Consumer ()
-doFetches kafka top currentState callback leave sock = do
+doFetches top currentState callback leave sock = do
   let topicName = getTopicName top
   neverInterrupt <- liftIO $ newTVarIO False
-  liftConsumer $ modifyMVar sock $ \err -> 
-    updateError err $ runExceptT $ runConsumer $ do
+  liftConsumer $ modifyMVar sock $ \(kafka, err) -> 
+    updateError (kafka, err) $ runExceptT $ runConsumer $ do
       ConsumerState member genId indices _ <- liftIO (readTVarIO currentState)
       latestOffs <- latestOffsets kafka topicName member indices
       fetchResp <- getMessages kafka top latestOffs neverInterrupt
@@ -246,11 +248,11 @@ doFetches kafka top currentState callback leave sock = do
       pure (F.errorCode fetchResp)
   l <- liftIO $ readTVarIO leave
   when (not l) $
-    doFetches kafka top currentState callback leave sock
+    doFetches top currentState callback leave sock
   where
-  updateError err = fmap $ \case
-    Left e -> (err, Left e)
-    Right i -> (i, Right ())
+  updateError (kafka, err) = fmap $ \case
+    Left e -> ((kafka, err), Left e)
+    Right i -> ((kafka, i), Right ())
 
 getMessages ::
      Kafka
