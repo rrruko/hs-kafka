@@ -2,13 +2,18 @@
 {-# LANGUAGE RecordWildCards #-}
 
 import Control.Monad.ST
+import Data.Attoparsec (parseOnly)
 import Data.Int
 import Data.Primitive.Unlifted.Array
 import Data.Primitive.ByteArray
 import Gauge
+import System.IO.Unsafe
+
+import qualified Data.ByteString as B
 
 import Kafka.Common
 import Kafka.Fetch.Request
+import Kafka.Fetch.Response
 import Kafka.Produce.Request
 
 data ProduceArgs =
@@ -66,6 +71,11 @@ fetchRequest' :: FetchArgs -> UnliftedArray ByteArray
 fetchRequest' (FetchArgs {..}) =
   sessionlessFetchRequest fTimeout fTopic fPartitions
 
+parseFetch = parseOnly parseFetchResponse
+
+fetchResponseBytes = unsafePerformIO $
+  B.readFile "test/golden/fetch-response-bytes"
+
 main :: IO ()
 main = do
   defaultMain
@@ -75,5 +85,8 @@ main = do
         ]
     , bgroup "fetchRequest"
         [ bench "fetch" $ whnf fetchRequest' fetchProduceArgs
+        ]
+    , bgroup "fetchResponse"
+        [ bench "fetch" $ whnf parseFetch fetchResponseBytes
         ]
     ]

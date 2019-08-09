@@ -170,7 +170,8 @@ benchmark bench
   type:                exitcode-stdio-1.0
   main-is:             Benchmark.hs
   hs-source-dirs:      bench
-  build-depends:       base ^>=4.12.0.0
+  build-depends:       attoparsec
+                     , base ^>=4.12.0.0
                      , bytestring
                      , gauge
                      , kafka
