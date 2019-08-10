@@ -1,4 +1,4 @@
-module Kafka.Combinator 
+module Kafka.Combinator
   ( array
   , byteString
   , count
@@ -36,13 +36,15 @@ int64 :: Parser Int64
 int64 = networkByteOrder . map fromIntegral <$> AT.count 8 AT.anyWord8
 
 networkByteOrder :: Integral a => [Word] -> a
-networkByteOrder = 
-  fst . foldr 
+networkByteOrder =
+  fst . foldr
     (\byte (acc, i) -> (acc + fromIntegral byte * i, i * 0x100))
     (0, 1)
+{-# inlineable networkByteOrder #-}
 
 count :: Integral n => n -> Parser a -> Parser [a]
 count = AT.count . fromIntegral
+{-# inlineable count #-}
 
 array :: Parser a -> Parser [a]
 array p = do
