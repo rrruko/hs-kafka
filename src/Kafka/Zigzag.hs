@@ -1,8 +1,8 @@
-module Kafka.Varint
-  ( varint
-  , zigzag
+module Kafka.Zigzag
+  ( zigzag
   ) where
 
+import Data.Bifunctor (bimap)
 import Data.Bits ((.|.))
 import Data.List.NonEmpty
 import Data.Primitive.ByteArray (ByteArray, byteArrayFromList)
@@ -12,7 +12,9 @@ import Data.Word (Word8)
 varint :: Int -> ByteArray
 varint n =
   let
+    chunks :: NonEmpty Word8
     chunks = setMsb $ chunk n
+    setMsb :: NonEmpty Word8 -> NonEmpty Word8
     setMsb (x :| xs) =
       let rest = setMsb <$> nonEmpty xs
       in  case rest of
@@ -27,10 +29,11 @@ zigzag n
   | otherwise = varint ((-n) * 2 - 1)
 
 chunk :: Int -> NonEmpty Word8
-chunk m =
-  unfoldr
-    (\n ->
-      if n < 128
-        then (fromIntegral n, Nothing)
-        else Just <$> (swap . fmap fromIntegral $ divMod n 128))
-    m
+chunk = unfoldr $ \n -> if n < 128
+  then (fromIntegral n, Nothing)
+  else swap
+    . bimap Just intToWord8
+    $ divMod n 128
+
+intToWord8 :: Int -> Word8
+intToWord8 = fromIntegral
