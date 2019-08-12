@@ -12,6 +12,7 @@ module Kafka.Combinator
   , networkByteOrder
   , nullableArray
   , nullableByteString
+  , nullableByteStringVar
   , nullableBytes
   , nullableSequence
   , parseVarint
@@ -92,10 +93,22 @@ unZigzag n
   | even n    = n `div` 2
   | otherwise = (-1) * ((n + 1) `div` 2)
 
-nullableByteString :: Int -> Parser (Maybe ByteString)
-nullableByteString n
-  | n < 0 = pure Nothing
-  | otherwise = Just <$> AT.take n
+nullableByteString :: Parser (Maybe ByteString)
+nullableByteString = do
+  bytesLength <- int16
+  if bytesLength < 0 then
+    pure Nothing
+  else
+    Just <$> AT.take (fromIntegral bytesLength)
+
+nullableByteStringVar :: Parser (Maybe ByteString)
+nullableByteStringVar = do
+  bytesLength <- parseVarint
+  if bytesLength < 0 then
+    pure Nothing
+  else
+    Just <$> AT.take (fromIntegral bytesLength)
+
 
 nullableBytes :: Parser a -> Parser (Maybe a)
 nullableBytes p = do

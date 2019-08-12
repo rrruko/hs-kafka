@@ -51,7 +51,7 @@ parseMetadataResponse = do
   MetadataResponse
     <$> (int32 <?> "throttle time")
     <*> (array parseMetadataBroker <?> "brokers")
-    <*> ((int16 >>= \i -> (nullableByteString (fromIntegral i))) <?> "cluster id")
+    <*> (nullableByteString <?> "cluster id")
     <*> (int32 <?> "controller id")
     <*> (array parseMetadataTopic <?> "topics")
 
@@ -61,7 +61,7 @@ parseMetadataBroker = do
     <$> (int32 <?> "node id")
     <*> (byteString <?> "host")
     <*> (int32 <?> "port")
-    <*> ((int16 >>= \i -> (nullableByteString (fromIntegral i))) <?> "rack")
+    <*> (nullableByteString <?> "rack")
 
 parseMetadataTopic :: Parser MetadataTopic
 parseMetadataTopic = do

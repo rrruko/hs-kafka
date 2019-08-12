@@ -75,17 +75,13 @@ data Record = Record
   , recordAttributes :: Int8
   , recordTimestampDelta :: Int
   , recordOffsetDelta :: Int
-  , recordKeyLength :: Int
   , recordKey :: Maybe ByteString
-  , recordValueLength :: Int
   , recordValue :: Maybe ByteString
   , recordHeaders :: [Header]
   } deriving (Eq, Show)
 
 data Header = Header
-  { headerKeyLength :: Int
-  , headerKey :: Maybe ByteString
-  , headerValueLength :: Int
+  { headerKey :: Maybe ByteString
   , headerValue :: Maybe ByteString
   } deriving (Eq, Show)
 
@@ -146,10 +142,8 @@ parseRecord = do
   recordAttributes <- int8 <?> "record attributes"
   recordTimestampDelta <- parseVarint <?> "record timestamp delta"
   recordOffsetDelta <- parseVarint <?> "record offset delta"
-  recordKeyLength <- parseVarint <?> "record key length"
-  recordKey <- nullableByteString recordKeyLength <?> "record key"
-  recordValueLength <- parseVarint <?> "record value length"
-  recordValue <- nullableByteString recordValueLength <?> "record value"
+  recordKey <- nullableByteString <?> "record key"
+  recordValue <- nullableByteString <?> "record value"
   recordHeaders <- varintArray parseHeader <?> "record headers"
   pure (Record {..})
 
@@ -160,10 +154,8 @@ varintArray p = do
 
 parseHeader :: Parser Header
 parseHeader = do
-  headerKeyLength <- parseVarint <?> "header key length"
-  headerKey <- nullableByteString headerKeyLength <?> "header key"
-  headerValueLength <- parseVarint <?> "header value length"
-  headerValue <- nullableByteString headerValueLength <?> "header value"
+  headerKey <- nullableByteStringVar <?> "header key"
+  headerValue <- nullableByteStringVar <?> "header value"
   pure (Header {..})
 
 getFetchResponse ::
