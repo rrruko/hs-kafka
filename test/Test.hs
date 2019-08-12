@@ -24,7 +24,7 @@ import Kafka.ListOffsets.Request
 import Kafka.Produce.Request
 import Kafka.Produce.Response
 import Kafka.Writer
-import Kafka.Varint
+import Kafka.Zigzag
 
 import qualified Kafka.Fetch.Response as Fetch
 
@@ -189,7 +189,7 @@ listOffsetsTest :: [Int32] -> IO ByteString
 listOffsetsTest partitions = do
   let topicName = fromByteString "test"
       req = toByteString $ unChunks $
-        listOffsetsRequest (TopicName topicName) partitions
+        listOffsetsRequest (TopicName topicName) partitions Latest
   pure req
 
 joinGroupTest :: GroupMember -> IO ByteString

@@ -142,8 +142,8 @@ parseRecord = do
   recordAttributes <- int8 <?> "record attributes"
   recordTimestampDelta <- parseVarint <?> "record timestamp delta"
   recordOffsetDelta <- parseVarint <?> "record offset delta"
-  recordKey <- nullableByteString <?> "record key"
-  recordValue <- nullableByteString <?> "record value"
+  recordKey <- nullableByteStringVar <?> "record key"
+  recordValue <- nullableByteStringVar <?> "record value"
   recordHeaders <- varintArray parseHeader <?> "record headers"
   pure (Record {..})
 
