@@ -39,7 +39,7 @@ library
                      , Kafka.Response
                      , Kafka.SyncGroup.Request
                      , Kafka.SyncGroup.Response
-                     , Kafka.Varint
+                     , Kafka.Zigzag
                      , Kafka.Writer
   ghc-options: -Wall -Werror -O2
   -- other-modules:
@@ -135,7 +135,7 @@ executable group
   default-extensions:  OverloadedStrings
   ghc-options: -Wall -O2 -threaded -rtsopts -with-rtsopts=-N1
 
-executable producer 
+executable producer
   main-is:             Producer.hs
   -- other-modules:
   -- other-extensions:

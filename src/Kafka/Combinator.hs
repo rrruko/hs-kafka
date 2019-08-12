@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 
-module Kafka.Combinator 
+module Kafka.Combinator
   ( array
   , bool
   , byteString
@@ -46,13 +46,15 @@ bool = AT.anyWord8 >>= \case
   _ -> fail "Expected 0 or 1"
 
 networkByteOrder :: Integral a => [Word] -> a
-networkByteOrder = 
-  fst . foldr 
+networkByteOrder =
+  fst . foldr
     (\byte (acc, i) -> (acc + fromIntegral byte * i, i * 0x100))
     (0, 1)
+{-# inlineable networkByteOrder #-}
 
 count :: Integral n => n -> Parser a -> Parser [a]
 count = AT.count . fromIntegral
+{-# inlineable count #-}
 
 array :: Parser a -> Parser [a]
 array p = do
