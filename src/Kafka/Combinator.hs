@@ -1,5 +1,8 @@
+{-# LANGUAGE LambdaCase #-}
+
 module Kafka.Combinator 
   ( array
+  , bool
   , byteString
   , count
   , int8
@@ -34,6 +37,12 @@ int32 = networkByteOrder . map fromIntegral <$> AT.count 4 AT.anyWord8
 
 int64 :: Parser Int64
 int64 = networkByteOrder . map fromIntegral <$> AT.count 8 AT.anyWord8
+
+bool :: Parser Bool
+bool = AT.anyWord8 >>= \case
+  0 -> pure False
+  1 -> pure True
+  _ -> fail "Expected 0 or 1"
 
 networkByteOrder :: Integral a => [Word] -> a
 networkByteOrder = 

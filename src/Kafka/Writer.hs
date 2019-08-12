@@ -15,6 +15,7 @@ module Kafka.Writer
   , build32
   , build64
   , buildArray
+  , buildBool
   , buildMapArray
   , buildString
   , evaluate
@@ -93,6 +94,9 @@ build32 i = Kwb 4 (write32 i)
 
 build64 :: Int64 -> KafkaWriterBuilder s
 build64 i = Kwb 8 (write64 i)
+
+buildBool :: Bool -> KafkaWriterBuilder s
+buildBool b = Kwb 1 (write8 (if b then 1 else 0))
 
 writeBytes ::
      ByteArray

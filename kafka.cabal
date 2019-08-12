@@ -28,6 +28,8 @@ library
                      , Kafka.LeaveGroup.Response
                      , Kafka.ListOffsets.Request
                      , Kafka.ListOffsets.Response
+                     , Kafka.Metadata.Request
+                     , Kafka.Metadata.Response
                      , Kafka.OffsetCommit.Request
                      , Kafka.OffsetCommit.Response
                      , Kafka.OffsetFetch.Request
