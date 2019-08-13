@@ -11,6 +11,8 @@ import Data.IORef
 import Data.Maybe
 import Data.Primitive.ByteArray (ByteArray)
 import GHC.Conc
+import Net.IPv4 (ipv4)
+import Socket.Stream.IPv4 (Peer(..))
 import System.IO.Unsafe (unsafePerformIO)
 
 import Kafka.Common
@@ -37,12 +39,12 @@ waitForChildren = do
 
 main :: IO ()
 main = do
-  fork consumer "C1"
-  fork consumer "C2"
-  fork consumer "C3"
-  threadDelay 5000000
-  fork consumer "C4"
-  waitForChildren
+  interrupt <- newTVarIO False
+  fork (consumer interrupt) "C1"
+  fork (consumer interrupt) "C2"
+  fork (consumer interrupt) "C3"
+  _ <- getLine
+  atomically $ writeTVar interrupt True
 
 fork :: (String -> IO ()) -> String -> IO ()
 fork f name = do
@@ -51,15 +53,14 @@ fork f name = do
   putMVar children (mvar:childs)
   void $ forkFinally (f name) (\_ -> putMVar mvar ())
 
-consumer :: String -> IO ()
-consumer name = do
-  (t, kafka) <- setup groupName 8
-  case kafka of
-    Nothing -> putStrLn "Failed to connect to kafka"
-    Just k -> do
-      interrupt <- registerDelay 10000000
+consumer :: TVar Bool -> String -> IO ()
+consumer interrupt name = do
+  kaf <- newKafka (Peer (ipv4 10 10 10 234) 9092)
+  case kaf of
+    Left e -> putStrLn ("failed to connect (" <> show e <> ")")
+    Right k -> do
       let settings = ConsumerSettings
-            { csTopic = t
+            { csTopicName = TopicName groupName
             , csGroupName = groupName
             , csMaxFetchBytes = 30 * 1000 * 1000
             , csFetchCallback = callback name
@@ -82,13 +83,6 @@ fetchResponseContents fetchResponse =
   . concatMap F.partitionResponses
   . F.responses
   $ fetchResponse
-
-setup :: ByteArray -> Int -> IO (Topic, Maybe Kafka)
-setup topicName partitionCount = do
-  currentPartition <- newIORef 0
-  let t = Topic topicName partitionCount currentPartition
-  k <- newKafka defaultKafka
-  pure (t, either (const Nothing) Just k)
 
 thirtySeconds :: Int
 thirtySeconds = 30000000
