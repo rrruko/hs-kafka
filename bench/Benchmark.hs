@@ -69,7 +69,7 @@ fetchProduceArgs =
 
 fetchRequest' :: FetchArgs -> UnliftedArray ByteArray
 fetchRequest' (FetchArgs {..}) =
-  sessionlessFetchRequest fTimeout fTopic fPartitions
+  sessionlessFetchRequest fTimeout fTopic fPartitions 30000000
 
 parseFetch = parseOnly parseFetchResponse
 
