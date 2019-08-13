@@ -10,7 +10,6 @@ import Data.ByteString (ByteString)
 import Data.IORef
 import Data.Maybe
 import Data.Primitive.ByteArray (ByteArray)
-import Data.Foldable
 import GHC.Conc
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -58,18 +57,21 @@ consumer name = do
   case kafka of
     Nothing -> putStrLn "Failed to connect to kafka"
     Just k -> do
-      let member = GroupMember groupName Nothing
       interrupt <- registerDelay 10000000
-      consumerSession k t member (callback name) interrupt >>= \case
+      let settings = ConsumerSettings
+            { csTopic = t
+            , csGroupName = groupName
+            , csMaxFetchBytes = 30 * 1000 * 1000
+            , csFetchCallback = callback name
+            , csGroupFetchStart = Earliest
+            }
+      consumerSession k settings interrupt >>= \case
         Left err -> print err
         Right () -> pure ()
 
 callback :: String -> FetchResponse -> IO ()
 callback name response = 
   putStrLn (name <> ": got " <> show (length (fetchResponseContents response)) <> " messages")
---  traverse_
---    (\message -> putStrLn (name <> ": " <> show message))
---    (fetchResponseContents response)
 
 fetchResponseContents :: FetchResponse -> [ByteString]
 fetchResponseContents fetchResponse =

@@ -28,6 +28,7 @@ sessionlessFetchRequest ::
      Int
   -> TopicName
   -> [PartitionOffset]
+  -> Int32
   -> UnliftedArray ByteArray
 sessionlessFetchRequest = fetchRequest 0 (-1)
 
@@ -36,9 +37,6 @@ defaultReplicaId = -1
 
 defaultMinBytes :: Int32
 defaultMinBytes = 1
-
-defaultMaxBytes :: Int32
-defaultMaxBytes = 30 * 1000 * 1000
 
 defaultCurrentLeaderEpoch :: Int32
 defaultCurrentLeaderEpoch = -1
@@ -52,8 +50,9 @@ fetchRequest ::
   -> Int
   -> TopicName
   -> [PartitionOffset]
+  -> Int32
   -> UnliftedArray ByteArray
-fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
+fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions maxBytes =
   let
     minimumRequestSize = 49
     partitionMessageSize = 28
@@ -72,7 +71,7 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
       , build32 defaultReplicaId
       , build32 (fromIntegral timeout) -- max_wait_time
       , build32 defaultMinBytes
-      , build32 defaultMaxBytes
+      , build32 maxBytes
       , build8 (isolationLevel ReadUncommitted)
       , build32 fetchSessionId
       , build32 fetchSessionEpoch
@@ -86,7 +85,7 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions =
               , build32 defaultCurrentLeaderEpoch
               , build64 (partitionOffset p)
               , build64 defaultLogStartOffset
-              , build32 defaultMaxBytes -- partition_max_bytes
+              , build32 maxBytes -- partition_max_bytes
               ]
           ) partitions
       , build32 0

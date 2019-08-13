@@ -3,7 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Kafka.Consumer
-  ( consumerSession
+  ( ConsumerSettings(..)
+  , consumerSession
   , merge
   ) where
 
@@ -13,6 +14,7 @@ import Control.Concurrent.MVar
 import Control.Monad hiding (join)
 import Control.Monad.Except hiding (join)
 import Data.Foldable
+import Data.Primitive.ByteArray
 import Data.Int
 import Data.IntMap (IntMap)
 import Data.Maybe
@@ -59,15 +61,24 @@ liftConsumer = Consumer . ExceptT
 throwConsumer :: KafkaException -> Consumer a
 throwConsumer = Consumer . throwError
 
+data ConsumerSettings = ConsumerSettings
+  { csGroupFetchStart :: !KafkaTimestamp -- ^ Where to start if the group is new
+  , csMaxFetchBytes :: !Int32 -- ^ Maximum number of bytes to allow per response
+  , csTopic :: !Topic -- ^ Topic to fetch on
+  , csGroupName :: !ByteArray -- ^ Name of the group
+  , csFetchCallback :: FetchResponse -> IO () -- ^ What to do with the messages
+  }
+
 getListedOffsets ::
      Kafka
   -> Topic
   -> [Int32]
+  -> KafkaTimestamp
   -> Consumer (IntMap Int64)
-getListedOffsets kafka topic indices = do
-  let Topic name _ _ = topic
+getListedOffsets kafka top indices ts = do
+  let Topic name _ _ = top
   let topicName = TopicName name
-  liftConsumer $ listOffsets kafka topicName indices Earliest
+  liftConsumer $ listOffsets kafka topicName indices ts
   listOffsetsTimeout <- liftIO (registerDelay fiveSeconds)
   listedOffs <- liftConsumer $ tryParse <$>
     L.getListOffsetsResponse kafka listOffsetsTimeout
@@ -78,12 +89,13 @@ initializeOffsets ::
   -> Topic
   -> GroupMember
   -> GenerationId
+  -> KafkaTimestamp
   -> Consumer ()
-initializeOffsets kafka topic member genId = do
-  let Topic name' partitionCount _ = topic
+initializeOffsets kafka top member genId ts = do
+  let Topic name' partitionCount _ = top
       topicName = TopicName name'
       allIndices = [0..fromIntegral partitionCount - 1]
-  initialOffs <- getListedOffsets kafka topic allIndices
+  initialOffs <- getListedOffsets kafka top allIndices ts
   latestOffs <- latestOffsets kafka topicName member allIndices
   let validOffs = merge initialOffs latestOffs
   commitOffsets kafka topicName validOffs member genId
@@ -138,23 +150,28 @@ data ConsumerState = ConsumerState
 -- be called when a response is received from Kafka. Responses might be empty.
 consumerSession ::
      Kafka
-  -> Topic
-  -> GroupMember
-  -> (FetchResponse -> IO ())
+  -> ConsumerSettings
   -> TVar Bool
   -> IO (Either KafkaException ())
-consumerSession kafka top oldMe callback leave = runExceptT $ runConsumer $ do
-  let topicName = getTopicName top
-  (genId, me, members) <- join kafka topicName oldMe
-  (newGenId, assigns) <- sync kafka top me members genId
-  initializeOffsets kafka top me newGenId
+consumerSession kafka (ConsumerSettings{..}) leave = runExceptT $ runConsumer $ do
+  let topicName = getTopicName csTopic
+  let initialMember = GroupMember (csGroupName settings) Nothing
+  (genId, me, members) <- join kafka topicName initialMember
+  (newGenId, assigns) <- sync kafka csTopic me members genId
+  initializeOffsets kafka csTopic me newGenId csGroupFetchStart
   case partitionsForTopic topicName assigns of
     Just indices -> do
       let initialState = ConsumerState me newGenId indices epoch
       currentState <- liftIO $ newTVarIO initialState
       sock <- liftIO $ newMVar (kafka, 0)
-      let runHeartbeats = heartbeats top currentState leave sock
-          runFetches = doFetches top currentState callback leave sock
+      let runHeartbeats = heartbeats csTopic currentState leave sock
+          runFetches = doFetches
+            csTopic
+            currentState
+            csMaxFetchBytes
+            csFetchCallback
+            leave
+            sock
       void . liftIO . forkIO . void . runExceptT . runConsumer $ runFetches
       void . liftIO $ runHeartbeats
     Nothing -> fail "The topic was not present in the assignment set"
@@ -227,18 +244,19 @@ heartbeats top currentState leave sock = do
 doFetches ::
      Topic
   -> TVar ConsumerState
+  -> Int32
   -> (FetchResponse -> IO ())
   -> TVar Bool
   -> MVar (Kafka, Int16)
   -> Consumer ()
-doFetches top currentState callback leave sock = do
+doFetches top currentState maxBytes callback leave sock = do
   let topicName = getTopicName top
   neverInterrupt <- liftIO $ newTVarIO False
-  liftConsumer $ modifyMVar sock $ \(kafka, err) -> 
+  liftConsumer $ modifyMVar sock $ \(kafka, err) ->
     updateError (kafka, err) $ runExceptT $ runConsumer $ do
       ConsumerState member genId indices _ <- liftIO (readTVarIO currentState)
       latestOffs <- latestOffsets kafka topicName member indices
-      fetchResp <- getMessages kafka top latestOffs neverInterrupt
+      fetchResp <- getMessages kafka top latestOffs neverInterrupt maxBytes
       liftIO $ do
         n <- now
         atomically $ modifyTVar' currentState (\cs -> cs { lastRequestTime = n })
@@ -248,7 +266,7 @@ doFetches top currentState callback leave sock = do
       pure (F.errorCode fetchResp)
   l <- liftIO $ readTVarIO leave
   when (not l) $
-    doFetches top currentState callback leave sock
+    doFetches top currentState maxBytes callback leave sock
   where
   updateError (kafka, err) = fmap $ \case
     Left e -> ((kafka, err), Left e)
@@ -259,9 +277,10 @@ getMessages ::
   -> Topic
   -> IntMap Int64
   -> TVar Bool
+  -> Int32
   -> Consumer FetchResponse
-getMessages kafka top offsets interrupt = do
-  liftConsumer $ fetch kafka (getTopicName top) 1000000 offsetList
+getMessages kafka top offsets interrupt maxBytes = do
+  liftConsumer $ fetch kafka (getTopicName top) 1000000 offsetList maxBytes
   liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
   where
   offsetList = toOffsetList offsets

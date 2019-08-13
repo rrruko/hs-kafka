@@ -73,7 +73,8 @@ sendProduceRequest topic = do
 sendFetchRequest :: TopicName -> [PartitionOffset] -> IO ()
 sendFetchRequest topicName partitions = do
   withDefaultKafka $ \kafka -> do
-    fetch kafka topicName thirtySecondsUs partitions >>= \case
+    let maxBytes = 30*1000*1000
+    fetch kafka topicName thirtySecondsUs partitions maxBytes >>= \case
       Right () -> do
         interrupt <- registerDelay thirtySecondsUs
         response <- getFetchResponse kafka interrupt

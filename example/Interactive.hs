@@ -56,7 +56,8 @@ iFetch ::
   -> IO (Either KafkaException (Either String FetchResponse))
 iFetch kafka top offs = do
   wait <- registerDelay giveUpTime
-  _ <- fetch kafka top requestedWaitTime [PartitionOffset 0 offs]
+  let maxBytes = 30 * 1000 * 1000
+  _ <- fetch kafka top requestedWaitTime [PartitionOffset 0 offs] maxBytes
   getFetchResponse kafka wait
 
 iListOffsets ::

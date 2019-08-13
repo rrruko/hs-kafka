@@ -71,9 +71,10 @@ fetch ::
   -> TopicName
   -> Int
   -> [PartitionOffset]
+  -> Int32
   -> IO (Either KafkaException ())
-fetch kafka topic waitTime partitions =
-  request kafka $ sessionlessFetchRequest (waitTime `div` 1000) topic partitions
+fetch kafka topic waitTime partitions maxBytes =
+  request kafka $ sessionlessFetchRequest (waitTime `div` 1000) topic partitions maxBytes
 
 listOffsets ::
      Kafka
