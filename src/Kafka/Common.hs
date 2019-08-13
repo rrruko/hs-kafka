@@ -42,6 +42,10 @@ data KafkaTimestamp
   | Earliest
   | At Int64
 
+data AutoCreateTopic
+  = Create
+  | NeverCreate
+
 data KafkaException where
   KafkaSendException :: SendException 'Uninterruptible -> KafkaException
   KafkaReceiveException :: ReceiveException 'Interruptible -> KafkaException

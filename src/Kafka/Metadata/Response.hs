@@ -1,5 +1,8 @@
 module Kafka.Metadata.Response
   ( MetadataResponse(..)
+  , MetadataBroker(..)
+  , MetadataTopic(..)
+  , MetadataPartition(..)
   , getMetadataResponse
   , parseMetadataResponse
   ) where

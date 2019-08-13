@@ -4,6 +4,7 @@ module Kafka
   , joinGroup
   , leaveGroup
   , listOffsets
+  , metadata
   , offsetCommit
   , offsetFetch
   , produce
@@ -23,6 +24,7 @@ import Kafka.Heartbeat.Request
 import Kafka.JoinGroup.Request
 import Kafka.LeaveGroup.Request
 import Kafka.ListOffsets.Request
+import Kafka.Metadata.Request
 import Kafka.OffsetCommit.Request
 import Kafka.OffsetFetch.Request
 import Kafka.Produce.Request
@@ -135,3 +137,11 @@ leaveGroup ::
   -> IO (Either KafkaException ())
 leaveGroup kafka groupMember =
   request kafka $ leaveGroupRequest groupMember
+
+metadata ::
+     Kafka
+  -> TopicName
+  -> AutoCreateTopic
+  -> IO (Either KafkaException ())
+metadata kafka topicName autoCreateTopic =
+  request kafka $ metadataRequest topicName autoCreateTopic

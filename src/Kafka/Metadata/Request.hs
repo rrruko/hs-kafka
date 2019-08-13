@@ -17,7 +17,7 @@ metadataApiKey = 3
 
 metadataRequest ::
      TopicName
-  -> Bool
+  -> AutoCreateTopic
   -> UnliftedArray ByteArray
 metadataRequest (TopicName topicName) autoCreate =
   let
@@ -29,7 +29,7 @@ metadataRequest (TopicName topicName) autoCreate =
       , buildString (fromByteString clientId) (fromIntegral clientIdLength)
       , build32 1
       , buildString topicName (sizeofByteArray topicName)
-      , buildBool autoCreate
+      , buildBool (case autoCreate of Create -> True; NeverCreate -> False)
       ]
   in
     runUnliftedArray $ do
