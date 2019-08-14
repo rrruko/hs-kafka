@@ -9,6 +9,7 @@ module Kafka.Common where
 
 import Data.ByteString (ByteString)
 import Data.Bytes.Types
+import Data.Coerce
 import Data.Int
 import Data.IORef
 import Data.Primitive
@@ -72,7 +73,7 @@ data TopicAssignment = TopicAssignment
   } deriving (Eq, Show)
 
 newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
-newKafka = fmap (fmap Kafka) . connect
+newKafka = coerce . connect
 
 defaultKafka :: Peer
 defaultKafka = Peer (IPv4 0) 9092
