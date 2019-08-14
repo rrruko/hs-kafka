@@ -119,9 +119,10 @@ defaultTimeout = 30000000
 fiveSeconds :: Int
 fiveSeconds = 5000000
 
-partitionHighWatermark :: TopicName -> FetchResponse -> Int32 -> Maybe Int64
-partitionHighWatermark (TopicName topicName) fetchResponse partitionId =
-  highWatermark . partitionHeader <$> getPartitionResponse partitionId
+partitionLastSeenOffset :: TopicName -> FetchResponse -> Int32 -> Maybe Int64
+partitionLastSeenOffset (TopicName topicName) fetchResponse partitionId =
+  fmap (maximum . map recordBatchLastOffset)
+  $ recordSet =<< getPartitionResponse partitionId
   where
   topicResps = filter
     (\x -> F.fetchResponseTopic x == toByteString topicName)
@@ -131,12 +132,13 @@ partitionHighWatermark (TopicName topicName) fetchResponse partitionId =
     find
       (\resp -> pid == partition (partitionHeader resp))
       partitionResps
+  recordBatchLastOffset rb = baseOffset rb + fromIntegral (lastOffsetDelta rb) + 1
 
 updateOffsets :: TopicName -> IntMap Int64 -> FetchResponse -> IntMap Int64
 updateOffsets topicName current r =
   IM.mapWithKey
     (\pid offs -> fromMaybe offs
-      (partitionHighWatermark topicName r (fromIntegral pid)))
+      (partitionLastSeenOffset topicName r (fromIntegral pid)))
     current
 
 getPartitionCount :: Kafka -> TopicName -> Consumer Int32
