@@ -44,7 +44,6 @@ import qualified Kafka.SyncGroup.Response as S
 
 -- | This module provides a high-level interface to the Kafka API for
 -- consumers by wrapping the low-level request and response type modules.
-
 newtype Consumer a
   = Consumer { runConsumer :: ExceptT KafkaException IO a }
   deriving (Functor, Applicative, Monad)
@@ -201,7 +200,7 @@ rejoin ::
   -> TopicName
   -> Int32
   -> TVar ConsumerState
-  -> Consumer [Int32]
+  -> Consumer ()
 rejoin kafka topicName partitionCount currentState = do
   ConsumerState member _ _ _ <- liftIO $ readTVarIO currentState
   (genId, newMember, members) <- join kafka topicName member
@@ -214,7 +213,6 @@ rejoin kafka topicName partitionCount currentState = do
           , currentGenId = newGenId
           , currentAssignments = indices
           })
-      pure indices
     Nothing -> fail "The topic was not present in the assignment set"
 
 partitionsForTopic :: TopicName -> [SyncTopicAssignment] -> Maybe [Int32]
@@ -232,7 +230,7 @@ heartbeats topicName partitionCount currentState leave sock = do
   l <- withMVar sock $ \(kafka, errCode) -> do
     case errCode of
       e | e == errorRebalanceInProgress -> do
-        void $ runExceptT $ runConsumer $ rejoin kafka topicName partitionCount currentState
+        runExceptT $ runConsumer $ rejoin kafka topicName partitionCount currentState
       e | e == noError ->
         pure ()
       e ->
