@@ -230,7 +230,7 @@ heartbeats topicName partitionCount currentState leave sock = do
   l <- withMVar sock $ \(kafka, errCode) -> do
     case errCode of
       e | e == errorRebalanceInProgress -> do
-        runExceptT $ runConsumer $ rejoin kafka topicName partitionCount currentState
+        void $ runExceptT $ runConsumer $ rejoin kafka topicName partitionCount currentState
       e | e == noError ->
         pure ()
       e ->
