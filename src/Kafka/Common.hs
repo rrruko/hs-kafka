@@ -14,6 +14,7 @@ import Data.Int
 import Data.IORef
 import Data.Primitive
 import Data.Primitive.Unlifted.Array
+import Data.Text
 import Data.Word
 import Net.IPv4 (IPv4(..))
 import Socket.Stream.IPv4
@@ -52,6 +53,7 @@ data KafkaException where
   KafkaReceiveException :: ReceiveException 'Interruptible -> KafkaException
   KafkaParseException :: String -> KafkaException
   KafkaUnexpectedErrorCodeException :: Int16 -> KafkaException
+  KafkaException :: Text -> KafkaException
 
 deriving stock instance Show KafkaException
 

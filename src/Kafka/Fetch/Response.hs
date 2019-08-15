@@ -12,11 +12,14 @@ module Kafka.Fetch.Response
   , RecordBatch(..)
   , getFetchResponse
   , parseFetchResponse
+  , partitionLastSeenOffset
   ) where
 
 import Data.Attoparsec.ByteString (Parser, (<?>))
 import Data.ByteString (ByteString)
 import Data.Int
+import Data.List (find)
+import Data.List.NonEmpty (nonEmpty)
 import GHC.Conc
 
 import Kafka.Combinator
@@ -163,3 +166,24 @@ getFetchResponse ::
   -> TVar Bool
   -> IO (Either KafkaException (Either String FetchResponse))
 getFetchResponse = fromKafkaResponse parseFetchResponse
+
+lookupTopic :: [FetchResponseMessage] -> ByteString -> Maybe FetchResponseMessage
+lookupTopic responses topicName = find
+  (\resp -> topicName == fetchResponseTopic resp)
+  responses
+
+lookupPartition :: [PartitionResponse] -> Int32 -> Maybe PartitionResponse
+lookupPartition responses pid = find
+  (\resp -> pid == partition (partitionHeader resp))
+  responses
+
+partitionLastSeenOffset :: FetchResponse -> ByteString -> Int32 -> Maybe Int64
+partitionLastSeenOffset fetchResponse topicName partitionId = do
+  topic <- lookupTopic (responses fetchResponse) topicName
+  partition <- lookupPartition (partitionResponses topic) partitionId
+  set <- recordSet partition
+  maxMaybe (map recordBatchLastOffset set)
+  where
+  recordBatchLastOffset rb =
+    baseOffset rb + fromIntegral (lastOffsetDelta rb) + 1
+  maxMaybe xs = fmap (foldr1 max) (nonEmpty xs)

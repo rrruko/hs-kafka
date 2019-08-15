@@ -24,6 +24,7 @@ import GHC.Conc (forkIO, atomically)
 import Torsor
 
 import qualified Data.IntMap as IM
+import qualified Data.Text as T
 
 import Kafka
 import Kafka.Common
@@ -56,6 +57,15 @@ tryParse = \case
 
 instance MonadIO Consumer where
   liftIO = Consumer . ExceptT . fmap Right
+
+instance Semigroup a => Semigroup (Consumer a) where
+  Consumer x <> Consumer y = Consumer $ do
+    v <- x
+    v' <- y
+    pure (v <> v')
+
+instance Monoid a => Monoid (Consumer a) where
+  mempty = pure mempty
 
 liftConsumer :: IO (Either KafkaException a) -> Consumer a
 liftConsumer = Consumer . ExceptT
@@ -118,40 +128,32 @@ defaultTimeout = 30000000
 fiveSeconds :: Int
 fiveSeconds = 5000000
 
-partitionLastSeenOffset :: TopicName -> FetchResponse -> Int32 -> Maybe Int64
-partitionLastSeenOffset (TopicName topicName) fetchResponse partitionId =
-  fmap (maximum . map recordBatchLastOffset)
-  $ recordSet =<< getPartitionResponse partitionId
-  where
-  topicResps = filter
-    (\x -> F.fetchResponseTopic x == toByteString topicName)
-    (F.responses fetchResponse)
-  partitionResps = concatMap partitionResponses topicResps
-  getPartitionResponse pid =
-    find
-      (\resp -> pid == partition (partitionHeader resp))
-      partitionResps
-  recordBatchLastOffset rb = baseOffset rb + fromIntegral (lastOffsetDelta rb) + 1
-
 updateOffsets :: TopicName -> IntMap Int64 -> FetchResponse -> IntMap Int64
 updateOffsets topicName current r =
   IM.mapWithKey
     (\pid offs -> fromMaybe offs
-      (partitionLastSeenOffset topicName r (fromIntegral pid)))
+      (F.partitionLastSeenOffset r name (fromIntegral pid)))
     current
+  where
+  name = toByteString (coerce topicName)
 
 getPartitionCount :: Kafka -> TopicName -> Consumer Int32
 getPartitionCount kafka topicName = do
   _ <- liftConsumer $ metadata kafka topicName NeverCreate
   interrupt <- liftIO $ registerDelay 5000000
-  fmap topicPartitions $
-    liftConsumer $ tryParse <$> M.getMetadataResponse kafka interrupt
+  parts <- fmap topicPartitions $ liftConsumer $
+    tryParse <$> M.getMetadataResponse kafka interrupt
+  case parts of
+    Just p -> pure p
+    Nothing -> throwConsumer $
+      KafkaException "Topic name not found in metadata request"
   where
+  topicPartitions :: M.MetadataResponse -> Maybe Int32
   topicPartitions mdr =
     let tops = M.metadataTopics mdr
     in  case find ((== topicName) . coerce . fromByteString . M.mtName) tops of
-          Just top -> fromIntegral $ length (M.mtPartitions top)
-          Nothing -> error "Topic name not found in metadata request"
+          Just top -> Just (fromIntegral $ length (M.mtPartitions top))
+          Nothing -> Nothing
 
 data ConsumerState = ConsumerState
   { currentMember :: GroupMember
@@ -188,8 +190,9 @@ consumerSession kafka (ConsumerSettings{..}) leave = runExceptT $ runConsumer $ 
             leave
             sock
       void . liftIO . forkIO . void . runExceptT . runConsumer $ runFetches
-      void . liftIO $ runHeartbeats
-    Nothing -> fail "The topic was not present in the assignment set"
+      void . liftIO . void . runExceptT . runConsumer $ runHeartbeats
+    Nothing -> throwConsumer $ KafkaException
+      "The topic was not present in the assignment set"
 
 -- | rejoin is called when the client receives a "rebalance in progress"
 -- error code, triggered by another client joining or leaving the group.
@@ -213,42 +216,47 @@ rejoin kafka topicName partitionCount currentState = do
           , currentGenId = newGenId
           , currentAssignments = indices
           })
-    Nothing -> fail "The topic was not present in the assignment set"
+    Nothing -> throwConsumer $ KafkaException
+      "The topic was not present in the assignment set"
 
 partitionsForTopic :: TopicName -> [SyncTopicAssignment] -> Maybe [Int32]
 partitionsForTopic (TopicName n) assigns =
   S.syncAssignedPartitions
   <$> find (\a -> S.syncAssignedTopic a == toByteString n) assigns
 
+when' :: Monoid m => Bool -> m -> m
+when' True x = x
+when' False _ = mempty
+
 -- | A client in a consumer group has to send heartbeats. Starting a session
 -- spawns a thread which calls this function to manage heartbeats and respond
 -- to error codes in the heartbeat response. In particular, if a "rebalance in
 -- progress" error is received, the client will rejoin the group.
-heartbeats :: TopicName -> Int32 -> TVar ConsumerState -> TVar Bool -> MVar (Kafka, Int16) -> IO ()
+heartbeats :: TopicName -> Int32 -> TVar ConsumerState -> TVar Bool -> MVar (Kafka, Int16) -> Consumer ()
 heartbeats topicName partitionCount currentState leave sock = do
-  ConsumerState member genId _ lastReqTime <- readTVarIO currentState
-  l <- withMVar sock $ \(kafka, errCode) -> do
+  ConsumerState member genId _ lastReqTime <- liftIO $ readTVarIO currentState
+  l <- liftConsumer $ withMVar sock $ \(kafka, errCode) -> runExceptT $ runConsumer $ do
     case errCode of
       e | e == errorRebalanceInProgress -> do
-        void $ runExceptT $ runConsumer $ rejoin kafka topicName partitionCount currentState
+        rejoin kafka topicName partitionCount currentState
       e | e == noError ->
         pure ()
       e ->
-        fail ("Unknown error code " <> show e)
+        throwConsumer $ KafkaException ("Unknown error code " <> T.pack (show e))
     l <- liftIO $ readTVarIO leave
-    now' <- now
-    when (difference now' lastReqTime > scale 5 second) $ do
-      void $ heartbeat kafka member genId
-      timeout <- registerDelay fiveSeconds
-      void $ getHeartbeatResponse kafka timeout
-      n <- now
-      atomically $ modifyTVar' currentState (\cs -> cs { lastRequestTime = n })
+    now' <- liftIO $ now
+    when' (difference now' lastReqTime > scale 5 second) $ do
+      liftConsumer $ heartbeat kafka member genId
+      timeout <- liftIO $ registerDelay fiveSeconds
+      _ <- liftConsumer $ getHeartbeatResponse kafka timeout
+      n <- liftIO $ now
+      liftIO $ atomically $ modifyTVar' currentState (\cs -> cs { lastRequestTime = n })
     pure l
   if l then do
-    withMVar sock $ \(kafka, _) -> do
-      void $ leaveGroup kafka member
-      timeout <- registerDelay defaultTimeout
-      void $ getLeaveGroupResponse kafka timeout
+    liftConsumer $ withMVar sock $ \(kafka, _) -> runExceptT $ runConsumer $ do
+      liftConsumer $ leaveGroup kafka member
+      timeout <- liftIO $ registerDelay defaultTimeout
+      fmap (const ()) $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka timeout
   else do
     heartbeats topicName partitionCount currentState leave sock
 
