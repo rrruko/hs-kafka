@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -9,11 +10,14 @@ import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
+import Data.Foldable (traverse_)
 import Data.Maybe
 import GHC.Conc
 import Net.IPv4 (ipv4)
 import Socket.Stream.IPv4 (Peer(..))
 import System.IO.Unsafe (unsafePerformIO)
+
+import qualified Data.ByteString.Char8 as B
 
 import Kafka.Common
 import Kafka.Consumer
@@ -40,7 +44,7 @@ main = do
   fork (consumer interrupt) "C1"
   fork (consumer interrupt) "C2"
   fork (consumer interrupt) "C3"
-  putStr "Press enter to quit"
+  putStrLn "Press enter to quit"
   _ <- getLine
   atomically $ writeTVar interrupt True
 
@@ -67,30 +71,27 @@ consumer interrupt name = do
       newConsumer k settings >>= \case
         Left err -> putStrLn ("Failed to create consumer: " <> show err)
         Right c -> 
-          runExceptT (runConsumer (go interrupt c)) >>= \case
+          runExceptT (runConsumer (loop interrupt c)) >>= \case
             Right () -> putStrLn "Finished with no errors."
             Left err -> putStrLn ("Consumer died with: " <> show err)
   where
-  go interrupt c = do
-    liftIO $ threadDelay 1000000
-    liftIO $ print (offsets c)
-    if (null (offsets c)) then do
+
+loop :: TVar Bool -> ConsumerState -> Consumer ()
+loop interrupt c = do
+  if (null (offsets c))
+    then do
       liftIO (putStrLn "No offsets assigned; quitting")
       leave c
     else do
-      (resp, c') <- getRecordSet 1000000 c
-      liftIO $ print resp
-      liftIO $ print c'
-      commitOffsets c'
-      i <- liftIO $ readTVarIO interrupt
-      if i then
-        leave c'
-      else
-        go interrupt c'
-
-_callback :: String -> FetchResponse -> IO ()
-_callback name response = 
-  putStrLn (name <> ": got " <> show (length (fetchResponseContents response)) <> " messages")
+      (resp, c) <- getRecordSet 1000000 c
+      liftIO do
+        print resp
+        traverse_ B.putStrLn (fetchResponseContents resp)
+      commitOffsets c
+      i <- liftIO (readTVarIO interrupt)
+      if i
+        then leave c
+        else loop interrupt c
 
 fetchResponseContents :: FetchResponse -> [ByteString]
 fetchResponseContents fetchResponse =

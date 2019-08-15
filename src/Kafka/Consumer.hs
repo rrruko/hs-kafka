@@ -4,11 +4,11 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Kafka.Consumer
-  ( ConsumerSettings(..)
+  ( Consumer(..)
+  , ConsumerSettings(..)
   , ConsumerState(..)
   , commitOffsets
   , runExceptT
-  , runConsumer
   , getRecordSet
   , leave
   , merge
