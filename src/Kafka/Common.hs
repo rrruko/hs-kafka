@@ -23,6 +23,9 @@ import qualified Data.ByteString as BS
 
 newtype Kafka = Kafka { getKafka :: Connection }
 
+instance Show Kafka where
+  show _ = "<Kafka>"
+
 data Topic = Topic
   ByteArray -- Topic name
   Int -- Number of partitions
@@ -43,10 +46,12 @@ data KafkaTimestamp
   = Latest
   | Earliest
   | At Int64
+  deriving (Show)
 
 data AutoCreateTopic
   = Create
   | NeverCreate
+  deriving (Show)
 
 data KafkaException where
   KafkaSendException :: SendException 'Uninterruptible -> KafkaException
