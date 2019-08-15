@@ -5,12 +5,11 @@
 module Main where
 
 import Control.Concurrent
+import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
-import Data.IORef
 import Data.Maybe
-import Data.Primitive.ByteArray (ByteArray)
 import GHC.Conc
 import Net.IPv4 (ipv4)
 import Socket.Stream.IPv4 (Peer(..))
@@ -21,9 +20,6 @@ import Kafka.Consumer
 import Kafka.Fetch.Response (FetchResponse)
 
 import qualified Kafka.Fetch.Response as F
-
-groupName :: ByteArray
-groupName = fromByteString "ruko-diamond"
 
 children :: MVar [MVar ()]
 children = unsafePerformIO (newMVar [])
@@ -43,6 +39,8 @@ main = do
   interrupt <- newTVarIO False
   fork (consumer interrupt) "C1"
   fork (consumer interrupt) "C2"
+  fork (consumer interrupt) "C3"
+  putStr "Press enter to quit"
   _ <- getLine
   atomically $ writeTVar interrupt True
 
@@ -61,24 +59,34 @@ consumer interrupt name = do
     Right k -> do
       let settings = ConsumerSettings
             { csTopicName = TopicName (fromByteString "diamond")
-            , csGroupName = groupName
-            , csMaxFetchBytes = 300
-            , csGroupFetchStart = Earliest
+            , groupName = fromByteString "ruko-diamond"
+            , maxFetchBytes = 30000
+            , groupFetchStart = Earliest
             , defaultTimeout = 5000000
             }
-      c <- newConsumer k settings
-      putStrLn "hehehe"
-      case c of
-        Right c' -> go c' *> putStrLn "done"
-        Left err -> print err
+      newConsumer k settings >>= \case
+        Left err -> putStrLn ("Failed to create consumer: " <> show err)
+        Right c -> 
+          runExceptT (runConsumer (go interrupt c)) >>= \case
+            Right () -> putStrLn "Finished with no errors."
+            Left err -> putStrLn ("Consumer died with: " <> show err)
   where
-  go c' = runExceptT $ runConsumer $ do
-    liftIO $ print (offsets c')
-    (resp, newThing) <- getRecordSet 1000000 c'
-    liftIO $ print resp
-    liftIO $ print newThing
-    commitOffsets newThing
-    leave newThing
+  go interrupt c = do
+    liftIO $ threadDelay 1000000
+    liftIO $ print (offsets c)
+    if (null (offsets c)) then do
+      liftIO (putStrLn "No offsets assigned; quitting")
+      leave c
+    else do
+      (resp, c') <- getRecordSet 1000000 c
+      liftIO $ print resp
+      liftIO $ print c'
+      commitOffsets c'
+      i <- liftIO $ readTVarIO interrupt
+      if i then
+        leave c'
+      else
+        go interrupt c'
 
 _callback :: String -> FetchResponse -> IO ()
 _callback name response = 
@@ -93,6 +101,3 @@ fetchResponseContents fetchResponse =
   . concatMap F.partitionResponses
   . F.responses
   $ fetchResponse
-
-thirtySeconds :: Int
-thirtySeconds = 30000000
