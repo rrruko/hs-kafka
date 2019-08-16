@@ -9,6 +9,7 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Monad.State
 import Data.ByteString (ByteString)
 import Data.Foldable (traverse_)
 import Data.Maybe
@@ -72,27 +73,27 @@ consumer interrupt name = do
       newConsumer k diamondSettings >>= \case
         Left err -> putStrLn ("Failed to create consumer: " <> show err)
         Right c -> 
-          runExceptT (runConsumer (loop interrupt c)) >>= \case
-            Right () -> putStrLn "Finished with no errors."
+          evalConsumer c (loop interrupt) >>= \case
+            Right ((), _) -> putStrLn "Finished with no errors."
             Left err -> putStrLn ("Consumer died with: " <> show err)
-  where
 
-loop :: TVar Bool -> ConsumerState -> Consumer ()
-loop interrupt c = do
-  if (null (offsets c))
+loop :: TVar Bool -> Consumer ()
+loop interrupt = do
+  o <- gets offsets
+  if (null o)
     then do
       liftIO (putStrLn "No offsets assigned; quitting")
-      leave c
+      leave
     else do
-      (resp, c') <- getRecordSet 1000000 c
+      resp <- getRecordSet 1000000
       liftIO do
         print resp
         traverse_ B.putStrLn (fetchResponseContents resp)
-      commitOffsets c'
+      commitOffsets
       i <- liftIO (readTVarIO interrupt)
       if i
-        then leave c'
-        else loop interrupt c'
+        then leave
+        else loop interrupt
 
 fetchResponseContents :: FetchResponse -> [ByteString]
 fetchResponseContents fetchResponse =

@@ -180,6 +180,7 @@ executable new-consumer
     , containers >= 0.6.0.1 && < 0.7.0.0
     , ip >= 1.5.0
     , kafka
+    , mtl >= 2.2.2 && < 2.3
     , primitive >= 0.7.0.0 && < 0.8.0.0
     , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
     , random >= 1.1 && < 1.2
@@ -250,6 +251,7 @@ benchmark bench
     , attoparsec
     , base ^>=4.12.0.0
     , bytestring
+    , file-embed
     , gauge
     , kafka
     , primitive >= 0.7.0.0 && < 0.8.0.0
