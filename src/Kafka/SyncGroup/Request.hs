@@ -51,21 +51,20 @@ syncGroupRequest ::
 syncGroupRequest (GroupMember gid mid) (GenerationId genId) assignments =
   let
     groupIdLength = sizeofByteArray gid
-    reqSize = evaluate $ foldBuilder
-      [build32 (fromIntegral $ sizeofByteArray req)]
-    req = evaluate $ foldBuilder
-      [ build16 syncGroupApiKey
-      , build16 syncGroupApiVersion
-      , build32 correlationId
-      , buildString (fromByteString clientId) (fromIntegral clientIdLength)
-      , buildString gid (fromIntegral groupIdLength)
-      , build32 genId
-      , maybe
+    reqSize = evaluate $
+      build32 (fromIntegral $ sizeofByteArray req)
+    req = evaluate $
+      build16 syncGroupApiKey
+      <> build16 syncGroupApiVersion
+      <> build32 correlationId
+      <> buildString (fromByteString clientId) (fromIntegral clientIdLength)
+      <> buildString gid (fromIntegral groupIdLength)
+      <> build32 genId
+      <> maybe
           (build16 0)
           (\m -> buildString m (sizeofByteArray m))
           mid
-      , buildMapArray assignments defaultAssignmentData
-      ]
+      <> buildMapArray assignments defaultAssignmentData
   in
     runUnliftedArray $ do
       arr <- newUnliftedArray 2 mempty

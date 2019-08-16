@@ -31,15 +31,14 @@ defaultProtocolTypeLength :: Int
 defaultProtocolTypeLength = sizeofByteArray defaultProtocolType
 
 defaultProtocolData :: ByteArray -> forall s. KafkaWriterBuilder s
-defaultProtocolData topic = mconcat
-  [ build32 1 -- 1 protocol
-  , buildString (fromByteString "range") 5 -- protocol name
-  , build32 (12 + fromIntegral topicSize) -- metadata bytes length
-  , build16 0 -- version
-  , build32 1 -- number of subscriptions
-  , buildString topic topicSize -- topic name
-  , build32 0 -- userdata bytes length
-  ]
+defaultProtocolData topic =
+  build32 1 -- 1 protocol
+  <> buildString (fromByteString "range") 5 -- protocol name
+  <> build32 (12 + fromIntegral topicSize) -- metadata bytes length
+  <> build16 0 -- version
+  <> build32 1 -- number of subscriptions
+  <> buildString topic topicSize -- topic name
+  <> build32 0 -- userdata bytes length
   where
     topicSize = sizeofByteArray topic
 
@@ -50,22 +49,21 @@ joinGroupRequest ::
 joinGroupRequest (TopicName topicName) (GroupMember gid mid) =
   let
     groupIdLength = sizeofByteArray gid
-    reqSize = evaluate $ foldBuilder [build32 (fromIntegral $ sizeofByteArray req)]
-    req = evaluate $ foldBuilder $
-      [ build16 joinGroupApiKey
-      , build16 joinGroupApiVersion
-      , build32 correlationId
-      , buildString (fromByteString clientId) (fromIntegral clientIdLength)
-      , buildString gid (fromIntegral groupIdLength)
-      , build32 defaultSessionTimeout
-      , build32 defaultRebalanceTimeout
-      , maybe
+    reqSize = evaluate $ build32 (fromIntegral $ sizeofByteArray req)
+    req = evaluate $
+      build16 joinGroupApiKey
+      <> build16 joinGroupApiVersion
+      <> build32 correlationId
+      <> buildString (fromByteString clientId) (fromIntegral clientIdLength)
+      <> buildString gid (fromIntegral groupIdLength)
+      <> build32 defaultSessionTimeout
+      <> build32 defaultRebalanceTimeout
+      <> maybe
           (build16 0)
           (\m -> buildString m (sizeofByteArray m))
           mid
-      , buildString defaultProtocolType (fromIntegral defaultProtocolTypeLength)
-      , defaultProtocolData topicName
-      ]
+      <> buildString defaultProtocolType (fromIntegral defaultProtocolTypeLength)
+      <> defaultProtocolData topicName
   in
     runUnliftedArray $ do
       arr <- newUnliftedArray 2 mempty

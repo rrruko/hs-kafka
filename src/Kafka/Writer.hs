@@ -1,11 +1,17 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UnboxedTuples #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# language
+        BangPatterns
+      , DataKinds
+      , DeriveFunctor
+      , GeneralizedNewtypeDeriving
+      , MagicHash
+      , MultiParamTypeClasses
+      , PolyKinds
+      , RankNTypes
+      , ScopedTypeVariables
+      , TypeFamilies
+      , UnboxedTuples
+      , UndecidableInstances
+  #-}
 
 module Kafka.Writer
   ( KafkaWriter(..)
@@ -19,8 +25,6 @@ module Kafka.Writer
   , buildMapArray
   , buildString
   , evaluate
-  , evaluateWriter
-  , foldBuilder
   , withCtx
   , write8
   , write16
@@ -33,30 +37,75 @@ module Kafka.Writer
 import Control.Applicative (liftA2)
 import Control.Monad.Primitive
 import Control.Monad.Reader
-import Control.Monad.ST
 import Control.Monad.State.Strict
 import Data.Int
-import Data.Foldable (foldl')
 import Data.Primitive (Prim(..), alignment)
 import Data.Primitive.ByteArray
 import Data.Primitive.ByteArray.Unaligned
+import GHC.Exts
 
 import Kafka.Common (toBE16, toBE32, toBE64)
 
-newtype KafkaWriter s a = KafkaWriter
-  { runKafkaWriter :: ReaderT (MutableByteArray s) (StateT Int (ST s)) a }
-  deriving
-    ( Functor, Applicative, Monad
-    , MonadReader (MutableByteArray s)
-    , MonadState Int
-    , PrimMonad
-    )
+newtype KafkaWriter s a = K
+  { getK :: ()
+      => MutableByteArray# s
+      -> Int#
+      -> State# s
+      -> (# State# s, Int#, a #)
+  }
+
+instance Functor (KafkaWriter s) where
+  fmap f (K g) = K $ \marr# ix0# s0# -> case g marr# ix0# s0# of
+    (# s1#, ix1#, a #) -> (# s1#, ix1#, f a #)
+  {-# inline fmap #-}
+
+instance Applicative (KafkaWriter s) where
+  pure = \a -> K $ \_ ix# s# -> (# s#, ix#, a #)
+  {-# inline pure #-}
+  K f <*> K g = K $ \marr# ix0# s0# -> case f marr# ix0# s0# of
+    (# s1#, ix1#, h #) -> case g marr# ix1# s1# of
+       (# s2#, ix2#, x #) -> (# s2#, ix2#, h x #)
+  {-# inline (<*>) #-}
+
+instance Monad (KafkaWriter s) where
+  K f >>= k = K $ \marr# ix0# s0# -> case f marr# ix0# s0# of
+    (# s1#, ix1#, a #) -> case k a of
+      K g -> g marr# ix1# s1#
+  {-# inline (>>=) #-}
+
+instance MonadReader (MutableByteArray s) (KafkaWriter s) where
+  ask = K $ \marr# ix0# s0# -> (# s0#, ix0#, MutableByteArray marr# #)
+  {-# inline ask #-}
+  reader f = K $ \marr# ix0# s0# -> case f (MutableByteArray marr#) of
+    a -> (# s0#, ix0#, a #)
+  {-# inline reader #-}
+  local f (K g) = K $ \marr0# ix0# s0# ->
+    case f (MutableByteArray marr0#) of
+      MutableByteArray marr1# -> g marr1# ix0# s0#
+  {-# inline local #-}
+
+instance MonadState Int (KafkaWriter s) where
+  get = K $ \_ ix0# s0# -> (# s0#, ix0#, I# ix0# #)
+  {-# inline get #-}
+  put = \(I# ix#) -> K $ \_ _ s0# -> (# s0#, ix#, () #)
+  {-# inline put #-}
+  state f = K $ \_ ix0# s0# -> case f (I# ix0#) of
+    (a, I# ix1#) -> (# s0#, ix1#, a #)
+  {-# inline state #-}
+
+instance PrimMonad (KafkaWriter s) where
+  type PrimState (KafkaWriter s) = s
+  primitive f = K $ \_ ix0# s0# -> case f s0# of
+    (# s1#, a #) -> (# s1#, ix0#, a #)
+  {-# inline primitive #-}
 
 instance Semigroup a => Semigroup (KafkaWriter s a) where
   (<>) = liftA2 (<>)
+  {-# inline (<>) #-}
 
 instance Monoid a => Monoid (KafkaWriter s a) where
   mempty = pure mempty
+  {-# inline mempty #-}
 
 withCtx :: (Int -> MutableByteArray s -> KafkaWriter s a) -> KafkaWriter s a
 withCtx f = do
@@ -112,29 +161,26 @@ buildBytes src len = Kwb len (writeBytes src len)
 buildArray :: [KafkaWriterBuilder s] -> Int -> KafkaWriterBuilder s
 buildArray src len = build32 (fromIntegral len) <> mconcat src
 
-buildMapArray :: Foldable t => t a -> (a -> KafkaWriterBuilder s) -> KafkaWriterBuilder s
+buildMapArray :: (Foldable t)
+  => t a
+  -> (a -> KafkaWriterBuilder s)
+  -> KafkaWriterBuilder s
 buildMapArray xs f = build32 (fromIntegral $ length xs) <> foldMap f xs
 
 buildString :: ByteArray -> Int -> KafkaWriterBuilder s
 buildString src len = build16 (fromIntegral len) <> buildBytes src len
 
-evaluateWriter :: Int -> (forall s. KafkaWriter s a) -> ByteArray
-evaluateWriter n kw = runST $ do
-  arr <- newByteArray n
-  _ <- runStateT (runReaderT (runKafkaWriter kw) arr) 0
-  unsafeFreezeByteArray arr
-
 evaluate :: (forall s. KafkaWriterBuilder s) -> ByteArray
-evaluate kwb = runST (go kwb)
-  where
-    go :: forall s. KafkaWriterBuilder s -> ST s ByteArray
-    go (Kwb len kw) = do
-      arr <- newByteArray len
-      void $ runStateT (runReaderT (runKafkaWriter kw) arr) 0
-      unsafeFreezeByteArray arr
+evaluate (Kwb (I# len#) kw) = case runRW# (runKafkaWriter# len# kw) of
+  (# _, b# #) -> ByteArray b#
+{-# inline evaluate #-}
 
-foldBuilder :: Foldable t => t (KafkaWriterBuilder s) -> KafkaWriterBuilder s
-foldBuilder = foldl' (<>) mempty
+runKafkaWriter# :: Int# -> KafkaWriter s a -> State# s -> (# State# s, ByteArray# #)
+runKafkaWriter# sz# (K g) = \s0# -> case newByteArray# sz# s0# of
+  (# s1#, marr# #) -> case g marr# 0# s1# of
+    (# s2#, _, _ #) -> case unsafeFreezeByteArray# marr# s2# of
+      (# s3#, b# #) -> (# s3#, b# #)
+{-# inline runKafkaWriter# #-}
 
 data KafkaWriterBuilder s = Kwb
   !Int -- ^ length
@@ -142,7 +188,9 @@ data KafkaWriterBuilder s = Kwb
 
 instance Semigroup (KafkaWriterBuilder s) where
   Kwb len1 x <> Kwb len2 y = Kwb (len1 + len2) (x <> y)
+  {-# inline (<>) #-}
 
 instance Monoid (KafkaWriterBuilder s) where
   mempty = Kwb 0 mempty
+  {-# inline mempty #-}
 

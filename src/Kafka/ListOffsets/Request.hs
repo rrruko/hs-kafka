@@ -51,29 +51,28 @@ listOffsetsRequest topic partitions timestamp =
       + clientIdLength
       + topicNameSize
       + partitionMessageSize * partitionCount
-    req = evaluate $ foldBuilder $
-      [ build32 reqSize
+    req = evaluate $
+      build32 reqSize
       -- common request headers
-      , build16 listOffsetsApiKey
-      , build16 listOffsetsApiVersion
-      , build32 correlationId
-      , buildString (fromByteString clientId) clientIdLength
+      <> build16 listOffsetsApiKey
+      <> build16 listOffsetsApiVersion
+      <> build32 correlationId
+      <> buildString (fromByteString clientId) clientIdLength
       -- listoffsets request
-      , build32 defaultReplicaId
-      , build8 defaultIsolationLevel
-      , build32 1 -- number of following topics
+      <> build32 defaultReplicaId
+      <> build8 defaultIsolationLevel
+      <> build32 1 -- number of following topics
 
-      , buildString topicName topicNameSize
-      , buildArray
-          (map
-            (\p -> foldBuilder
-              [ build32 p
-              , build32 defaultCurrentLeaderEpoch
-              , build64 (kafkaTimestamp timestamp)
-              ])
-            partitions)
+      <> buildString topicName topicNameSize
+      <> buildArray
+          ( map
+            (\p -> build32 p
+              <> build32 defaultCurrentLeaderEpoch
+              <> build64 (kafkaTimestamp timestamp)
+            )
+            partitions
+          )
           (fromIntegral partitionCount)
-      ]
   in
     runUnliftedArray $ do
       arr <- newUnliftedArray 1 mempty

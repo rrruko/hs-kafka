@@ -112,24 +112,22 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
       + postCrcLength
       + payloadsSectionSize
     preCrcLength = 9
-    preCrc = evaluate $ foldBuilder
-      [ build64 defaultBaseOffset
-      , build32 batchLength
-      , build32 defaultPartitionLeaderEpoch
-      , build8 magic
-      , build32 (fromIntegral crc)
-      ]
+    preCrc = evaluate $
+      build64 defaultBaseOffset
+      <> build32 batchLength
+      <> build32 defaultPartitionLeaderEpoch
+      <> build8 magic
+      <> build32 (fromIntegral crc)
     postCrcLength = 40
-    postCrc = evaluate $ foldBuilder
-      [ build16 defaultRecordBatchAttributes
-      , build32 (fromIntegral (payloadCount - 1))
-      , build64 defaultFirstTimestamp
-      , build64 defaultMaxTimestamp
-      , build64 defaultProducerId
-      , build16 defaultProducerEpoch
-      , build32 defaultBaseSequence
-      , build32 $ fromIntegral payloadCount
-      ]
+    postCrc = evaluate $
+      build16 defaultRecordBatchAttributes
+      <> build32 (fromIntegral (payloadCount - 1))
+      <> build64 defaultFirstTimestamp
+      <> build64 defaultMaxTimestamp
+      <> build64 defaultProducerId
+      <> build16 defaultProducerEpoch
+      <> build32 defaultBaseSequence
+      <> build32 (fromIntegral payloadCount)
   in
     preCrc <> postCrc
 
@@ -140,21 +138,20 @@ makeRequestMetadata ::
   -> Int32
   -> ByteArray
 makeRequestMetadata recordBatchSectionSize timeout topic partition =
-  evaluate $ foldBuilder
-    [ build32 size
-    , build16 produceApiKey
-    , build16 produceApiVersion
-    , build32 correlationId
-    , buildString (fromByteString clientId) clientIdLength
-    , build16 (-1) -- transactional_id length
-    , build16 (acks defaultAcknowledgments) -- acks
-    , build32 (fromIntegral timeout) -- timeout in ms
-    , build32 1 -- following array length
-    , buildString topicName topicNameSize -- topic_data topic
-    , build32 1 -- following array [data] length
-    , build32 partition -- partition
-    , build32 (fromIntegral recordBatchSectionSize) -- record_set length
-    ]
+  evaluate $
+    build32 size
+    <> build16 produceApiKey
+    <> build16 produceApiVersion
+    <> build32 correlationId
+    <> buildString (fromByteString clientId) clientIdLength
+    <> build16 (-1) -- transactional_id length
+    <> build16 (acks defaultAcknowledgments) -- acks
+    <> build32 (fromIntegral timeout) -- timeout in ms
+    <> build32 1 -- following array length
+    <> buildString topicName topicNameSize -- topic_data topic
+    <> build32 1 -- following array [data] length
+    <> build32 partition -- partition
+    <> build32 (fromIntegral recordBatchSectionSize) -- record_set length
   where
     TopicName topicName = topic
     topicNameSize = sizeofByteArray topicName

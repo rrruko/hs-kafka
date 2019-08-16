@@ -21,18 +21,17 @@ leaveGroupRequest ::
 leaveGroupRequest (GroupMember gid mid) =
   let
     groupIdLength = sizeofByteArray gid
-    reqSize = evaluate $ foldBuilder [build32 (fromIntegral $ sizeofByteArray req)]
-    req = evaluate $ foldBuilder $
-      [ build16 leaveGroupApiKey
-      , build16 leaveGroupApiVersion
-      , build32 correlationId
-      , buildString (fromByteString clientId) (fromIntegral clientIdLength)
-      , buildString gid (fromIntegral groupIdLength)
-      , maybe
+    reqSize = evaluate $ (build32 (fromIntegral $ sizeofByteArray req))
+    req = evaluate $
+      build16 leaveGroupApiKey
+      <> build16 leaveGroupApiVersion
+      <> build32 correlationId
+      <> buildString (fromByteString clientId) (fromIntegral clientIdLength)
+      <> buildString gid (fromIntegral groupIdLength)
+      <> maybe
           (build16 0)
           (\m -> buildString m (sizeofByteArray m))
           mid
-      ]
   in
     runUnliftedArray $ do
       arr <- newUnliftedArray 2 mempty

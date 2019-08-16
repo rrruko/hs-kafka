@@ -1,188 +1,266 @@
-cabal-version:       2.4
-
-name:                kafka
-version:             0.1.0.0
+cabal-version: 2.2
+name:
+  kafka
+version:
+  0.1
 -- synopsis:
 -- description:
 -- bug-reports:
-license:             BSD-3-Clause
-license-file:        LICENSE
-author:              Ethan Jones
-maintainer:          joneetha@oregonstate.edu
+license:
+  BSD-3-Clause
+license-file:
+  LICENSE
+author:
+  Ethan Jones
+maintainer:
+  joneetha@oregonstate.edu
 -- copyright:
 -- category:
-extra-source-files:  CHANGELOG.md
+extra-source-files:
+  CHANGELOG.md
 
 library
-  exposed-modules:     Kafka
-                     , Kafka.Combinator
-                     , Kafka.Common
-                     , Kafka.Consumer
-                     , Kafka.Fetch.Request
-                     , Kafka.Fetch.Response
-                     , Kafka.Heartbeat.Request
-                     , Kafka.Heartbeat.Response
-                     , Kafka.JoinGroup.Request
-                     , Kafka.JoinGroup.Response
-                     , Kafka.LeaveGroup.Request
-                     , Kafka.LeaveGroup.Response
-                     , Kafka.ListOffsets.Request
-                     , Kafka.ListOffsets.Response
-                     , Kafka.Metadata.Request
-                     , Kafka.Metadata.Response
-                     , Kafka.OffsetCommit.Request
-                     , Kafka.OffsetCommit.Response
-                     , Kafka.OffsetFetch.Request
-                     , Kafka.OffsetFetch.Response
-                     , Kafka.Produce.Request
-                     , Kafka.Produce.Response
-                     , Kafka.Response
-                     , Kafka.SyncGroup.Request
-                     , Kafka.SyncGroup.Response
-                     , Kafka.Zigzag
-                     , Kafka.Writer
-  ghc-options: -Wall -Werror -O2
+  exposed-modules:
+    Kafka
+    Kafka.Combinator
+    Kafka.Common
+    Kafka.Consumer
+    Kafka.Fetch.Request
+    Kafka.Fetch.Response
+    Kafka.Heartbeat.Request
+    Kafka.Heartbeat.Response
+    Kafka.JoinGroup.Request
+    Kafka.JoinGroup.Response
+    Kafka.LeaveGroup.Request
+    Kafka.LeaveGroup.Response
+    Kafka.ListOffsets.Request
+    Kafka.ListOffsets.Response
+    Kafka.Metadata.Request
+    Kafka.Metadata.Response
+    Kafka.OffsetCommit.Request
+    Kafka.OffsetCommit.Response
+    Kafka.OffsetFetch.Request
+    Kafka.OffsetFetch.Response
+    Kafka.Produce.Request
+    Kafka.Produce.Response
+    Kafka.Response
+    Kafka.SyncGroup.Request
+    Kafka.SyncGroup.Response
+    Kafka.Zigzag
+    Kafka.Writer
+  ghc-options:
+    -Wall
+    -Werror
+    -O2
   -- other-modules:
-  -- other-extensions:
-  build-depends:     , attoparsec
-                     , base ^>=4.12.0.0
-                     , byteslice >= 0.1.1.0 && < 0.2.0.0
-                     , bytestring
-                     , castagnoli
-                     , chronos >= 1.0.5 && < 1.1
-                     , containers
-                     , cpu >= 0.1.2 && < 0.2
-                     , crc32c
-                     , ip >= 1.5.0
-                     , mtl >= 2.2.2 && < 2.3
-                     , primitive >= 0.7.0.0 && < 0.8.0.0
-                     , primitive-convenience >= 0.1 && < 0.2
-                     , primitive-unaligned >= 0.1.1.0 && < 0.2.0.0
-                     , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
-                     , primitive-slice >= 0.1.0.0 && < 0.2.0.0
-                     , sockets >= 0.6.0.0 && < 0.7.0.0
-                     , stm >= 2.5.0.0 && < 2.6.0.0
-                     , text
-                     , torsor >= 0.1 && < 0.2
-                     , transformers
-  hs-source-dirs:      src
-  default-language:    Haskell2010
+  build-depends:
+    , attoparsec
+    , base ^>=4.12.0.0
+    , byteslice >= 0.1.1.0 && < 0.2.0.0
+    , bytestring
+    , castagnoli
+    , chronos >= 1.0.5 && < 1.1
+    , containers
+    , cpu >= 0.1.2 && < 0.2
+    , crc32c
+    , ip >= 1.5.0
+    , mtl >= 2.2.2 && < 2.3
+    , primitive >= 0.7.0.0 && < 0.8.0.0
+    , primitive-convenience >= 0.1 && < 0.2
+    , primitive-unaligned >= 0.1.1.0 && < 0.2.0.0
+    , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
+    , primitive-slice >= 0.1.0.0 && < 0.2.0.0
+    , sockets >= 0.6.0.0 && < 0.7.0.0
+    , stm >= 2.5.0.0 && < 2.6.0.0
+    , text
+    , torsor >= 0.1 && < 0.2
+    , transformers
+  hs-source-dirs:
+    src
+  default-language:
+    Haskell2010
 
 executable produce-fetch-example
-  main-is:             ProduceFetchExample.hs
-  -- other-modules:
-  -- other-extensions:
-  build-depends:       base ^>=4.12.0.0
-                     , byteslice >= 0.1.1.0 && < 0.2.0.0
-                     , bytestring
-                     , ip >= 1.5.0
-                     , kafka
-                     , primitive >= 0.7.0.0 && < 0.8.0.0
-                     , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
-                     , sockets >= 0.6.0.0 && < 0.7.0.0
-  hs-source-dirs:      example
-  default-language:    Haskell2010
-  ghc-options: -Wall -O2 -threaded -rtsopts -with-rtsopts=-N1
+  main-is:
+    ProduceFetchExample.hs
+  build-depends:
+    , base ^>=4.12.0.0
+    , byteslice >= 0.1.1.0 && < 0.2.0.0
+    , bytestring
+    , ip >= 1.5.0
+    , kafka
+    , primitive >= 0.7.0.0 && < 0.8.0.0
+    , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
+    , sockets >= 0.6.0.0 && < 0.7.0.0
+  hs-source-dirs:
+    example
+  default-language:
+    Haskell2010
+  ghc-options:
+    -Wall
+    -O2
+    -threaded
+    -rtsopts -with-rtsopts=-N1
 
 executable listoffsets-example
-  main-is:             ListOffsetsExample.hs
-  -- other-modules:
-  -- other-extensions:
-  build-depends:       base ^>=4.12.0.0
-                     , byteslice >= 0.1.1.0 && < 0.2.0.0
-                     , bytestring
-                     , ip >= 1.5.0
-                     , kafka
-                     , primitive >= 0.7.0.0 && < 0.8.0.0
-                     , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
-                     , sockets >= 0.6.0.0 && < 0.7.0.0
-  hs-source-dirs:      example
-  default-language:    Haskell2010
-  ghc-options: -Wall -O2 -threaded -rtsopts -with-rtsopts=-N1
+  main-is:
+    ListOffsetsExample.hs
+  build-depends:
+    , base ^>=4.12.0.0
+    , byteslice >= 0.1.1.0 && < 0.2.0.0
+    , bytestring
+    , ip >= 1.5.0
+    , kafka
+    , primitive >= 0.7.0.0 && < 0.8.0.0
+    , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
+    , sockets >= 0.6.0.0 && < 0.7.0.0
+  hs-source-dirs:
+    example
+  default-language:
+    Haskell2010
+  ghc-options:
+    -Wall
+    -O2
+    -threaded
+    -rtsopts -with-rtsopts=-N1
 
 executable interactive
-  main-is:             Interactive.hs
-  -- other-modules:
-  -- other-extensions:
-  build-depends:       base ^>=4.12.0.0
-                     , byteslice >= 0.1.1.0 && < 0.2.0.0
-                     , bytestring
-                     , ip >= 1.5.0
-                     , kafka
-                     , primitive >= 0.7.0.0 && < 0.8.0.0
-                     , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
-                     , sockets >= 0.6.0.0 && < 0.7.0.0
-  hs-source-dirs:      example
-  default-language:    Haskell2010
-  default-extensions:  OverloadedStrings
-  ghc-options: -Wall -O2 -threaded -rtsopts -with-rtsopts=-N1
+  main-is:
+    Interactive.hs
+  build-depends:
+    , base ^>=4.12.0.0
+    , byteslice >= 0.1.1.0 && < 0.2.0.0
+    , bytestring
+    , ip >= 1.5.0
+    , kafka
+    , primitive >= 0.7.0.0 && < 0.8.0.0
+    , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
+    , sockets >= 0.6.0.0 && < 0.7.0.0
+  hs-source-dirs:
+    example
+  default-language:
+    Haskell2010
+  ghc-options:
+    -Wall
+    -O2
+    -threaded
+    -rtsopts -with-rtsopts=-N1
 
 executable producer
-  main-is:             Producer.hs
-  -- other-modules:
-  -- other-extensions:
-  build-depends:       base ^>=4.12.0.0
-                     , byteslice >= 0.1.1.0 && < 0.2.0.0
-                     , bytestring
-                     , containers >= 0.6.0.1 && < 0.7.0.0
-                     , ip >= 1.5.0
-                     , kafka
-                     , primitive >= 0.7.0.0 && < 0.8.0.0
-                     , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
-                     , random >= 1.1 && < 1.2
-                     , sockets >= 0.6.0.0 && < 0.7.0.0
-  hs-source-dirs:      example
-  default-language:    Haskell2010
-  default-extensions:  OverloadedStrings
-  ghc-options: -Wall -O2 -threaded -rtsopts -with-rtsopts=-N1
+  main-is:
+    Producer.hs
+  build-depends:
+    , base ^>=4.12.0.0
+    , byteslice >= 0.1.1.0 && < 0.2.0.0
+    , bytestring
+    , containers >= 0.6.0.1 && < 0.7.0.0
+    , ip >= 1.5.0
+    , kafka
+    , primitive >= 0.7.0.0 && < 0.8.0.0
+    , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
+    , random >= 1.1 && < 1.2
+    , sockets >= 0.6.0.0 && < 0.7.0.0
+  hs-source-dirs:
+    example
+  default-language:
+    Haskell2010
+  ghc-options:
+    -Wall
+    -O2
+    -threaded
+    -rtsopts -with-rtsopts=-N1
 
 executable new-consumer
-  main-is:             NewConsumer.hs
-  -- other-modules:
-  -- other-extensions:
-  build-depends:       base ^>=4.12.0.0
-                     , byteslice >= 0.1.1.0 && < 0.2.0.0
-                     , bytestring
-                     , containers >= 0.6.0.1 && < 0.7.0.0
-                     , ip >= 1.5.0
-                     , kafka
-                     , mtl
-                     , primitive >= 0.7.0.0 && < 0.8.0.0
-                     , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
-                     , random >= 1.1 && < 1.2
-                     , sockets >= 0.6.0.0 && < 0.7.0.0
-                     , stm
-  hs-source-dirs:      example
-  default-language:    Haskell2010
-  default-extensions:  OverloadedStrings
-  ghc-options: -Wall -O2 -threaded -rtsopts -with-rtsopts=-N1
+  main-is:
+    NewConsumer.hs
+  build-depends:
+    , base ^>=4.12.0.0
+    , byteslice >= 0.1.1.0 && < 0.2.0.0
+    , bytestring
+    , containers >= 0.6.0.1 && < 0.7.0.0
+    , ip >= 1.5.0
+    , kafka
+    , mtl >= 2.2.2 && < 2.3
+    , primitive >= 0.7.0.0 && < 0.8.0.0
+    , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
+    , random >= 1.1 && < 1.2
+    , sockets >= 0.6.0.0 && < 0.7.0.0
+    , stm
+  hs-source-dirs:
+    example
+  default-language:
+    Haskell2010
+  ghc-options:
+    -Wall
+    -O2
+    -threaded
+    -rtsopts -with-rtsopts=-N1
 
-test-suite tests
-  type:                exitcode-stdio-1.0
-  main-is:             Test.hs
-  hs-source-dirs:      test
-  build-depends:       attoparsec
-                     , base ^>=4.12.0.0
-                     , bytestring
-                     , containers >= 0.6.0.1 && < 0.7.0.0
-                     , kafka
-                     , primitive >= 0.7.0.0 && < 0.8.0.0
-                     , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
-                     , tasty
-                     , tasty-golden
-                     , tasty-hunit
-  ghc-options: -Wall -Werror -O2
+test-suite laws
+  type:
+    exitcode-stdio-1.0
+  main-is:
+    Laws.hs
+  hs-source-dirs:
+    test
+  default-language:
+    Haskell2010
+  build-depends:
+    , base
+    , kafka
+    , hedgehog
+    , hedgehog-classes
+  ghc-options:
+    -Wall
+    -Werror
+    -O2
+
+test-suite unit
+  type:
+    exitcode-stdio-1.0
+  main-is:
+    UnitTests.hs
+  hs-source-dirs:
+    test
+  build-depends:
+    , attoparsec
+    , base ^>=4.12.0.0
+    , bytestring
+    , containers >= 0.6.0.1 && < 0.7.0.0
+    , kafka
+    , primitive >= 0.7.0.0 && < 0.8.0.0
+    , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
+    , tasty
+    , tasty-golden
+    , tasty-hunit
+  default-language:
+    Haskell2010
+  ghc-options:
+    -Wall
+    -Werror
+    -O2
 
 benchmark bench
-  type:                exitcode-stdio-1.0
-  main-is:             Benchmark.hs
-  hs-source-dirs:      bench
-  build-depends:       attoparsec
-                     , base ^>=4.12.0.0
-                     , bytestring
-                     , file-embed
-                     , gauge
-                     , kafka
-                     , primitive >= 0.7.0.0 && < 0.8.0.0
-                     , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
-  ghc-options: -Wall -O2 -threaded -rtsopts -with-rtsopts=-N1
+  type:
+    exitcode-stdio-1.0
+  main-is:
+    Benchmark.hs
+  hs-source-dirs:
+    bench
+  build-depends:
+    , attoparsec
+    , base ^>=4.12.0.0
+    , bytestring
+    , file-embed
+    , gauge
+    , kafka
+    , primitive >= 0.7.0.0 && < 0.8.0.0
+    , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
+  default-language:
+    Haskell2010
+  ghc-options:
+    -Wall
+    -Werror
+    -O2
+    -threaded
+    -rtsopts -with-rtsopts=-N1
