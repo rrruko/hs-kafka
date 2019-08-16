@@ -26,6 +26,7 @@ import Kafka.Fetch.Response (FetchResponse)
 import qualified Kafka.Fetch.Response as F
 
 children :: MVar [MVar ()]
+{-# NOINLINE children #-}
 children = unsafePerformIO (newMVar [])
 
 waitForChildren :: IO ()

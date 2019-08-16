@@ -2,7 +2,8 @@
 {-# LANGUAGE RecordWildCards #-}
 
 import Control.Monad.ST
-import Data.Attoparsec (parseOnly)
+import Data.Attoparsec.ByteString (parseOnly)
+import Data.ByteString (ByteString)
 import Data.Int
 import Data.Primitive.Unlifted.Array
 import Data.Primitive.ByteArray
@@ -28,6 +29,7 @@ produceRequest' :: ProduceArgs -> UnliftedArray ByteArray
 produceRequest' (ProduceArgs {..}) =
   produceRequest pTimeout pTopic pPartition pPayloads
 
+shortPayloads :: UnliftedArray ByteArray
 shortPayloads = unliftedArrayFromList
   [ fromByteString "aaaaa"
   , fromByteString "bbbbb"
@@ -36,6 +38,7 @@ shortPayloads = unliftedArrayFromList
   , fromByteString "eeeee"
   ]
 
+shortProduceArgs :: ProduceArgs
 shortProduceArgs =
   ProduceArgs
     30000000
@@ -43,10 +46,12 @@ shortProduceArgs =
     0
     shortPayloads
 
+longPayloads :: UnliftedArray ByteArray
 longPayloads = unliftedArrayFromList
   [ runST $ newByteArray (10*1000*1000) >>= unsafeFreezeByteArray
   ]
 
+longProduceArgs :: ProduceArgs
 longProduceArgs =
   ProduceArgs
     30000000
@@ -61,6 +66,7 @@ data FetchArgs =
     , fPartitions :: [PartitionOffset]
     }
 
+fetchProduceArgs :: FetchArgs
 fetchProduceArgs =
   FetchArgs
     30000000
@@ -71,8 +77,11 @@ fetchRequest' :: FetchArgs -> UnliftedArray ByteArray
 fetchRequest' (FetchArgs {..}) =
   sessionlessFetchRequest fTimeout fTopic fPartitions 30000000
 
+parseFetch :: ByteString -> Either String FetchResponse
 parseFetch = parseOnly parseFetchResponse
 
+fetchResponseBytes :: ByteString
+{-# NOINLINE fetchResponseBytes #-}
 fetchResponseBytes = unsafePerformIO $
   B.readFile "test/golden/fetch-response-bytes"
 
