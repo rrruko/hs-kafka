@@ -13,7 +13,6 @@ module Kafka.Consumer
   , leave
   , merge
   , newConsumer
-  , rejoin
   , sendHeartbeat
   ) where
 
@@ -42,6 +41,7 @@ import Kafka.ListOffsets.Response (ListOffsetsResponse)
 import Kafka.SyncGroup.Response (SyncTopicAssignment)
 
 import qualified Kafka.Fetch.Response as F
+import qualified Kafka.Heartbeat.Response as H
 import qualified Kafka.JoinGroup.Response as J
 import qualified Kafka.ListOffsets.Response as L
 import qualified Kafka.Metadata.Response as M
@@ -191,7 +191,7 @@ newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ do
     Nothing -> throwError $ KafkaException
       "The topic was not present in the assignment set"
 
--- | rejoin should be called when the client receives a "rebalance in progress"
+-- | rejoin is called when the client receives a "rebalance in progress"
 -- error code, triggered by another client joining or leaving the group.
 -- It sends join and sync requests and receives a new member id, generation
 -- id, and set of assigned topics.
@@ -222,7 +222,8 @@ sendHeartbeat = do
   ConsumerState {..} <- get
   liftConsumer $ heartbeat kafka member genId
   timeout <- liftIO $ registerDelay (defaultTimeout settings)
-  void $ liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout
+  resp <- liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout
+  when (H.heartbeatErrorCode resp == errorRebalanceInProgress) rejoin
 
 leave :: Consumer ()
 leave = do
@@ -241,6 +242,7 @@ getRecordSet fetchWaitTime = do
   liftConsumer $ fetch kafka csTopicName fetchWaitTime offsetList maxFetchBytes
   interrupt <- liftIO $ registerDelay defaultTimeout
   fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
+  when (F.errorCode fetchResp == errorRebalanceInProgress) rejoin
   modify (\s -> s { offsets = updateOffsets csTopicName offsets fetchResp })
   pure fetchResp
 
