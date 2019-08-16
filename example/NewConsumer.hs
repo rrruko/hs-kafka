@@ -62,14 +62,14 @@ consumer interrupt name = do
   case kaf of
     Left e -> putStrLn ("failed to connect (" <> show e <> ")")
     Right k -> do
-      let settings = ConsumerSettings
+      let diamondSettings = ConsumerSettings
             { csTopicName = TopicName (fromByteString "diamond")
             , groupName = fromByteString "ruko-diamond"
             , maxFetchBytes = 30000
             , groupFetchStart = Earliest
             , defaultTimeout = 5000000
             }
-      newConsumer k settings >>= \case
+      newConsumer k diamondSettings >>= \case
         Left err -> putStrLn ("Failed to create consumer: " <> show err)
         Right c -> 
           runExceptT (runConsumer (loop interrupt c)) >>= \case
@@ -84,15 +84,15 @@ loop interrupt c = do
       liftIO (putStrLn "No offsets assigned; quitting")
       leave c
     else do
-      (resp, c) <- getRecordSet 1000000 c
+      (resp, c') <- getRecordSet 1000000 c
       liftIO do
         print resp
         traverse_ B.putStrLn (fetchResponseContents resp)
-      commitOffsets c
+      commitOffsets c'
       i <- liftIO (readTVarIO interrupt)
       if i
-        then leave c
-        else loop interrupt c
+        then leave c'
+        else loop interrupt c'
 
 fetchResponseContents :: FetchResponse -> [ByteString]
 fetchResponseContents fetchResponse =
