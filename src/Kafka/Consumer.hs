@@ -50,7 +50,7 @@ import qualified Kafka.SyncGroup.Response as S
 -- consumers by wrapping the low-level request and response type modules.
 newtype Consumer a
   = Consumer { runConsumer :: ExceptT KafkaException IO a }
-  deriving (Functor, Applicative, Monad)
+  deriving (Functor, Applicative, Monad, MonadError KafkaException)
 
 tryParse :: Either KafkaException (Either String a) -> Either KafkaException a
 tryParse = \case
@@ -69,9 +69,6 @@ instance Monoid a => Monoid (Consumer a) where
 
 liftConsumer :: IO (Either KafkaException a) -> Consumer a
 liftConsumer = Consumer . ExceptT
-
-throwConsumer :: KafkaException -> Consumer a
-throwConsumer = Consumer . throwError
 
 -- | Configuration determined before the consumer
 data ConsumerSettings = ConsumerSettings
@@ -147,7 +144,7 @@ getPartitionCount kafka topicName timeout = do
     tryParse <$> M.getMetadataResponse kafka interrupt
   case parts of
     Just p -> pure p
-    Nothing -> throwConsumer $
+    Nothing -> throwError $
       KafkaException "Topic name not found in metadata request"
 
 metadataPartitions :: TopicName -> M.MetadataResponse -> Maybe Int32
@@ -180,7 +177,7 @@ newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ runConsumer $ 
             , errorCode = 0
             }
       initializeOffsets indices state
-    Nothing -> throwConsumer $ KafkaException
+    Nothing -> throwError $ KafkaException
       "The topic was not present in the assignment set"
 
 -- | rejoin should be called when the client receives a "rebalance in progress"
@@ -203,7 +200,7 @@ rejoin state@(ConsumerState {..}) = do
           , genId = newGenId
           , offsets = newOffsets
           })
-    Nothing -> throwConsumer $ KafkaException
+    Nothing -> throwError $ KafkaException
       "The topic was not present in the assignment set"
 
 partitionsForTopic :: TopicName -> [SyncTopicAssignment] -> Maybe [Int32]
@@ -317,7 +314,7 @@ sync kafka topicName partitionCount member members genId = do
     let assigns = S.partitionAssignments <$> S.memberAssignment sgr
     pure (genId, fromMaybe [] assigns)
   else
-    throwConsumer (KafkaUnexpectedErrorCodeException (S.errorCode sgr))
+    throwError (KafkaUnexpectedErrorCodeException (S.errorCode sgr))
 
 join ::
      Kafka
@@ -338,4 +335,4 @@ join kafka top member@(GroupMember name _) = do
     let assignment = GroupMember name memId
     pure (genId, assignment, J.members jgr)
   else
-    throwConsumer (KafkaUnexpectedErrorCodeException (J.errorCode jgr))
+    throwError (KafkaUnexpectedErrorCodeException (J.errorCode jgr))
