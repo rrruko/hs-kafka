@@ -1,16 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 import Control.Monad.ST
 import Data.Attoparsec.ByteString (parseOnly)
 import Data.ByteString (ByteString)
+import Data.FileEmbed (embedFile)
 import Data.Int
 import Data.Primitive.Unlifted.Array
 import Data.Primitive.ByteArray
 import Gauge
-import System.IO.Unsafe
-
-import qualified Data.ByteString as B
 
 import Kafka.Common
 import Kafka.Fetch.Request
@@ -81,9 +80,7 @@ parseFetch :: ByteString -> Either String FetchResponse
 parseFetch = parseOnly parseFetchResponse
 
 fetchResponseBytes :: ByteString
-{-# NOINLINE fetchResponseBytes #-}
-fetchResponseBytes = unsafePerformIO $
-  B.readFile "test/golden/fetch-response-bytes"
+fetchResponseBytes = $(embedFile "test/golden/fetch-response-bytes")
 
 main :: IO ()
 main = do
