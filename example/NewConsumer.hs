@@ -12,7 +12,6 @@ import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 import Data.Foldable (traverse_)
 import Data.Maybe
-import GHC.Conc
 import Net.IPv4 (ipv4)
 import Socket.Stream.IPv4 (Peer(..))
 import System.IO.Unsafe (unsafePerformIO)
