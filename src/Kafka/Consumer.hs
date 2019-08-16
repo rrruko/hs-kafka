@@ -14,7 +14,6 @@ module Kafka.Consumer
   , merge
   , newConsumer
   , rejoin
-  , runExceptT
   ) where
 
 import Chronos
