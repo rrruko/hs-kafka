@@ -17,6 +17,7 @@ module Kafka.Consumer
   ) where
 
 import Chronos
+import Control.Applicative
 import Control.Concurrent.STM.TVar
 import Control.Monad hiding (join)
 import Control.Monad.Except hiding (join)
@@ -61,10 +62,7 @@ instance MonadIO Consumer where
   liftIO = Consumer . ExceptT . fmap Right
 
 instance Semigroup a => Semigroup (Consumer a) where
-  Consumer x <> Consumer y = Consumer $ do
-    v <- x
-    v' <- y
-    pure (v <> v')
+  (<>) = liftA2 (<>)
 
 instance Monoid a => Monoid (Consumer a) where
   mempty = pure mempty
