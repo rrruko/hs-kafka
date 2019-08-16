@@ -46,13 +46,6 @@ import GHC.Exts
 
 import Kafka.Common (toBE16, toBE32, toBE64)
 
-runKafkaWriter# :: Int# -> KafkaWriter s a -> State# s -> (# State# s, ByteArray# #)
-runKafkaWriter# sz# (K g) = \s0# -> case newByteArray# sz# s0# of
-  (# s1#, marr# #) -> case g marr# 0# s1# of
-    (# s2#, _, _ #) -> case unsafeFreezeByteArray# marr# s2# of
-      (# s3#, b# #) -> (# s3#, b# #)
-{-# inline runKafkaWriter# #-}
-
 newtype KafkaWriter s a = K
   { getK :: ()
       => MutableByteArray# s
@@ -168,7 +161,10 @@ buildBytes src len = Kwb len (writeBytes src len)
 buildArray :: [KafkaWriterBuilder s] -> Int -> KafkaWriterBuilder s
 buildArray src len = build32 (fromIntegral len) <> mconcat src
 
-buildMapArray :: Foldable t => t a -> (a -> KafkaWriterBuilder s) -> KafkaWriterBuilder s
+buildMapArray :: (Foldable t)
+  => t a
+  -> (a -> KafkaWriterBuilder s)
+  -> KafkaWriterBuilder s
 buildMapArray xs f = build32 (fromIntegral $ length xs) <> foldMap f xs
 
 buildString :: ByteArray -> Int -> KafkaWriterBuilder s
@@ -178,6 +174,13 @@ evaluate :: (forall s. KafkaWriterBuilder s) -> ByteArray
 evaluate (Kwb (I# len#) kw) = case runRW# (runKafkaWriter# len# kw) of
   (# _, b# #) -> ByteArray b#
 {-# inline evaluate #-}
+
+runKafkaWriter# :: Int# -> KafkaWriter s a -> State# s -> (# State# s, ByteArray# #)
+runKafkaWriter# sz# (K g) = \s0# -> case newByteArray# sz# s0# of
+  (# s1#, marr# #) -> case g marr# 0# s1# of
+    (# s2#, _, _ #) -> case unsafeFreezeByteArray# marr# s2# of
+      (# s3#, b# #) -> (# s3#, b# #)
+{-# inline runKafkaWriter# #-}
 
 data KafkaWriterBuilder s = Kwb
   !Int -- ^ length
