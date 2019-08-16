@@ -20,19 +20,18 @@ offsetFetchRequest ::
   -> UnliftedArray ByteArray
 offsetFetchRequest (GroupMember gid _) (TopicName topicName) offs =
   let
-    reqSize = evaluate $ foldBuilder [build32 (size32 req)]
+    reqSize = evaluate (build32 (size32 req))
     req =
-      evaluate $ foldBuilder
-        [ build16 offsetFetchApiKey
-        , build16 offsetFetchApiVersion
-        , build32 correlationId
-        , buildString (fromByteString clientId) clientIdLength
-        , buildString gid (sizeofByteArray gid)
-        , build32 1 -- 1 topic
-        , buildString topicName (sizeofByteArray topicName)
-        , build32 (fromIntegral (length offs))
-        , foldMap build32 offs
-        ]
+      evaluate $
+        build16 offsetFetchApiKey
+        <> build16 offsetFetchApiVersion
+        <> build32 correlationId
+        <> buildString (fromByteString clientId) clientIdLength
+        <> buildString gid (sizeofByteArray gid)
+        <> build32 1 -- 1 topic
+        <> buildString topicName (sizeofByteArray topicName)
+        <> build32 (fromIntegral (length offs))
+        <> foldMap build32 offs
   in
     runUnliftedArray $ do
       arr <- newUnliftedArray 2 mempty
