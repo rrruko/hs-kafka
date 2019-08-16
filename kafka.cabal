@@ -218,7 +218,7 @@ test-suite unit
   type:
     exitcode-stdio-1.0
   main-is:
-    UnitTest.hs
+    UnitTests.hs
   hs-source-dirs:
     test
   build-depends:

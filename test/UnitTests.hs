@@ -1,5 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+module Main (main) where
+
 import Data.ByteString (ByteString)
 import Data.Int
 import Data.Primitive.ByteArray
@@ -217,37 +219,35 @@ parseProduce :: ByteArray -> Either String ProduceResponse
 parseProduce ba = AT.parseOnly parseProduceResponse (toByteString ba)
 
 oneMsgProduceResponseBytes :: ByteArray
-oneMsgProduceResponseBytes = evaluate $ foldBuilder
-  [ build32 0
-  , build32 1
-  , buildString (fromByteString "topic-name") 10
-  , build32 1
-  , build32 10
-  , build16 11
-  , build64 12
-  , build64 13
-  , build64 14
-  , build32 1
-  ]
+oneMsgProduceResponseBytes = evaluate $
+  build32 0
+  <> build32 1
+  <> buildString (fromByteString "topic-name") 10
+  <> build32 1
+  <> build32 10
+  <> build16 11
+  <> build64 12
+  <> build64 13
+  <> build64 14
+  <> build32 1
 
 twoMsgProduceResponseBytes :: ByteArray
-twoMsgProduceResponseBytes = evaluate $ foldBuilder
-  [ build32 0
-  , build32 1
-  , buildString (fromByteString "topic-name") 10
-  , build32 2
-  , build32 10
-  , build16 11
-  , build64 12
-  , build64 13
-  , build64 14
-  , build32 20
-  , build16 21
-  , build64 22
-  , build64 23
-  , build64 24
-  , build32 1
-  ]
+twoMsgProduceResponseBytes = evaluate $
+  build32 0
+  <> build32 1
+  <> buildString (fromByteString "topic-name") 10
+  <> build32 2
+  <> build32 10
+  <> build16 11
+  <> build64 12
+  <> build64 13
+  <> build64 14
+  <> build32 20
+  <> build16 21
+  <> build64 22
+  <> build64 23
+  <> build64 24
+  <> build32 1
 
 oneMsgProduceResponse :: ProduceResponse
 oneMsgProduceResponse =
