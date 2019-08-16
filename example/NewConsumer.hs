@@ -47,6 +47,7 @@ main = do
   putStrLn "Press enter to quit"
   _ <- getLine
   atomically $ writeTVar interrupt True
+  waitForChildren
 
 fork :: (String -> IO ()) -> String -> IO ()
 fork f name = do
