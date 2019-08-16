@@ -17,7 +17,6 @@ module Kafka.Consumer
   ) where
 
 import Chronos
-import Control.Applicative
 import Control.Concurrent.STM.TVar
 import Control.Monad hiding (join)
 import Control.Monad.Except hiding (join)
@@ -63,12 +62,6 @@ tryParse = \case
 
 instance MonadIO Consumer where
   liftIO = Consumer . liftIO
-
-instance Semigroup a => Semigroup (Consumer a) where
-  (<>) = liftA2 (<>)
-
-instance Monoid a => Monoid (Consumer a) where
-  mempty = pure mempty
 
 liftConsumer :: IO (Either KafkaException a) -> Consumer a
 liftConsumer = Consumer . lift . ExceptT
