@@ -14,6 +14,7 @@ module Kafka.Consumer
   , merge
   , newConsumer
   , rejoin
+  , sendHeartbeat
   ) where
 
 import Chronos
@@ -36,6 +37,7 @@ import Kafka.Common
 import Kafka.Fetch.Response
 import Kafka.JoinGroup.Response (Member, getJoinGroupResponse)
 import Kafka.LeaveGroup.Response
+import Kafka.Heartbeat.Response (getHeartbeatResponse)
 import Kafka.ListOffsets.Response (ListOffsetsResponse)
 import Kafka.SyncGroup.Response (SyncTopicAssignment)
 
@@ -214,6 +216,13 @@ partitionsForTopic :: TopicName -> [SyncTopicAssignment] -> Maybe [Int32]
 partitionsForTopic (TopicName n) assigns =
   S.syncAssignedPartitions
   <$> find (\a -> S.syncAssignedTopic a == toByteString n) assigns
+
+sendHeartbeat :: Consumer ()
+sendHeartbeat = do
+  ConsumerState {..} <- get
+  liftConsumer $ heartbeat kafka member genId
+  timeout <- liftIO $ registerDelay (defaultTimeout settings)
+  void $ liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout
 
 leave :: Consumer ()
 leave = do
