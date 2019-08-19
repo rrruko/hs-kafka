@@ -13,6 +13,7 @@ import Control.Monad.IO.Class
 import Control.Monad.State
 import Data.ByteString (ByteString)
 import Data.Foldable (traverse_)
+import Data.IORef
 import Data.Maybe
 import Net.IPv4 (ipv4)
 import Socket.Stream.IPv4 (Peer(..))
@@ -71,16 +72,17 @@ consumer interrupt name = do
             , maxFetchBytes = 30000
             , groupFetchStart = Earliest
             , defaultTimeout = 5000000
+            , autoCommit = AutoCommit
             }
       newConsumer k diamondSettings >>= \case
         Left err -> putStrLn ("Failed to create consumer: " <> show err)
         Right c -> do
-          t <- atomically (newTVar epoch)
+          t <- newIORef epoch
           evalConsumer c (loop interrupt t) >>= \case
             Right ((), _) -> putStrLn "Finished with no errors."
             Left err -> putStrLn ("Consumer died with: " <> show err)
 
-loop :: TVar Bool -> TVar Time -> Consumer ()
+loop :: TVar Bool -> IORef Time -> Consumer ()
 loop interrupt timeSinceHeartbeat = do
   o <- gets offsets
   if (null o)
@@ -89,15 +91,13 @@ loop interrupt timeSinceHeartbeat = do
       leave
     else do
       resp <- getRecordSet 1000000
-      liftIO do
-        putStrLn "got some messages"
+      liftIO $ traverse_ B.putStrLn (fetchResponseContents resp)
       currentTime <- liftIO now
-      timeSince <- liftIO $ readTVarIO timeSinceHeartbeat
+      timeSince <- liftIO $ readIORef timeSinceHeartbeat
       when (currentTime >= add (scale 3 second) timeSince) do
-        liftIO $ atomically $ writeTVar timeSinceHeartbeat currentTime
+        liftIO $ writeIORef timeSinceHeartbeat currentTime
         liftIO $ putStrLn "[Heartbeat]"
         void sendHeartbeat
-      commitOffsets
       i <- liftIO (readTVarIO interrupt)
       if i
         then leave

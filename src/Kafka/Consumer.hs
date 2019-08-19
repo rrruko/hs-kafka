@@ -4,7 +4,8 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Kafka.Consumer
-  ( Consumer(..)
+  ( AutoCommit(..)
+  , Consumer(..)
   , ConsumerSettings(..)
   , ConsumerState(..)
   , commitOffsets
@@ -79,7 +80,11 @@ data ConsumerSettings = ConsumerSettings
   , csTopicName :: !TopicName -- ^ Topic to fetch on
   , groupName :: !ByteArray -- ^ Name of the group
   , defaultTimeout :: !Int
+  , autoCommit :: !AutoCommit
   } deriving (Show)
+
+data AutoCommit = AutoCommit | NoAutoCommit
+  deriving (Eq, Show)
 
 -- | Consumer information that varies while the consumer is running
 data ConsumerState = ConsumerState
@@ -235,6 +240,7 @@ getRecordSet fetchWaitTime = do
   interrupt <- liftIO $ registerDelay defaultTimeout
   fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
   modify (\s -> s { offsets = updateOffsets csTopicName offsets fetchResp })
+  when (autoCommit == AutoCommit) commitOffsets
   pure fetchResp
 
 latestOffsets :: [Int32] -> Consumer (IntMap Int64)
