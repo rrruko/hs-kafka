@@ -5,6 +5,7 @@
 
 module Main where
 
+import Chronos
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
@@ -16,6 +17,7 @@ import Data.Maybe
 import Net.IPv4 (ipv4)
 import Socket.Stream.IPv4 (Peer(..))
 import System.IO.Unsafe (unsafePerformIO)
+import Torsor
 
 import qualified Data.ByteString.Char8 as B
 
@@ -72,13 +74,14 @@ consumer interrupt name = do
             }
       newConsumer k diamondSettings >>= \case
         Left err -> putStrLn ("Failed to create consumer: " <> show err)
-        Right c -> 
-          evalConsumer c (loop interrupt) >>= \case
+        Right c -> do
+          t <- atomically (newTVar epoch)
+          evalConsumer c (loop interrupt t) >>= \case
             Right ((), _) -> putStrLn "Finished with no errors."
             Left err -> putStrLn ("Consumer died with: " <> show err)
 
-loop :: TVar Bool -> Consumer ()
-loop interrupt = do
+loop :: TVar Bool -> TVar Time -> Consumer ()
+loop interrupt timeSinceHeartbeat = do
   o <- gets offsets
   if (null o)
     then do
@@ -87,13 +90,18 @@ loop interrupt = do
     else do
       resp <- getRecordSet 1000000
       liftIO do
-        print resp
-        traverse_ B.putStrLn (fetchResponseContents resp)
+        putStrLn "got some messages"
+      currentTime <- liftIO now
+      timeSince <- liftIO $ readTVarIO timeSinceHeartbeat
+      when (currentTime >= add (scale 3 second) timeSince) do
+        liftIO $ atomically $ writeTVar timeSinceHeartbeat currentTime
+        liftIO $ putStrLn "[Heartbeat]"
+        void sendHeartbeat
       commitOffsets
       i <- liftIO (readTVarIO interrupt)
       if i
         then leave
-        else loop interrupt
+        else loop interrupt timeSinceHeartbeat
 
 fetchResponseContents :: FetchResponse -> [ByteString]
 fetchResponseContents fetchResponse =
