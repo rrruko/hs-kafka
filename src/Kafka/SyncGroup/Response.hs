@@ -28,8 +28,8 @@ data SyncMemberAssignment = SyncMemberAssignment
   } deriving (Eq, Show)
 
 data SyncTopicAssignment = SyncTopicAssignment
-  { syncAssignedTopic :: ByteString
-  , syncAssignedPartitions :: [Int32]
+  { topic :: ByteString
+  , partitions :: [Int32]
   } deriving (Eq, Show)
 
 parseTopicPartitions :: Parser SyncTopicAssignment

@@ -101,6 +101,6 @@ fetchResponseContents fetchResponse =
   . concatMap F.records
   . concat
   . mapMaybe F.recordSet
-  . concatMap F.partitionResponses
-  . F.responses
+  . concatMap F.partitions
+  . F.topics
   $ fetchResponse

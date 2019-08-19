@@ -22,16 +22,16 @@ data OffsetFetchResponse = OffsetFetchResponse
   } deriving (Eq, Show)
 
 data OffsetFetchTopic = OffsetFetchTopic
-  { offsetFetchTopic :: ByteString
-  , offsetFetchPartitions :: [OffsetFetchPartition]
+  { topic :: ByteString
+  , partitions :: [OffsetFetchPartition]
   } deriving (Eq, Show)
 
 data OffsetFetchPartition = OffsetFetchPartition
-  { offsetFetchPartitionIndex :: Int32
-  , offsetFetchOffset :: Int64
-  , offsetFetchLeaderEpoch :: Int32
-  , offsetFetchMetadata :: Maybe ByteString
-  , offsetFetchErrorCode :: Int16
+  { partitionIndex :: Int32
+  , offset :: Int64
+  , leaderEpoch :: Int32
+  , metadata :: Maybe ByteString
+  , partitionErrorCode :: Int16
   } deriving (Eq, Show)
 
 parseOffsetFetchResponse :: Parser OffsetFetchResponse

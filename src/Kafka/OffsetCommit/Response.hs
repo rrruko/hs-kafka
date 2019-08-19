@@ -17,17 +17,17 @@ import Kafka.Response
 
 data OffsetCommitResponse = OffsetCommitResponse
   { throttleTimeMs :: Int32
-  , offsetCommitTopics :: [OffsetCommitTopic]
+  , topics :: [OffsetCommitTopic]
   } deriving (Eq, Show)
 
 data OffsetCommitTopic = OffsetCommitTopic
-  { offsetCommitTopicName :: ByteString
-  , offsetCommitPartitions :: [OffsetCommitPartition]
+  { topic :: ByteString
+  , partitions :: [OffsetCommitPartition]
   } deriving (Eq, Show)
 
 data OffsetCommitPartition = OffsetCommitPartition
-  { offsetCommitPartitionIndex :: Int32
-  , offsetCommitErrorCode :: Int16
+  { partitionIndex :: Int32
+  , errorCode :: Int16
   } deriving (Eq, Show)
 
 parseOffsetCommitResponse :: Parser OffsetCommitResponse

@@ -4,10 +4,10 @@
 
 module Kafka.Fetch.Response
   ( FetchResponse(..)
-  , FetchResponseMessage(..)
+  , FetchTopic(..)
   , Header(..)
   , PartitionHeader(..)
-  , PartitionResponse(..)
+  , FetchPartition(..)
   , Record(..)
   , RecordBatch(..)
   , getFetchResponse
@@ -30,15 +30,15 @@ data FetchResponse = FetchResponse
   { throttleTimeMs :: Int32
   , errorCode :: Int16
   , sessionId :: Int32
-  , responses :: [FetchResponseMessage]
+  , topics :: [FetchTopic]
   } deriving (Eq, Show)
 
-data FetchResponseMessage = FetchResponseMessage
-  { fetchResponseTopic :: ByteString
-  , partitionResponses :: [PartitionResponse]
+data FetchTopic = FetchTopic
+  { topic :: ByteString
+  , partitions :: [FetchPartition]
   } deriving (Eq, Show)
 
-data PartitionResponse = PartitionResponse
+data FetchPartition = FetchPartition
   { partitionHeader :: PartitionHeader
   , recordSet :: Maybe [RecordBatch]
   } deriving (Eq, Show)
@@ -95,16 +95,16 @@ parseFetchResponse = do
     <$> int32
     <*> int16
     <*> int32
-    <*> nullableArray parseFetchResponseMessage
+    <*> nullableArray parseFetchTopic
 
-parseFetchResponseMessage :: Parser FetchResponseMessage
-parseFetchResponseMessage = do
+parseFetchTopic :: Parser FetchTopic
+parseFetchTopic = do
   topicName <- byteString <?> "topic name"
-  rs <- nullableArray parsePartitionResponse
-  pure (FetchResponseMessage topicName rs)
+  rs <- nullableArray parseFetchPartition
+  pure (FetchTopic topicName rs)
 
-parsePartitionResponse :: Parser PartitionResponse
-parsePartitionResponse = PartitionResponse
+parseFetchPartition :: Parser FetchPartition
+parseFetchPartition = FetchPartition
   <$> (parsePartitionHeader <?> "partition header")
   <*> (nullableSequence parseRecordBatch <?> "record batch")
 
@@ -167,20 +167,20 @@ getFetchResponse ::
   -> IO (Either KafkaException (Either String FetchResponse))
 getFetchResponse = fromKafkaResponse parseFetchResponse
 
-lookupTopic :: [FetchResponseMessage] -> ByteString -> Maybe FetchResponseMessage
+lookupTopic :: [FetchTopic] -> ByteString -> Maybe FetchTopic
 lookupTopic responses topicName = find
-  (\resp -> topicName == fetchResponseTopic resp)
+  (\resp -> topicName == topic resp)
   responses
 
-lookupPartition :: [PartitionResponse] -> Int32 -> Maybe PartitionResponse
+lookupPartition :: [FetchPartition] -> Int32 -> Maybe FetchPartition
 lookupPartition responses pid = find
   (\resp -> pid == partition (partitionHeader resp))
   responses
 
 partitionLastSeenOffset :: FetchResponse -> ByteString -> Int32 -> Maybe Int64
 partitionLastSeenOffset fetchResponse topicName partitionId = do
-  topic <- lookupTopic (responses fetchResponse) topicName
-  partition <- lookupPartition (partitionResponses topic) partitionId
+  topic <- lookupTopic (topics fetchResponse) topicName
+  partition <- lookupPartition (partitions topic) partitionId
   set <- recordSet partition
   maxMaybe (map recordBatchLastOffset set)
   where

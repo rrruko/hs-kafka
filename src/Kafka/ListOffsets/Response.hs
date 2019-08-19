@@ -2,8 +2,8 @@
 
 module Kafka.ListOffsets.Response
   ( ListOffsetsResponse(..)
-  , ListOffsetsResponseMessage(..)
-  , PartitionResponse(..)
+  , ListOffsetsTopic(..)
+  , ListOffsetPartition(..)
   , getListOffsetsResponse
   ) where
 
@@ -18,15 +18,15 @@ import Kafka.Response
 
 data ListOffsetsResponse = ListOffsetsResponse
   { throttleTimeMs :: Int32
-  , responses :: [ListOffsetsResponseMessage]
+  , topics :: [ListOffsetsTopic]
   } deriving (Eq, Show)
 
-data ListOffsetsResponseMessage = ListOffsetsResponseMessage
+data ListOffsetsTopic = ListOffsetsTopic
   { topic :: ByteString
-  , partitionResponses :: [PartitionResponse]
+  , partitions :: [ListOffsetPartition]
   } deriving (Eq, Show)
 
-data PartitionResponse = PartitionResponse
+data ListOffsetPartition = ListOffsetPartition
   { partition :: Int32
   , errorCode :: Int16
   , timestamp :: Int64
@@ -39,17 +39,17 @@ parseListOffsetsResponse = do
   _correlationId <- int32 <?> "correlation id"
   ListOffsetsResponse
     <$> int32
-    <*> array parseListOffsetsResponseMessage
+    <*> array parseListOffsetsTopic
 
-parseListOffsetsResponseMessage :: Parser ListOffsetsResponseMessage
-parseListOffsetsResponseMessage =
-  ListOffsetsResponseMessage
+parseListOffsetsTopic :: Parser ListOffsetsTopic
+parseListOffsetsTopic =
+  ListOffsetsTopic
     <$> byteString
-    <*> array parsePartitionResponse
+    <*> array parseListOffsetPartition
 
-parsePartitionResponse :: Parser PartitionResponse
-parsePartitionResponse =
-  PartitionResponse
+parseListOffsetPartition :: Parser ListOffsetPartition
+parseListOffsetPartition =
+  ListOffsetPartition
     <$> int32
     <*> int16
     <*> int64

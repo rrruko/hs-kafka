@@ -17,35 +17,35 @@ import Kafka.Common
 import Kafka.Response
 
 data MetadataResponse = MetadataResponse
-  { metadataThrottle :: Int32
-  , metadataBrokers :: [MetadataBroker]
-  , metadataClusterId :: Maybe ByteString
-  , metadataControllerId :: Int32
-  , metadataTopics :: [MetadataTopic]
+  { throttleTimeMs :: Int32
+  , brokers :: [MetadataBroker]
+  , clusterId :: Maybe ByteString
+  , controllerId :: Int32
+  , topics :: [MetadataTopic]
   } deriving (Eq, Show)
 
 data MetadataBroker = MetadataBroker
-  { metadataNodeId :: Int32
-  , metadataHost :: ByteString
-  , metadataPort :: Int32
-  , metadataRack :: Maybe ByteString
+  { nodeId :: Int32
+  , host :: ByteString
+  , port :: Int32
+  , rack :: Maybe ByteString
   } deriving (Eq, Show)
 
 data MetadataTopic = MetadataTopic
-  { mtErrorCode :: Int16
-  , mtName :: ByteString
-  , mtIsInternal :: Bool
-  , mtPartitions :: [MetadataPartition]
+  { errorCode :: Int16
+  , name :: ByteString
+  , isInternal :: Bool
+  , partitions :: [MetadataPartition]
   } deriving (Eq, Show)
 
 data MetadataPartition = MetadataPartition
-  { mpErrorCode :: Int16
-  , mpPartitionIndex :: Int32
-  , mpLeaderId :: Int32
-  , mpLeaderEpoch :: Int32
-  , mpReplicaNodes :: Int32
-  , mpIsrNodes :: Int32
-  , mpOfflineReplicas :: Int32
+  { partitionErrorCode :: Int16
+  , partitionIndex :: Int32
+  , leaderId :: Int32
+  , leaderEpoch :: Int32
+  , replicaNodes :: Int32
+  , isrNodes :: Int32
+  , offlineReplicas :: Int32
   } deriving (Eq, Show)
 
 parseMetadataResponse :: Parser MetadataResponse

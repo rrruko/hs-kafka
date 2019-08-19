@@ -13,8 +13,8 @@ import Kafka.Common
 import Kafka.Response
 
 data HeartbeatResponse = HeartbeatResponse
-  { heartbeatThrottle :: Int32
-  , heartbeatErrorCode :: Int16
+  { throttleTimeMs :: Int32
+  , errorCode :: Int16
   } deriving (Eq, Show)
 
 parseHeartbeatResponse :: Parser HeartbeatResponse

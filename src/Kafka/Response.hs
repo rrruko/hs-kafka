@@ -1,7 +1,8 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Kafka.Response
-  ( fromKafkaResponse
+  ( ErrorCode(..)
+  , fromKafkaResponse
   , getKafkaResponse
   , getResponseSizeHeader
   ) where
@@ -10,6 +11,7 @@ import Data.Attoparsec.ByteString (Parser, parseOnly)
 import Data.Bifunctor
 import Data.ByteString
 import Data.Bytes.Types
+import Data.Int
 import Data.Primitive.ByteArray
 import Data.Word
 import GHC.Conc
@@ -58,3 +60,6 @@ fromKafkaResponse parser kafka interrupt =
   (fmap . fmap)
     (parseOnly parser)
     (getKafkaResponse kafka interrupt)
+
+class ErrorCode a where
+  errorCode :: a -> Int16

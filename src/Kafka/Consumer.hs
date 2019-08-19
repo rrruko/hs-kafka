@@ -127,7 +127,7 @@ toOffsetList = map (\(k, v) -> PartitionOffset (fromIntegral k) v) . IM.toList
 listOffsetsMap :: ListOffsetsResponse -> IntMap Int64
 listOffsetsMap lor = IM.fromList $ map
   (\pr -> (fromIntegral (L.partition pr), L.offset pr))
-  (concatMap L.partitionResponses $ L.responses lor)
+  (concatMap L.partitions $ L.topics lor)
 
 updateOffsets :: TopicName -> IntMap Int64 -> FetchResponse -> IntMap Int64
 updateOffsets topicName current r =
@@ -151,9 +151,9 @@ getPartitionCount kafka topicName timeout = do
 
 metadataPartitions :: TopicName -> M.MetadataResponse -> Maybe Int32
 metadataPartitions topicName mdr =
-  let tops = M.metadataTopics mdr
-  in  case find ((== topicName) . coerce . fromByteString . M.mtName) tops of
-        Just top -> Just (fromIntegral $ length (M.mtPartitions top))
+  let tops = M.topics mdr
+  in  case find ((== topicName) . coerce . fromByteString . M.name) tops of
+        Just top -> Just (fromIntegral $ length (M.partitions top))
         Nothing -> Nothing
 
 newConsumer ::
@@ -207,8 +207,7 @@ rejoin = do
 
 partitionsForTopic :: TopicName -> [SyncTopicAssignment] -> Maybe [Int32]
 partitionsForTopic (TopicName n) assigns =
-  S.syncAssignedPartitions
-  <$> find (\a -> S.syncAssignedTopic a == toByteString n) assigns
+  S.partitions <$> find (\a -> S.topic a == toByteString n) assigns
 
 sendHeartbeat :: Consumer ()
 sendHeartbeat = do
@@ -216,7 +215,7 @@ sendHeartbeat = do
   liftConsumer $ heartbeat kafka member genId
   timeout <- liftIO $ registerDelay (defaultTimeout settings)
   resp <- liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout
-  when (H.heartbeatErrorCode resp == errorRebalanceInProgress) rejoin
+  when (H.errorCode resp == errorRebalanceInProgress) rejoin
 
 leave :: Consumer ()
 leave = do
@@ -249,10 +248,8 @@ latestOffsets indices = do
 
 offsetFetchOffsets :: O.OffsetFetchResponse -> IntMap Int64
 offsetFetchOffsets ofr = IM.fromList $ fmap
-  (\part ->
-    (fromIntegral $ O.offsetFetchPartitionIndex part
-      , O.offsetFetchOffset part))
-    (concatMap O.offsetFetchPartitions $ O.topics ofr)
+  (\part -> (fromIntegral $ O.partitionIndex part, O.offset part))
+  (concatMap O.partitions $ O.topics ofr)
 
 commitOffsets :: Consumer ()
 commitOffsets = do
