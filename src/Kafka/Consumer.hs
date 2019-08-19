@@ -234,7 +234,6 @@ getRecordSet fetchWaitTime = do
   liftConsumer $ fetch kafka csTopicName fetchWaitTime offsetList maxFetchBytes
   interrupt <- liftIO $ registerDelay defaultTimeout
   fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
-  when (F.errorCode fetchResp == errorRebalanceInProgress) rejoin
   modify (\s -> s { offsets = updateOffsets csTopicName offsets fetchResp })
   pure fetchResp
 
