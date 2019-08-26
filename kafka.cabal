@@ -50,6 +50,7 @@ library
     Kafka.Writer
   ghc-options:
     -Wall
+    -Werror
     -O2
   -- other-modules:
   build-depends:

@@ -29,14 +29,12 @@ import Control.Monad.Except hiding (join)
 import Control.Monad.Reader hiding (join)
 import Control.Monad.State hiding (join)
 import Data.Coerce
-import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Primitive.ByteArray
 import Data.Int
 import Data.IntMap (IntMap)
 import Data.Maybe
 
-import qualified Data.ByteString.Char8 as B
 import qualified Data.IntMap as IM
 
 import Kafka
