@@ -88,7 +88,6 @@ instance MonadState ConsumerState Consumer where
     pure currVal
   put s = Consumer $ do
     v <- ask
-    --liftIO (putStrLn ("writing to tvar: " <> show s))
     liftIO (atomically (writeTVar v s))
 
 liftConsumer :: IO (Either KafkaException a) -> Consumer a
@@ -101,7 +100,7 @@ evalConsumer ::
 evalConsumer v consumer = do
   (runExceptT . flip runReaderT v . runConsumer) consumer
 
--- | Configuration determined before the consumer
+-- | Configuration determined before the consumer starts
 data ConsumerSettings = ConsumerSettings
   { groupFetchStart :: !KafkaTimestamp -- ^ Where to start if the group is new
   , maxFetchBytes :: !Int32 -- ^ Maximum number of bytes to allow per response
@@ -295,7 +294,7 @@ leave = do
 getRecordSet :: Int -> Consumer FetchResponse
 getRecordSet fetchWaitTime = do
   gets sock >>= \so -> withSocket so $ do
-    cs@ConsumerState {..} <- get
+    ConsumerState {..} <- get
     let offsetList = toOffsetList offsets
         ConsumerSettings {..} = settings
     liftConsumer $ fetch kafka csTopicName fetchWaitTime offsetList maxFetchBytes
@@ -303,6 +302,7 @@ getRecordSet fetchWaitTime = do
     fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
     let newOffsets = updateOffsets csTopicName offsets fetchResp
     modify (\s -> s { offsets = newOffsets })
+    cs <- get
     when (autoCommit == AutoCommit) (commitOffsets' cs)
     pure fetchResp
 
