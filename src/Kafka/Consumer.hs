@@ -2,6 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -28,12 +29,14 @@ import Control.Monad.Except hiding (join)
 import Control.Monad.Reader hiding (join)
 import Control.Monad.State hiding (join)
 import Data.Coerce
+import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Primitive.ByteArray
 import Data.Int
 import Data.IntMap (IntMap)
 import Data.Maybe
 
+import qualified Data.ByteString.Char8 as B
 import qualified Data.IntMap as IM
 
 import Kafka
@@ -85,6 +88,7 @@ instance MonadState ConsumerState Consumer where
     pure currVal
   put s = Consumer $ do
     v <- ask
+    --liftIO (putStrLn ("writing to tvar: " <> show s))
     liftIO (atomically (writeTVar v s))
 
 liftConsumer :: IO (Either KafkaException a) -> Consumer a
@@ -229,7 +233,7 @@ newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ do
             , quit = False
             }
       v <- liftIO (newTVarIO initialState)
-      void . liftIO . forkIO . void $ evalConsumer v heartbeats
+      void . liftIO . forkIO $ void $ evalConsumer v heartbeats
       flip runReaderT v (runConsumer (initializeOffsets indices))
       pure v
     Nothing -> throwError $ KafkaException
@@ -250,20 +254,29 @@ heartbeats = do
 -- id, and set of assigned topics.
 rejoin :: Consumer ()
 rejoin = do
-  ConsumerState {..} <- get
+  ConsumerState {kafka, member, partitionCount, settings} <- get
   let topicName = csTopicName settings
   (genId', newMember, members') <- Consumer $ lift $ join kafka topicName member
   (newGenId, assigns) <- Consumer $ lift $ sync kafka topicName partitionCount newMember members' genId'
   case partitionsForTopic topicName assigns of
     Just indices -> do
       newOffsets <- latestOffsets indices
-      modify $ \s -> s
-        { member = newMember
-        , genId = newGenId
-        , offsets = newOffsets
-        }
+      v <- ask
+      liftIO $ atomically $ do
+        currentState <- readTVar v 
+        writeTVar v $ 
+          currentState
+            { member = newMember
+            , genId = newGenId
+            , offsets = newOffsets
+            }
     Nothing -> throwError $ KafkaException
       "The topic was not present in the assignment set"
+
+oof :: (ConsumerState -> ConsumerState) -> Consumer ()
+oof f = do
+  v <- ask
+  liftIO (atomically (modifyTVar v f))
 
 partitionsForTopic :: TopicName -> [SyncTopicAssignment] -> Maybe [Int32]
 partitionsForTopic (TopicName n) assigns =
@@ -271,12 +284,18 @@ partitionsForTopic (TopicName n) assigns =
 
 sendHeartbeat :: Consumer ()
 sendHeartbeat = do
-  ConsumerState {..} <- get
+  ConsumerState {sock, member, genId, kafka, settings} <- get
   withSocket sock $ do
     liftConsumer $ heartbeat kafka member genId
     timeout <- liftIO $ registerDelay (defaultTimeout settings)
     resp <- liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout
-    when (H.errorCode resp == errorRebalanceInProgress) rejoin
+    when (H.errorCode resp == errorRebalanceInProgress) $ do
+      rejoin
+      v <- ask
+      newOffs <- offsets <$> liftIO (readTVarIO v)
+      liftIO $ putStrLn $
+        "Rejoined as part of a heartbeat, new offsets are "
+        <> show newOffs
 
 leave :: Consumer ()
 leave = do
@@ -289,8 +308,8 @@ leave = do
 
 getRecordSet :: Int -> Consumer FetchResponse
 getRecordSet fetchWaitTime = do
-  cs@ConsumerState {..} <- get
-  withSocket sock $ do
+  gets sock >>= \so -> withSocket so $ do
+    cs@ConsumerState {..} <- get
     let offsetList = toOffsetList offsets
         ConsumerSettings {..} = settings
     liftConsumer $ fetch kafka csTopicName fetchWaitTime offsetList maxFetchBytes
@@ -382,6 +401,7 @@ sync kafka topicName partitionCount member members genId = do
   ExceptT $ syncGroup kafka member genId assignments
   wait <- liftIO (registerDelay joinTimeout)
   sgr <- ExceptT $ tryParse <$> S.getSyncGroupResponse kafka wait
+  --liftIO (print sgr)
   if S.errorCode sgr `elem` expectedSyncErrors then do
     (newGenId, newMember, newMembers) <- join kafka topicName member
     sync kafka topicName partitionCount newMember newMembers newGenId

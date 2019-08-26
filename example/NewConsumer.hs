@@ -12,6 +12,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.State
 import Data.ByteString (ByteString)
+import Data.Coerce
 import Data.Foldable (traverse_)
 import Data.Maybe
 import Net.IPv4 (ipv4)
@@ -46,6 +47,8 @@ main = do
   fork (consumer interrupt)
   fork (consumer interrupt)
   fork (consumer interrupt)
+  threadDelay 15000000
+  fork (consumer interrupt)
   putStrLn "Press enter to quit"
   _ <- getLine
   atomically $ writeTVar interrupt True
@@ -60,7 +63,7 @@ fork f = do
 
 consumer :: TVar Bool -> IO ()
 consumer interrupt = do
-  kaf <- newKafka (Peer (ipv4 10 10 10 234) 9092)
+  kaf <- newKafka (Peer (ipv4 0 0 0 0) 9092)
   case kaf of
     Left e -> putStrLn ("failed to connect (" <> show e <> ")")
     Right k -> do
@@ -88,7 +91,13 @@ loop interrupt = do
       leave
     else do
       resp <- getRecordSet 1000000
-      liftIO $ traverse_ B.putStrLn (fetchResponseContents resp)
+      o' <- gets offsets
+      GroupMember _ m <- gets member
+      liftIO $ B.putStrLn $
+        "Got: "
+        <> B.intercalate ", " (fetchResponseContents resp)
+        <> "(" <> B.pack (show o') <> ") "
+        <> "(" <> maybe "NULL" toByteString (coerce m) <> ")"
       i <- liftIO (readTVarIO interrupt)
       if i
         then leave
