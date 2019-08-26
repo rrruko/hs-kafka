@@ -161,11 +161,12 @@ initializeOffsets :: [Int32] -> Consumer ()
 initializeOffsets assignedPartitions = do
   ConsumerState {..} <- get
   let ConsumerSettings {..} = settings
-  initialOffs <- getListedOffsets assignedPartitions
-  latestOffs <- latestOffsets assignedPartitions
-  let validOffs = merge initialOffs latestOffs
-  modify (\s -> s { offsets = validOffs })
-  commitOffsets
+  withSocket sock $ do
+    initialOffs <- getListedOffsets assignedPartitions
+    latestOffs <- latestOffsets assignedPartitions
+    let validOffs = merge initialOffs latestOffs
+    modify (\s -> s { offsets = validOffs })
+    get >>= commitOffsets'
 
 merge :: IntMap Int64 -> IntMap Int64 -> IntMap Int64
 merge lor ofr = mergeId (\l o -> Just $ if o < 0 then l else o) lor ofr
