@@ -261,22 +261,13 @@ rejoin = do
   case partitionsForTopic topicName assigns of
     Just indices -> do
       newOffsets <- latestOffsets indices
-      v <- ask
-      liftIO $ atomically $ do
-        currentState <- readTVar v 
-        writeTVar v $ 
-          currentState
-            { member = newMember
-            , genId = newGenId
-            , offsets = newOffsets
-            }
+      modify' $ \s -> s
+        { member = newMember
+        , genId = newGenId
+        , offsets = newOffsets
+        }
     Nothing -> throwError $ KafkaException
       "The topic was not present in the assignment set"
-
-oof :: (ConsumerState -> ConsumerState) -> Consumer ()
-oof f = do
-  v <- ask
-  liftIO (atomically (modifyTVar v f))
 
 partitionsForTopic :: TopicName -> [SyncTopicAssignment] -> Maybe [Int32]
 partitionsForTopic (TopicName n) assigns =
@@ -289,13 +280,7 @@ sendHeartbeat = do
     liftConsumer $ heartbeat kafka member genId
     timeout <- liftIO $ registerDelay (defaultTimeout settings)
     resp <- liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout
-    when (H.errorCode resp == errorRebalanceInProgress) $ do
-      rejoin
-      v <- ask
-      newOffs <- offsets <$> liftIO (readTVarIO v)
-      liftIO $ putStrLn $
-        "Rejoined as part of a heartbeat, new offsets are "
-        <> show newOffs
+    when (H.errorCode resp == errorRebalanceInProgress) rejoin
 
 leave :: Consumer ()
 leave = do
@@ -315,7 +300,8 @@ getRecordSet fetchWaitTime = do
     liftConsumer $ fetch kafka csTopicName fetchWaitTime offsetList maxFetchBytes
     interrupt <- liftIO $ registerDelay defaultTimeout
     fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
-    modify (\s -> s { offsets = updateOffsets csTopicName offsets fetchResp })
+    let newOffsets = updateOffsets csTopicName offsets fetchResp
+    modify (\s -> s { offsets = newOffsets })
     when (autoCommit == AutoCommit) (commitOffsets' cs)
     pure fetchResp
 
@@ -401,7 +387,6 @@ sync kafka topicName partitionCount member members genId = do
   ExceptT $ syncGroup kafka member genId assignments
   wait <- liftIO (registerDelay joinTimeout)
   sgr <- ExceptT $ tryParse <$> S.getSyncGroupResponse kafka wait
-  --liftIO (print sgr)
   if S.errorCode sgr `elem` expectedSyncErrors then do
     (newGenId, newMember, newMembers) <- join kafka topicName member
     sync kafka topicName partitionCount newMember newMembers newGenId
