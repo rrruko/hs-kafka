@@ -10,10 +10,8 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.State
 import Data.ByteString (ByteString)
 import Data.Coerce
-import Data.Foldable (traverse_)
 import Data.Maybe
 import Net.IPv4 (ipv4)
 import Socket.Stream.IPv4 (Peer(..))
@@ -84,15 +82,15 @@ consumer interrupt = do
 
 loop :: TVar Bool -> Consumer ()
 loop interrupt = do
-  o <- gets offsets
+  o <- getsv offsets
   if (null o)
     then do
       liftIO (putStrLn "No offsets assigned; quitting")
       leave
     else do
       resp <- getRecordSet 1000000
-      o' <- gets offsets
-      GroupMember _ m <- gets member
+      o' <- getsv offsets
+      GroupMember _ m <- getsv member
       liftIO $ B.putStrLn $
         "Got: "
         <> B.intercalate ", " (fetchResponseContents resp)

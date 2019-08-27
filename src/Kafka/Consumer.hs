@@ -18,6 +18,7 @@ module Kafka.Consumer
   , leave
   , merge
   , newConsumer
+  , getsv
   ) where
 
 import Chronos
@@ -27,7 +28,6 @@ import Control.Concurrent.STM
 import Control.Monad hiding (join)
 import Control.Monad.Except hiding (join)
 import Control.Monad.Reader hiding (join)
-import Control.Monad.State hiding (join)
 import Data.Coerce
 import Data.Foldable
 import Data.Primitive.ByteArray
@@ -85,12 +85,13 @@ getv = Consumer $ do
   currVal <- liftIO (readTVarIO v)
   pure currVal
 
+getsv :: (ConsumerState -> a) -> Consumer a
+getsv f = fmap f getv
+
 modifyv :: (ConsumerState -> ConsumerState) -> Consumer ()
 modifyv f = Consumer $ do
   v <- ask
-  liftIO $ atomically $ do
-    currVal <- readTVar v
-    writeTVar v (f currVal)
+  liftIO $ atomically $ modifyTVar' v f
 
 liftConsumer :: IO (Either KafkaException a) -> Consumer a
 liftConsumer = Consumer . lift . ExceptT
@@ -167,7 +168,7 @@ initializeOffsets assignedPartitions = do
     latestOffs <- latestOffsets assignedPartitions
     let validOffs = merge initialOffs latestOffs
     modifyv (\s -> s { offsets = validOffs })
-    get >>= commitOffsets'
+    getv >>= commitOffsets'
 
 merge :: IntMap Int64 -> IntMap Int64 -> IntMap Int64
 merge lor ofr = mergeId (\l o -> Just $ if o < 0 then l else o) lor ofr
@@ -243,7 +244,7 @@ newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ do
 
 heartbeats :: Consumer ()
 heartbeats = do
-  gets quit >>= \case
+  getsv quit >>= \case
     True -> pure ()
     False -> do
       liftIO (threadDelay 3000000)
@@ -295,7 +296,7 @@ leave = do
 
 getRecordSet :: Int -> Consumer FetchResponse
 getRecordSet fetchWaitTime = do
-  gets sock >>= \so -> withSocket so $ do
+  getsv sock >>= \so -> withSocket so $ do
     ConsumerState {..} <- getv
     let offsetList = toOffsetList offsets
         ConsumerSettings {..} = settings
