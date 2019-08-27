@@ -79,14 +79,18 @@ tryParse = \case
 instance MonadIO Consumer where
   liftIO = Consumer . liftIO
 
-instance MonadState ConsumerState Consumer where
-  get = Consumer $ do
-    v <- ask
-    currVal <- liftIO (readTVarIO v)
-    pure currVal
-  put s = Consumer $ do
-    v <- ask
-    liftIO (atomically (writeTVar v s))
+getv :: Consumer ConsumerState
+getv = Consumer $ do
+  v <- ask
+  currVal <- liftIO (readTVarIO v)
+  pure currVal
+
+modifyv :: (ConsumerState -> ConsumerState) -> Consumer ()
+modifyv f = Consumer $ do
+  v <- ask
+  liftIO $ atomically $ do
+    currVal <- readTVar v
+    writeTVar v (f currVal)
 
 liftConsumer :: IO (Either KafkaException a) -> Consumer a
 liftConsumer = Consumer . lift . ExceptT
@@ -146,7 +150,7 @@ instance Show KafkaSocket where
 
 getListedOffsets :: [Int32] -> Consumer (IntMap Int64)
 getListedOffsets allIndices = do
-  ConsumerState {..} <- get
+  ConsumerState {..} <- getv
   let ConsumerSettings {..} = settings
   liftConsumer $ listOffsets kafka csTopicName allIndices groupFetchStart
   listOffsetsTimeout <- liftIO (registerDelay defaultTimeout)
@@ -156,13 +160,13 @@ getListedOffsets allIndices = do
 
 initializeOffsets :: [Int32] -> Consumer ()
 initializeOffsets assignedPartitions = do
-  ConsumerState {..} <- get
+  ConsumerState {..} <- getv
   let ConsumerSettings {..} = settings
   withSocket sock $ do
     initialOffs <- getListedOffsets assignedPartitions
     latestOffs <- latestOffsets assignedPartitions
     let validOffs = merge initialOffs latestOffs
-    modify (\s -> s { offsets = validOffs })
+    modifyv (\s -> s { offsets = validOffs })
     get >>= commitOffsets'
 
 merge :: IntMap Int64 -> IntMap Int64 -> IntMap Int64
@@ -252,14 +256,14 @@ heartbeats = do
 -- id, and set of assigned topics.
 rejoin :: Consumer ()
 rejoin = do
-  ConsumerState {kafka, member, partitionCount, settings} <- get
+  ConsumerState {kafka, member, partitionCount, settings} <- getv
   let topicName = csTopicName settings
   (genId', newMember, members') <- Consumer $ lift $ join kafka topicName member
   (newGenId, assigns) <- Consumer $ lift $ sync kafka topicName partitionCount newMember members' genId'
   case partitionsForTopic topicName assigns of
     Just indices -> do
       newOffsets <- latestOffsets indices
-      modify' $ \s -> s
+      modifyv $ \s -> s
         { member = newMember
         , genId = newGenId
         , offsets = newOffsets
@@ -273,7 +277,7 @@ partitionsForTopic (TopicName n) assigns =
 
 sendHeartbeat :: Consumer ()
 sendHeartbeat = do
-  ConsumerState {sock, member, genId, kafka, settings} <- get
+  ConsumerState {sock, member, genId, kafka, settings} <- getv
   withSocket sock $ do
     liftConsumer $ heartbeat kafka member genId
     timeout <- liftIO $ registerDelay (defaultTimeout settings)
@@ -282,31 +286,31 @@ sendHeartbeat = do
 
 leave :: Consumer ()
 leave = do
-  ConsumerState {..} <- get
+  ConsumerState {..} <- getv
   withSocket sock $ do
     liftConsumer $ leaveGroup kafka member
     timeout <- liftIO $ registerDelay (defaultTimeout settings)
     void $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka timeout
-    modify (\s -> s { quit = True })
+    modifyv (\s -> s { quit = True })
 
 getRecordSet :: Int -> Consumer FetchResponse
 getRecordSet fetchWaitTime = do
   gets sock >>= \so -> withSocket so $ do
-    ConsumerState {..} <- get
+    ConsumerState {..} <- getv
     let offsetList = toOffsetList offsets
         ConsumerSettings {..} = settings
     liftConsumer $ fetch kafka csTopicName fetchWaitTime offsetList maxFetchBytes
     interrupt <- liftIO $ registerDelay defaultTimeout
     fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
     let newOffsets = updateOffsets csTopicName offsets fetchResp
-    modify (\s -> s { offsets = newOffsets })
-    cs <- get
+    modifyv (\s -> s { offsets = newOffsets })
+    cs <- getv
     when (autoCommit == AutoCommit) (commitOffsets' cs)
     pure fetchResp
 
 latestOffsets :: [Int32] -> Consumer (IntMap Int64)
 latestOffsets indices = do
-  ConsumerState {..} <- get
+  ConsumerState {..} <- getv
   liftConsumer $ offsetFetch kafka member (csTopicName settings) indices
   timeout <- liftIO $ registerDelay (defaultTimeout settings)
   offs <- liftConsumer $ tryParse <$> O.getOffsetFetchResponse kafka timeout
@@ -327,7 +331,7 @@ commitOffsets' cs = do
 
 commitOffsets :: Consumer ()
 commitOffsets = do
-  cs@ConsumerState {..} <- get
+  cs@ConsumerState {..} <- getv
   withSocket sock (commitOffsets' cs)
 
 assignMembers :: Int -> TopicName -> Int32 -> [Member] -> [MemberAssignment]
