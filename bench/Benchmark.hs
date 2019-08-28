@@ -12,9 +12,9 @@ import Data.Primitive.ByteArray
 import Gauge
 
 import Kafka.Common
-import Kafka.Fetch.Request
-import Kafka.Fetch.Response
-import Kafka.Produce.Request
+import Kafka.Internal.Fetch.Request
+import Kafka.Internal.Fetch.Response
+import Kafka.Internal.Produce.Request
 
 data ProduceArgs =
   ProduceArgs

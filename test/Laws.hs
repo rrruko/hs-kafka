@@ -19,7 +19,7 @@ import Hedgehog.Classes
 --import qualified Hedgehog.Gen as Gen
 --import qualified Hedgehog.Range as Range
 
-import Kafka.Writer hiding (KafkaWriterBuilder(..))
+import Kafka.Internal.Writer hiding (KafkaWriterBuilder(..))
 
 main :: IO Bool
 main = lawsCheckMany

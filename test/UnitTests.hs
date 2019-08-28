@@ -17,18 +17,18 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Lazy.Char8 as BC
 import qualified Data.IntMap as IM
 
-import Kafka.Combinator
 import Kafka.Common
-import Kafka.Consumer
-import Kafka.Fetch.Request
-import Kafka.JoinGroup.Request
-import Kafka.ListOffsets.Request
-import Kafka.Produce.Request
-import Kafka.Produce.Response
-import Kafka.Writer
-import Kafka.Zigzag
+import Kafka.Consumer (merge)
+import Kafka.Internal.Combinator
+import Kafka.Internal.Fetch.Request
+import Kafka.Internal.JoinGroup.Request
+import Kafka.Internal.ListOffsets.Request
+import Kafka.Internal.Produce.Request
+import Kafka.Internal.Produce.Response
+import Kafka.Internal.Writer
+import Kafka.Internal.Zigzag
 
-import qualified Kafka.Fetch.Response as Fetch
+import qualified Kafka.Internal.Fetch.Response as Fetch
 
 main :: IO ()
 main = defaultMain (testGroup "Tests" [unitTests, goldenTests])
