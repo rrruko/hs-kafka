@@ -13,12 +13,12 @@ import GHC.Conc
 
 import Kafka
 import Kafka.Common
-import Kafka.Fetch.Response
-import Kafka.ListOffsets.Response
-import Kafka.JoinGroup.Response
-import Kafka.OffsetCommit.Response
-import Kafka.OffsetFetch.Response
-import Kafka.Produce.Response
+import Kafka.Internal.Fetch.Response
+import Kafka.Internal.ListOffsets.Response
+import Kafka.Internal.JoinGroup.Response
+import Kafka.Internal.OffsetCommit.Response
+import Kafka.Internal.OffsetFetch.Response
+import Kafka.Internal.Produce.Response
 
 main :: IO ()
 main = pure ()

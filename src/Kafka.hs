@@ -19,16 +19,16 @@ import Data.Primitive.Unlifted.Array
 import Socket.Stream.Uninterruptible.Bytes
 
 import Kafka.Common
-import Kafka.Fetch.Request
-import Kafka.Heartbeat.Request
-import Kafka.JoinGroup.Request
-import Kafka.LeaveGroup.Request
-import Kafka.ListOffsets.Request
-import Kafka.Metadata.Request
-import Kafka.OffsetCommit.Request
-import Kafka.OffsetFetch.Request
-import Kafka.Produce.Request
-import Kafka.SyncGroup.Request
+import Kafka.Internal.Fetch.Request
+import Kafka.Internal.Heartbeat.Request
+import Kafka.Internal.JoinGroup.Request
+import Kafka.Internal.LeaveGroup.Request
+import Kafka.Internal.ListOffsets.Request
+import Kafka.Internal.Metadata.Request
+import Kafka.Internal.OffsetCommit.Request
+import Kafka.Internal.OffsetFetch.Request
+import Kafka.Internal.Produce.Request
+import Kafka.Internal.SyncGroup.Request
 
 request ::
      Kafka

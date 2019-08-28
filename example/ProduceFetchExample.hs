@@ -12,8 +12,8 @@ import GHC.Conc
 
 import Kafka
 import Kafka.Common
-import Kafka.Fetch.Response
-import Kafka.Produce.Response
+import Kafka.Internal.Fetch.Response
+import Kafka.Internal.Produce.Response
 
 main :: IO ()
 main = do

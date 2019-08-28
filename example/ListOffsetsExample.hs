@@ -9,7 +9,7 @@ import GHC.Conc
 
 import Kafka
 import Kafka.Common
-import Kafka.ListOffsets.Response
+import Kafka.Internal.ListOffsets.Response
 
 main :: IO ()
 main = do

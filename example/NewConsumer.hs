@@ -21,9 +21,9 @@ import qualified Data.ByteString.Char8 as B
 
 import Kafka.Common
 import Kafka.Consumer
-import Kafka.Fetch.Response (FetchResponse)
+import Kafka.Internal.Fetch.Response (FetchResponse)
 
-import qualified Kafka.Fetch.Response as F
+import qualified Kafka.Internal.Fetch.Response as F
 
 children :: MVar [MVar ()]
 {-# NOINLINE children #-}

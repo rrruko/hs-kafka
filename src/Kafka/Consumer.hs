@@ -38,21 +38,21 @@ import qualified Data.IntMap as IM
 
 import Kafka
 import Kafka.Common
-import Kafka.Fetch.Response
-import Kafka.JoinGroup.Response (Member, getJoinGroupResponse)
-import Kafka.LeaveGroup.Response
-import Kafka.Heartbeat.Response (getHeartbeatResponse)
-import Kafka.ListOffsets.Response (ListOffsetsResponse)
-import Kafka.SyncGroup.Response (SyncTopicAssignment)
+import Kafka.Internal.Fetch.Response
+import Kafka.Internal.JoinGroup.Response (Member, getJoinGroupResponse)
+import Kafka.Internal.LeaveGroup.Response
+import Kafka.Internal.Heartbeat.Response (getHeartbeatResponse)
+import Kafka.Internal.ListOffsets.Response (ListOffsetsResponse)
+import Kafka.Internal.SyncGroup.Response (SyncTopicAssignment)
 
-import qualified Kafka.Fetch.Response as F
-import qualified Kafka.Heartbeat.Response as H
-import qualified Kafka.JoinGroup.Response as J
-import qualified Kafka.ListOffsets.Response as L
-import qualified Kafka.Metadata.Response as M
-import qualified Kafka.OffsetCommit.Response as C
-import qualified Kafka.OffsetFetch.Response as O
-import qualified Kafka.SyncGroup.Response as S
+import qualified Kafka.Internal.Fetch.Response as F
+import qualified Kafka.Internal.Heartbeat.Response as H
+import qualified Kafka.Internal.JoinGroup.Response as J
+import qualified Kafka.Internal.ListOffsets.Response as L
+import qualified Kafka.Internal.Metadata.Response as M
+import qualified Kafka.Internal.OffsetCommit.Response as C
+import qualified Kafka.Internal.OffsetFetch.Response as O
+import qualified Kafka.Internal.SyncGroup.Response as S
 
 -- | This module provides a high-level interface to the Kafka API for
 -- consumers by wrapping the low-level request and response type modules.

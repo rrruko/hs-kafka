@@ -22,32 +22,32 @@ extra-source-files:
 library
   exposed-modules:
     Kafka
-    Kafka.Combinator
     Kafka.Common
     Kafka.Consumer
-    Kafka.Fetch.Request
-    Kafka.Fetch.Response
-    Kafka.Heartbeat.Request
-    Kafka.Heartbeat.Response
-    Kafka.JoinGroup.Request
-    Kafka.JoinGroup.Response
-    Kafka.LeaveGroup.Request
-    Kafka.LeaveGroup.Response
-    Kafka.ListOffsets.Request
-    Kafka.ListOffsets.Response
-    Kafka.Metadata.Request
-    Kafka.Metadata.Response
-    Kafka.OffsetCommit.Request
-    Kafka.OffsetCommit.Response
-    Kafka.OffsetFetch.Request
-    Kafka.OffsetFetch.Response
-    Kafka.Produce.Request
-    Kafka.Produce.Response
-    Kafka.Response
-    Kafka.SyncGroup.Request
-    Kafka.SyncGroup.Response
-    Kafka.Zigzag
-    Kafka.Writer
+    Kafka.Internal.Combinator
+    Kafka.Internal.Fetch.Request
+    Kafka.Internal.Fetch.Response
+    Kafka.Internal.Heartbeat.Request
+    Kafka.Internal.Heartbeat.Response
+    Kafka.Internal.JoinGroup.Request
+    Kafka.Internal.JoinGroup.Response
+    Kafka.Internal.LeaveGroup.Request
+    Kafka.Internal.LeaveGroup.Response
+    Kafka.Internal.ListOffsets.Request
+    Kafka.Internal.ListOffsets.Response
+    Kafka.Internal.Metadata.Request
+    Kafka.Internal.Metadata.Response
+    Kafka.Internal.OffsetCommit.Request
+    Kafka.Internal.OffsetCommit.Response
+    Kafka.Internal.OffsetFetch.Request
+    Kafka.Internal.OffsetFetch.Response
+    Kafka.Internal.Produce.Request
+    Kafka.Internal.Produce.Response
+    Kafka.Internal.Response
+    Kafka.Internal.SyncGroup.Request
+    Kafka.Internal.SyncGroup.Response
+    Kafka.Internal.Writer
+    Kafka.Internal.Zigzag
   ghc-options:
     -Wall
     -Werror
