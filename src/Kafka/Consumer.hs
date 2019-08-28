@@ -133,7 +133,7 @@ data ConsumerState = ConsumerState
   , offsets :: !(IntMap Int64)
   , partitionCount :: !Int32
   , sock :: !KafkaSocket
-  , quit :: !Bool
+  , quit :: !Interruptedness
   } deriving (Show)
 
 newtype KafkaSocket = KafkaSocket { getSock :: MVar () }
@@ -236,7 +236,7 @@ newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ do
             , offsets = mempty
             , partitionCount = partitionCount
             , sock = KafkaSocket so
-            , quit = False
+            , quit = Uninterrupted
             }
       v <- liftIO (newTVarIO initialState)
       void . liftIO . forkIO $ void $ evalConsumer v heartbeats
@@ -248,8 +248,8 @@ newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ do
 heartbeats :: Consumer ()
 heartbeats = do
   getsv quit >>= \case
-    True -> pure ()
-    False -> do
+    Interrupted -> pure ()
+    Uninterrupted -> do
       liftIO (threadDelay 3000000)
       void sendHeartbeat
       heartbeats
@@ -295,7 +295,7 @@ leave = do
     liftConsumer $ leaveGroup kafka member
     timeout <- liftIO $ registerDelay (defaultTimeout settings)
     void $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka timeout
-    modifyv (\s -> s { quit = True })
+    modifyv (\s -> s { quit = Interrupted })
 
 getRecordSet :: Int -> Consumer FetchResponse
 getRecordSet fetchWaitTime = do

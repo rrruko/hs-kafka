@@ -38,7 +38,7 @@ waitForChildren = do
 
 main :: IO ()
 main = do
-  interrupt <- newTVarIO False
+  interrupt <- newTVarIO Uninterrupted
   fork (consumer interrupt)
   fork (consumer interrupt)
   fork (consumer interrupt)
@@ -46,7 +46,7 @@ main = do
   fork (consumer interrupt)
   putStrLn "Press enter to quit"
   _ <- getLine
-  atomically $ writeTVar interrupt True
+  atomically $ writeTVar interrupt Interrupted
   waitForChildren
 
 fork :: IO () -> IO ()
@@ -56,7 +56,7 @@ fork f = do
   putMVar children (mvar:childs)
   void $ forkFinally f (\_ -> putMVar mvar ())
 
-consumer :: TVar Bool -> IO ()
+consumer :: TVar Interruptedness -> IO ()
 consumer interrupt = do
   kaf <- newKafka (Peer (ipv4 0 0 0 0) 9092)
   case kaf of
@@ -77,7 +77,7 @@ consumer interrupt = do
             Right () -> putStrLn "Finished with no errors."
             Left err -> putStrLn ("Consumer died with: " <> show err)
 
-loop :: TVar Bool -> Consumer ()
+loop :: TVar Interruptedness -> Consumer ()
 loop interrupt = do
   o <- getsv offsets
   if (null o)
@@ -94,9 +94,9 @@ loop interrupt = do
         <> "(" <> B.pack (show o') <> ") "
         <> "(" <> maybe "NULL" toByteString (coerce m) <> ")"
       i <- liftIO (readTVarIO interrupt)
-      if i
-        then leave
-        else loop interrupt
+      case i of
+        Interrupted -> leave
+        Uninterrupted -> loop interrupt
 
 fetchResponseContents :: FetchResponse -> [ByteString]
 fetchResponseContents fetchResponse =

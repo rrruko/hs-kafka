@@ -79,6 +79,9 @@ data TopicAssignment = TopicAssignment
   , assignedPartitions :: [Int32]
   } deriving (Eq, Show)
 
+data Interruptedness = Interrupted | Uninterrupted
+  deriving (Eq, Show)
+
 newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
 newKafka = coerce . connect
 
