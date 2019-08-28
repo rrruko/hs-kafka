@@ -21,7 +21,6 @@ module Kafka.Consumer
   , getsv
   ) where
 
-import Chronos
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.MVar
 import Control.Concurrent.STM
@@ -125,8 +124,6 @@ data ConsumerState = ConsumerState
   , members :: [Member]
   , offsets :: !(IntMap Int64)
   , partitionCount :: !Int32
-  , lastRequestTime :: !Time
-  , errorCode :: !Int16
   , sock :: !KafkaSocket
   , quit :: !Bool
   } deriving (Show)
@@ -230,8 +227,6 @@ newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ do
             , members = members
             , offsets = mempty
             , partitionCount = partitionCount
-            , lastRequestTime = epoch
-            , errorCode = 0
             , sock = KafkaSocket so
             , quit = False
             }
