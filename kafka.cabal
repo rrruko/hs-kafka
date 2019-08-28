@@ -24,7 +24,6 @@ library
     Kafka.Common
     Kafka.Consumer
     Kafka.Producer
-    Kafka.Topic
 
     Kafka.Internal.Combinator
     Kafka.Internal.Fetch.Request
@@ -49,6 +48,7 @@ library
     Kafka.Internal.Response
     Kafka.Internal.SyncGroup.Request
     Kafka.Internal.SyncGroup.Response
+    Kafka.Internal.Topic
     Kafka.Internal.Writer
     Kafka.Internal.Zigzag
   ghc-options:

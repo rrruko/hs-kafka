@@ -52,7 +52,7 @@ import Kafka.Internal.LeaveGroup.Response
 import Kafka.Internal.Heartbeat.Response (getHeartbeatResponse)
 import Kafka.Internal.ListOffsets.Response (ListOffsetsResponse)
 import Kafka.Internal.SyncGroup.Response (SyncTopicAssignment)
-import Kafka.Topic
+import Kafka.Internal.Topic
 
 import qualified Kafka.Internal.Fetch.Response as F
 import qualified Kafka.Internal.Heartbeat.Response as H

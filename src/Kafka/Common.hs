@@ -7,6 +7,7 @@
 
 module Kafka.Common where
 
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.Bytes.Types
 import Data.Coerce
@@ -58,6 +59,7 @@ data KafkaException where
   KafkaReceiveException :: ReceiveException 'Interruptible -> KafkaException
   KafkaParseException :: String -> KafkaException
   KafkaUnexpectedErrorCodeException :: Int16 -> KafkaException
+  KafkaConnectException :: ConnectException ('Internet 'V4) 'Uninterruptible -> KafkaException
   KafkaException :: Text -> KafkaException
 
 deriving stock instance Show KafkaException
@@ -82,8 +84,8 @@ data TopicAssignment = TopicAssignment
 data Interruptedness = Interrupted | Uninterrupted
   deriving (Eq, Show)
 
-newKafka :: Peer -> IO (Either (ConnectException ('Internet 'V4) 'Uninterruptible) Kafka)
-newKafka = coerce . connect
+newKafka :: Peer -> IO (Either KafkaException Kafka)
+newKafka = fmap (first KafkaConnectException) . coerce . connect
 
 defaultKafka :: Peer
 defaultKafka = Peer (IPv4 0) 9092

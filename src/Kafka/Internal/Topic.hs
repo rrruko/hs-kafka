@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Kafka.Topic
+module Kafka.Internal.Topic
   ( makeTopic
   , getPartitionCount
   ) where

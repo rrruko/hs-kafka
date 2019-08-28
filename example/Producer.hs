@@ -14,7 +14,6 @@ import qualified Data.ByteString.Char8 as B
 
 import Kafka.Common
 import Kafka.Producer
-import Kafka.Topic
 
 main :: IO ()
 main = producer
@@ -55,20 +54,18 @@ pickMany n xs g =
 
 producer :: IO ()
 producer = do
-  kafka <- newKafka defaultKafka
+  p <- newProducer 
+    defaultKafka 
+    (TopicName (fromByteString "example-consumer-group"))
   rand <- getStdGen
-  case kafka of
-    Left err -> putStrLn $ "Failed to connect to kafka (" <> show err <> ")"
-    Right k -> do
-      top <- makeTopic k (TopicName (fromByteString "example-consumer-group"))
-      case top of
-        Left err -> putStrLn $ "Failed to get topic (" <> show err <> ")"
-        Right t -> loop k t rand
+  case p of
+    Left err -> putStrLn $ "Failed to create producer (" <> show err <> ")"
+    Right prod -> loop prod rand
 
-loop :: Kafka -> Topic -> StdGen -> IO ()
-loop k t rand = do
+loop :: Producer -> StdGen -> IO ()
+loop p rand = do
   let (pokes, rand') = pickMany 10000 names rand
-  _ <- produce k t 5000000 (byteStrings pokes)
+  _ <- produce p 5000000 (byteStrings pokes)
   B.putStrLn ("sent " <> B.pack (show (B.length (B.concat pokes))) <> " bytes")
   threadDelay 1000000
-  loop k t rand'
+  loop p rand'
