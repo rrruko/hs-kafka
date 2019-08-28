@@ -19,6 +19,14 @@ module Kafka.Consumer
   , merge
   , newConsumer
   , getsv
+
+  , FetchResponse(..)
+  , FetchTopic(..)
+  , Header(..)
+  , PartitionHeader(..)
+  , FetchPartition(..)
+  , Record(..)
+  , RecordBatch(..)
   ) where
 
 import Control.Concurrent (forkIO, threadDelay)

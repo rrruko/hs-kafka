@@ -21,9 +21,6 @@ import qualified Data.ByteString.Char8 as B
 
 import Kafka.Common
 import Kafka.Consumer
-import Kafka.Internal.Fetch.Response (FetchResponse)
-
-import qualified Kafka.Internal.Fetch.Response as F
 
 children :: MVar [MVar ()]
 {-# NOINLINE children #-}
@@ -103,10 +100,10 @@ loop interrupt = do
 
 fetchResponseContents :: FetchResponse -> [ByteString]
 fetchResponseContents fetchResponse =
-    mapMaybe F.recordValue
-  . concatMap F.records
+    mapMaybe recordValue
+  . concatMap records
   . concat
-  . mapMaybe F.recordSet
-  . concatMap F.partitions
-  . F.topics
+  . mapMaybe recordSet
+  . concatMap partitions
+  . topics
   $ fetchResponse
