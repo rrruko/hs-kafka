@@ -5,23 +5,12 @@
 module Main where
 
 import Control.Concurrent
-import Data.ByteString (ByteString)
-import Data.Primitive.ByteArray (ByteArray)
-import Data.Primitive.Unlifted.Array
 import System.Random
-
-import qualified Data.ByteString.Char8 as B
 
 import Kafka.Common
 import Kafka.Producer
 
-main :: IO ()
-main = producer
-
-byteStrings :: [ByteString] -> UnliftedArray ByteArray
-byteStrings = unliftedArrayFromList . fmap fromByteString
-
-names :: [ByteString]
+names :: [String]
 names = 
   [ "bulbasaur"
   , "ivysaur"
@@ -52,11 +41,9 @@ pickMany n xs g =
       (rest, g'') = pickMany (n-1) xs g'
   in  (e:rest, g'')
 
-producer :: IO ()
-producer = do
-  p <- newProducer 
-    defaultKafka 
-    (TopicName (fromByteString "example-consumer-group"))
+main :: IO ()
+main = do
+  p <- newProducer defaultKafka (mkTopicName "example-consumer-group")
   rand <- getStdGen
   case p of
     Left err -> putStrLn $ "Failed to create producer (" <> show err <> ")"
@@ -65,7 +52,7 @@ producer = do
 loop :: Producer -> StdGen -> IO ()
 loop p rand = do
   let (pokes, rand') = pickMany 10000 names rand
-  _ <- produce p 5000000 (byteStrings pokes)
-  B.putStrLn ("sent " <> B.pack (show (B.length (B.concat pokes))) <> " bytes")
+  _ <- produce p 5000000 (messages pokes)
+  putStrLn ("sent " <> show (length (concat pokes)) <> " bytes")
   threadDelay 1000000
   loop p rand'
