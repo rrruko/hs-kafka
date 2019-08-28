@@ -90,15 +90,6 @@ newKafka = fmap (first KafkaConnectException) . coerce . connect
 defaultKafka :: Peer
 defaultKafka = Peer (IPv4 0) 9092
 
-withDefaultKafka :: (Kafka -> IO a) -> IO a
-withDefaultKafka f = do
-  newKafka defaultKafka >>= \case
-    Right kafka -> do
-      f kafka
-    Left bad -> do
-      print bad
-      fail "Couldn't connect to kafka"
-
 toBE16 :: Int16 -> Int16
 toBE16 = fromIntegral . byteSwap16 . fromIntegral
 
