@@ -36,6 +36,9 @@ newtype TopicName = TopicName ByteArray
 getTopicName :: Topic -> TopicName
 getTopicName (Topic name _ _) = TopicName name
 
+mkTopicName :: String -> TopicName
+mkTopicName = TopicName . fromString
+
 data PartitionOffset = PartitionOffset
   { partitionIndex :: Int32
   , partitionOffset :: Int64
@@ -93,6 +96,12 @@ toByteString = BS.pack . foldrByteArray (:) []
 
 fromByteString :: ByteString -> ByteArray
 fromByteString = byteArrayFromList . BS.unpack
+
+fromString :: String -> ByteArray
+fromString = byteArrayFromList
+
+messages :: [String] -> UnliftedArray ByteArray
+messages = unliftedArrayFromList . fmap fromString
 
 foldByteArrays :: UnliftedArray ByteArray -> ByteArray
 foldByteArrays = foldrUnliftedArray (<>) (byteArrayFromList ([]::[Char]))
