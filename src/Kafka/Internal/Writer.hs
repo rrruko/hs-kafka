@@ -25,6 +25,7 @@ module Kafka.Internal.Writer
   , buildMapArray
   , buildString
   , evaluate
+  , size32
   , withCtx
   , write8
   , write16
@@ -42,9 +43,8 @@ import Data.Int
 import Data.Primitive (Prim(..), alignment)
 import Data.Primitive.ByteArray
 import Data.Primitive.ByteArray.Unaligned
+import Data.Word (byteSwap16, byteSwap32, byteSwap64)
 import GHC.Exts
-
-import Kafka.Common (toBE16, toBE32, toBE64)
 
 newtype KafkaWriter s a = K
   { getK :: ()
@@ -194,3 +194,14 @@ instance Monoid (KafkaWriterBuilder s) where
   mempty = Kwb 0 mempty
   {-# inline mempty #-}
 
+toBE16 :: Int16 -> Int16
+toBE16 = fromIntegral . byteSwap16 . fromIntegral
+
+toBE32 :: Int32 -> Int32
+toBE32 = fromIntegral . byteSwap32 . fromIntegral
+
+toBE64 :: Int64 -> Int64
+toBE64 = fromIntegral . byteSwap64 . fromIntegral
+
+size32 :: ByteArray -> Int32
+size32 = fromIntegral . sizeofByteArray

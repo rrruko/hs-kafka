@@ -9,14 +9,12 @@ module Kafka.Common where
 
 import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
-import Data.Bytes.Types
 import Data.Coerce
 import Data.Int
 import Data.IORef
 import Data.Primitive
 import Data.Primitive.Unlifted.Array
 import Data.Text
-import Data.Word
 import Net.IPv4 (IPv4(..))
 import Socket.Stream.IPv4
 
@@ -89,30 +87,6 @@ newKafka = fmap (first KafkaConnectException) . coerce . connect
 
 defaultKafka :: Peer
 defaultKafka = Peer (IPv4 0) 9092
-
-toBE16 :: Int16 -> Int16
-toBE16 = fromIntegral . byteSwap16 . fromIntegral
-
-toBE32 :: Int32 -> Int32
-toBE32 = fromIntegral . byteSwap32 . fromIntegral
-
-toBEW32 :: Word32 -> Word32
-toBEW32 = byteSwap32
-
-toBE64 :: Int64 -> Int64
-toBE64 = fromIntegral . byteSwap64 . fromIntegral
-
-size8 :: ByteArray -> Int8
-size8 = fromIntegral . sizeofByteArray
-
-size16 :: ByteArray -> Int16
-size16 = fromIntegral . sizeofByteArray
-
-size32 :: ByteArray -> Int32
-size32 = fromIntegral . sizeofByteArray
-
-getArray :: MutableBytes s -> MutableByteArray s
-getArray (MutableBytes a _ _) = a
 
 toByteString :: ByteArray -> ByteString
 toByteString = BS.pack . foldrByteArray (:) []
