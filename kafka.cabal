@@ -21,9 +21,11 @@ extra-source-files:
 
 library
   exposed-modules:
-    Kafka
     Kafka.Common
     Kafka.Consumer
+    Kafka.Producer
+    Kafka.Topic
+
     Kafka.Internal.Combinator
     Kafka.Internal.Fetch.Request
     Kafka.Internal.Fetch.Response
@@ -43,6 +45,7 @@ library
     Kafka.Internal.OffsetFetch.Response
     Kafka.Internal.Produce.Request
     Kafka.Internal.Produce.Response
+    Kafka.Internal.Request
     Kafka.Internal.Response
     Kafka.Internal.SyncGroup.Request
     Kafka.Internal.SyncGroup.Response

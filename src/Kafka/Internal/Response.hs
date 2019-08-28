@@ -4,6 +4,7 @@ module Kafka.Internal.Response
   ( fromKafkaResponse
   , getKafkaResponse
   , getResponseSizeHeader
+  , tryParse
   ) where
 
 import Data.Attoparsec.ByteString (Parser, parseOnly)
@@ -58,3 +59,9 @@ fromKafkaResponse parser kafka interrupt =
   (fmap . fmap)
     (parseOnly parser)
     (getKafkaResponse kafka interrupt)
+
+tryParse :: Either KafkaException (Either String a) -> Either KafkaException a
+tryParse = \case
+  Right (Right parsed) -> Right parsed
+  Right (Left parseError) -> Left (KafkaParseException parseError)
+  Left networkError -> Left networkError

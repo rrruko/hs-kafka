@@ -6,25 +6,18 @@ module Main where
 
 import Control.Concurrent
 import Data.ByteString (ByteString)
-import Data.IORef
 import Data.Primitive.ByteArray (ByteArray)
 import Data.Primitive.Unlifted.Array
 import System.Random
 
 import qualified Data.ByteString.Char8 as B
 
-import Kafka
 import Kafka.Common
+import Kafka.Producer
+import Kafka.Topic
 
 main :: IO ()
 main = producer
-
-setup :: ByteArray -> Int -> IO (Topic, Maybe Kafka)
-setup topicName partitionCount = do
-  currentPartition <- newIORef 0
-  let t = Topic topicName partitionCount currentPartition
-  k <- newKafka defaultKafka
-  pure (t, either (const Nothing) Just k)
 
 byteStrings :: [ByteString] -> UnliftedArray ByteArray
 byteStrings = unliftedArrayFromList . fmap fromByteString
@@ -62,11 +55,15 @@ pickMany n xs g =
 
 producer :: IO ()
 producer = do
-  (t, kafka) <- setup (fromByteString "example-consumer-group") 8
+  kafka <- newKafka defaultKafka
   rand <- getStdGen
   case kafka of
-    Nothing -> putStrLn "Failed to connect to kafka"
-    Just k -> loop k t rand
+    Left err -> putStrLn $ "Failed to connect to kafka (" <> show err <> ")"
+    Right k -> do
+      top <- makeTopic k (TopicName (fromByteString "example-consumer-group"))
+      case top of
+        Left err -> putStrLn $ "Failed to get topic (" <> show err <> ")"
+        Right t -> loop k t rand
 
 loop :: Kafka -> Topic -> StdGen -> IO ()
 loop k t rand = do

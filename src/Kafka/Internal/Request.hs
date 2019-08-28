@@ -1,4 +1,4 @@
-module Kafka
+module Kafka.Internal.Request
   ( fetch
   , heartbeat
   , joinGroup

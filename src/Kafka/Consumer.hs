@@ -44,20 +44,20 @@ import Data.Maybe
 
 import qualified Data.IntMap as IM
 
-import Kafka
 import Kafka.Common
+import Kafka.Internal.Request
 import Kafka.Internal.Fetch.Response
 import Kafka.Internal.JoinGroup.Response (Member, getJoinGroupResponse)
 import Kafka.Internal.LeaveGroup.Response
 import Kafka.Internal.Heartbeat.Response (getHeartbeatResponse)
 import Kafka.Internal.ListOffsets.Response (ListOffsetsResponse)
 import Kafka.Internal.SyncGroup.Response (SyncTopicAssignment)
+import Kafka.Topic
 
 import qualified Kafka.Internal.Fetch.Response as F
 import qualified Kafka.Internal.Heartbeat.Response as H
 import qualified Kafka.Internal.JoinGroup.Response as J
 import qualified Kafka.Internal.ListOffsets.Response as L
-import qualified Kafka.Internal.Metadata.Response as M
 import qualified Kafka.Internal.OffsetCommit.Response as C
 import qualified Kafka.Internal.OffsetFetch.Response as O
 import qualified Kafka.Internal.SyncGroup.Response as S
@@ -197,31 +197,13 @@ updateOffsets topicName current r =
   where
   name = toByteString (coerce topicName)
 
-getPartitionCount :: Kafka -> TopicName -> Int -> ExceptT KafkaException IO Int32
-getPartitionCount kafka topicName timeout = do
-  _ <- ExceptT $ metadata kafka topicName NeverCreate
-  interrupt <- liftIO $ registerDelay timeout
-  parts <- fmap (metadataPartitions topicName) $ ExceptT $
-    tryParse <$> M.getMetadataResponse kafka interrupt
-  case parts of
-    Just p -> pure p
-    Nothing -> throwError $
-      KafkaException "Topic name not found in metadata request"
-
-metadataPartitions :: TopicName -> M.MetadataResponse -> Maybe Int32
-metadataPartitions topicName mdr =
-  let tops = M.topics mdr
-  in  case find ((== topicName) . coerce . fromByteString . M.name) tops of
-        Just top -> Just (fromIntegral $ length (M.partitions top))
-        Nothing -> Nothing
-
 newConsumer ::
      Kafka
   -> ConsumerSettings
   -> IO (Either KafkaException (TVar ConsumerState))
 newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ do
   let initialMember = GroupMember groupName Nothing
-  partitionCount <- getPartitionCount kafka csTopicName defaultTimeout
+  partitionCount <- ExceptT $ getPartitionCount kafka csTopicName defaultTimeout
   (genId', me, members) <- join kafka csTopicName initialMember
   (newGenId, assigns) <- sync kafka csTopicName partitionCount me members genId'
   case partitionsForTopic csTopicName assigns of

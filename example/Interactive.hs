@@ -11,7 +11,6 @@ import Data.Primitive.ByteArray (ByteArray)
 import Data.Primitive.Unlifted.Array
 import GHC.Conc
 
-import Kafka
 import Kafka.Common
 import Kafka.Internal.Fetch.Response
 import Kafka.Internal.ListOffsets.Response
@@ -19,6 +18,7 @@ import Kafka.Internal.JoinGroup.Response
 import Kafka.Internal.OffsetCommit.Response
 import Kafka.Internal.OffsetFetch.Response
 import Kafka.Internal.Produce.Response
+import Kafka.Internal.Request
 
 main :: IO ()
 main = pure ()

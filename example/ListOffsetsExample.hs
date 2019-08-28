@@ -7,9 +7,9 @@ module Main where
 import Data.Int
 import GHC.Conc
 
-import Kafka
 import Kafka.Common
 import Kafka.Internal.ListOffsets.Response
+import Kafka.Internal.Request
 
 main :: IO ()
 main = do

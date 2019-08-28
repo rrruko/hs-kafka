@@ -10,10 +10,10 @@ import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 import GHC.Conc
 
-import Kafka
 import Kafka.Common
 import Kafka.Internal.Fetch.Response
 import Kafka.Internal.Produce.Response
+import Kafka.Internal.Request
 
 main :: IO ()
 main = do
