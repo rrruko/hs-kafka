@@ -19,6 +19,7 @@ import Net.IPv4 (IPv4(..))
 import Socket.Stream.IPv4
 
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as BC8
 
 newtype Kafka = Kafka { getKafka :: Connection }
 
@@ -98,7 +99,7 @@ fromByteString :: ByteString -> ByteArray
 fromByteString = byteArrayFromList . BS.unpack
 
 fromString :: String -> ByteArray
-fromString = byteArrayFromList
+fromString = fromByteString . BC8.pack
 
 messages :: [String] -> UnliftedArray ByteArray
 messages = unliftedArrayFromList . fmap fromString
