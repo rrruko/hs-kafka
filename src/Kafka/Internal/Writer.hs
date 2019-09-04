@@ -32,6 +32,8 @@ import Data.Primitive.ByteArray.Unaligned
 import Data.Word (byteSwap16, byteSwap32, byteSwap64)
 import GHC.Exts
 
+import qualified Data.List as L
+
 newtype KafkaWriter s = K
   (    MutableByteArray# s -- ^ buffer
     -> Int# -- ^ offset into the buffer
@@ -129,6 +131,111 @@ instance Semigroup (KafkaWriterBuilder s) where
 instance Monoid (KafkaWriterBuilder s) where
   mempty = Kwb 0 mempty
   {-# inline mempty #-}
+  mconcat = mconcatBuilder
+  {-# inline mconcat #-}
+
+mconcatBuilder :: [KafkaWriterBuilder s] -> KafkaWriterBuilder s
+mconcatBuilder = L.foldr (<>) mempty
+{-# noinline[1] mconcatBuilder #-}
+
+{-# RULES "builder_mconcat0"
+  forall (x0 :: KafkaWriterBuilder s).
+    mconcatBuilder [x0] = x0
+  #-}
+{-# RULES "builder_mconcat1"
+  forall (x0 :: KafkaWriterBuilder s) x1.
+    mconcatBuilder [x0,x1] = x0<>x1
+  #-}
+{-# RULES "builder_mconcat2"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2.
+    mconcatBuilder [x0,x1,x2] = x0<>x1<>x2
+  #-}
+{-# RULES "builder_mconcat3"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3.
+    mconcatBuilder [x0,x1,x2,x3] = x0<>x1<>x2<>x3
+  #-}
+{-# RULES "builder_mconcat4"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4.
+    mconcatBuilder [x0,x1,x2,x3,x4] = x0<>x1<>x2<>x3<>x4
+  #-}
+{-# RULES "builder_mconcat5"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5.
+    mconcatBuilder [x0,x1,x2,x3,x4,x5] = x0<>x1<>x2<>x3<>x4<>x5
+  #-}
+{-# RULES "builder_mconcat6"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6.
+    mconcatBuilder [x0,x1,x2,x3,x4,x5,x6] = x0<>x1<>x2<>x3<>x4<>x5<>x6
+  #-}
+{-# RULES "builder_mconcat7"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7.
+    mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7
+  #-}
+{-# RULES "builder_mconcat8"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8.
+    mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8
+  #-}
+{-# RULES "builder_mconcat9"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9.
+    mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9
+  #-}
+{-# RULES "builder_mconcat10"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10.
+    mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10
+  #-}
+{-# RULES "builder_mconcat11"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11.
+    mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10<>x11
+  #-}
+{-# RULES "builder_mconcat12"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12.
+     mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10<>x11<>x12
+  #-}
+{-# RULES "builder_mconcat13"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13.
+     mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10<>x11<>x12<>x13
+  #-}
+{-# RULES "builder_mconcat14"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14.
+     mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10<>x11<>x12<>x13<>x14
+  #-}
+{-# RULES "builder_mconcat15"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15.
+     mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10<>x11<>x12<>x13<>x14<>x15
+  #-}
+{-# RULES "builder_mconcat16"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16.
+     mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10<>x11<>x12<>x13<>x14<>x15<>x16
+  #-}
+{-# RULES "builder_mconcat17"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17.
+     mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16,x17]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10<>x11<>x12<>x13<>x14<>x15<>x16<>x17
+  #-}
+{-# RULES "builder_mconcat18"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17 x18.
+     mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16,x17,x18]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10<>x11<>x12<>x13<>x14<>x15<>x16<>x17<>x18
+  #-}
+{-# RULES "builder_mconcat19"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17 x18 x19.
+     mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16,x17,x18,x19]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10<>x11<>x12<>x13<>x14<>x15<>x16<>x17<>x18<>x19
+  #-}
+{-# RULES "builder_mconcat20"
+  forall (x0 :: KafkaWriterBuilder s) x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12 x13 x14 x15 x16 x17 x18 x19 x20.
+     mconcatBuilder [x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16,x17,x18,x19,x20]
+      = x0<>x1<>x2<>x3<>x4<>x5<>x6<>x7<>x8<>x9<>x10<>x11<>x12<>x13<>x14<>x15<>x16<>x17<>x18<>x19<>x20
+  #-}
 
 toBE16 :: Int16 -> Int16
 toBE16 = fromIntegral . byteSwap16 . fromIntegral
