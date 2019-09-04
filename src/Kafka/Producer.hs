@@ -1,3 +1,7 @@
+{-# language
+    BangPatterns
+  #-}
+
 module Kafka.Producer
   ( Producer(..)
   , newProducer
@@ -17,11 +21,15 @@ import Kafka.Internal.Topic (makeTopic)
 import qualified Kafka.Internal.Request as Request
 
 data Producer = Producer
-  { producerKafka :: Kafka
-  , producerTopics :: IORef (Map.Map TopicName Topic)
-  , producerTimeout :: Int
+  { producerKafka :: !Kafka
+    -- ^ Connection to Kafka
+  , producerTopics :: !(IORef (Map.Map TopicName Topic))
+    -- ^ TopicName with associated Topic
+  , producerTimeout :: !Int
+    -- ^ Timeout in microseconds
   }
 
+-- | Attempt to establish a connection to Kafka.
 newProducer :: Peer -> Int -> IO (Either KafkaException Producer)
 newProducer peer timeout = do
   kafka <- newKafka peer
@@ -31,10 +39,11 @@ newProducer peer timeout = do
       tops <- newIORef mempty
       pure (Right (Producer k tops timeout))
 
-produce :: 
-     Producer 
-  -> TopicName
-  -> UnliftedArray ByteArray 
+-- | Send messages to Kafka.
+produce ::
+     Producer -- ^ Producer
+  -> TopicName -- ^ Topic to which we push
+  -> UnliftedArray ByteArray -- ^ Messages
   -> IO (Either KafkaException ())
 produce (Producer k t timeout) topicName msgs = do
   tops <- readIORef t
