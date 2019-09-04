@@ -37,8 +37,6 @@ module Kafka.Internal.Writer
 
 import Control.Applicative (liftA2)
 import Control.Monad.Primitive
-import Control.Monad.Reader
-import Control.Monad.State.Strict
 import Data.Int
 import Data.Primitive (Prim(..), alignment)
 import Data.Primitive.ByteArray
@@ -73,25 +71,21 @@ instance Monad (KafkaWriter s) where
       K g -> g marr# ix1# s1#
   {-# inline (>>=) #-}
 
-instance MonadReader (MutableByteArray s) (KafkaWriter s) where
-  ask = K $ \marr# ix0# s0# -> (# s0#, ix0#, MutableByteArray marr# #)
-  {-# inline ask #-}
-  reader f = K $ \marr# ix0# s0# -> case f (MutableByteArray marr#) of
-    a -> (# s0#, ix0#, a #)
-  {-# inline reader #-}
-  local f (K g) = K $ \marr0# ix0# s0# ->
-    case f (MutableByteArray marr0#) of
-      MutableByteArray marr1# -> g marr1# ix0# s0#
-  {-# inline local #-}
+ask :: KafkaWriter s (MutableByteArray s)
+ask = K $ \marr# ix0# s0# -> (# s0#, ix0#, MutableByteArray marr# #)
+{-# inline ask #-}
 
-instance MonadState Int (KafkaWriter s) where
-  get = K $ \_ ix0# s0# -> (# s0#, ix0#, I# ix0# #)
-  {-# inline get #-}
-  put = \(I# ix#) -> K $ \_ _ s0# -> (# s0#, ix#, () #)
-  {-# inline put #-}
-  state f = K $ \_ ix0# s0# -> case f (I# ix0#) of
-    (a, I# ix1#) -> (# s0#, ix1#, a #)
-  {-# inline state #-}
+get :: KafkaWriter s Int
+get = K $ \_ ix0# s0# -> (# s0#, ix0#, I# ix0# #)
+{-# inline get #-}
+
+modify :: (Int -> Int) -> KafkaWriter s ()
+modify f = K $ \_ ix0# s0# ->
+  let
+    !(I# ix1#) = f (I# ix0#)
+  in
+    (# s0#, ix1#, () #)
+{-# inline modify #-}
 
 instance PrimMonad (KafkaWriter s) where
   type PrimState (KafkaWriter s) = s
@@ -112,12 +106,13 @@ withCtx f = do
   index <- get
   arr <- ask
   f index arr
+{-# inline withCtx #-}
 
 writeNum :: (Prim a, PrimUnaligned a)
   => a -> KafkaWriter s ()
 writeNum n = withCtx $ \index arr -> do
   writeUnalignedByteArray arr index n
-  modify' (+ (alignment n))
+  modify (+ (alignment n))
 {-# inlineable writeNum #-}
 
 write8 :: Int8 -> KafkaWriter s ()
@@ -153,7 +148,7 @@ writeBytes ::
   -> KafkaWriter s ()
 writeBytes src len = withCtx $ \index arr -> do
   copyByteArray arr index src 0 len
-  modify' (+len)
+  modify (+len)
 
 buildBytes :: ByteArray -> Int -> KafkaWriterBuilder s
 buildBytes src len = Kwb len (writeBytes src len)
