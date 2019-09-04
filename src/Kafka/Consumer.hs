@@ -42,6 +42,7 @@ import Data.Int
 import Data.IntMap (IntMap)
 import Data.Maybe
 
+import qualified Data.ByteString as B
 import qualified Data.IntMap as IM
 
 import Kafka.Common
@@ -222,7 +223,7 @@ heartbeats = do
     Interrupted -> pure ()
     Uninterrupted -> do
       liftIO (threadDelay 3000000)
-      void sendHeartbeat
+      sendHeartbeat
       heartbeats
 
 -- | rejoin is called when the client receives a "rebalance in progress"
@@ -277,11 +278,78 @@ getRecordSet fetchWaitTime = do
     liftConsumer $ fetch kafka csTopicName fetchWaitTime offsetList maxFetchBytes
     interrupt <- liftIO $ registerDelay defaultTimeout
     fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
+    let errs = fetchResponseErrors fetchResp
+    when (not (null errs)) $ do
+      throwError (KafkaFetchException errs)
     let newOffsets = updateOffsets csTopicName offsets fetchResp
     modifyv (\s -> s { offsets = newOffsets })
     cs <- getv
     when (autoCommit == AutoCommit) (commitOffsets' cs)
     pure fetchResp
+
+data KafkaResponseErrorCode
+  = UnknownError
+  | OffsetOutOfRange
+  | UnknownTopicOrPartition
+  | NotLeaderForPartition
+  | ReplicaNotAvailable
+  | OffsetMetadataTooLarge
+  | IllegalGeneration
+  | UnknownMemberId
+  | InvalidCommitOffsetSize
+  deriving Eq
+
+fromErrorCode :: Int16 -> Maybe KafkaResponseErrorCode
+fromErrorCode = \case
+  1  -> Just OffsetOutOfRange
+  3  -> Just UnknownTopicOrPartition
+  6  -> Just NotLeaderForPartition
+  9  -> Just ReplicaNotAvailable
+  12 -> Just OffsetMetadataTooLarge
+  22 -> Just IllegalGeneration
+  25 -> Just UnknownMemberId
+  28 -> Just InvalidCommitOffsetSize
+  -1 -> Just UnknownError
+  _  -> Nothing
+
+offsetCommitErrors :: C.OffsetCommitResponse -> [(B.ByteString, Int32, Int16)]
+offsetCommitErrors resp =
+  let tops = C.topics resp
+  in  foldMap
+        (\t ->
+          [(C.topic t, p, e)
+            | p <- fmap C.partitionIndex (C.partitions t)
+            , e <- fmap C.errorCode (C.partitions t)
+            , maybe False (`elem` fatalErrors) (fromErrorCode e)
+          ])
+        tops
+  where
+  fatalErrors =
+    [ OffsetMetadataTooLarge
+    , IllegalGeneration
+    , UnknownMemberId
+    , InvalidCommitOffsetSize
+    ]
+
+fetchResponseErrors :: FetchResponse -> [(B.ByteString, Int32, Int16)]
+fetchResponseErrors resp =
+  let tops = topics resp
+  in  foldMap
+        (\t ->
+          [(topic t, p, e)
+            | p <- fmap (partition . partitionHeader) (partitions t)
+            , e <- fmap (partitionHeaderErrorCode . partitionHeader) (partitions t)
+            , maybe False (`elem` fatalErrors) (fromErrorCode e)
+          ])
+        tops
+  where
+  fatalErrors =
+    [ UnknownError
+    , OffsetOutOfRange
+    , UnknownTopicOrPartition
+    , NotLeaderForPartition
+    , ReplicaNotAvailable
+    ]
 
 latestOffsets :: [Int32] -> Consumer (IntMap Int64)
 latestOffsets indices = do
@@ -302,7 +370,10 @@ commitOffsets' cs = do
   let ConsumerSettings {..} = settings
   liftConsumer $ offsetCommit kafka csTopicName (toOffsetList offsets) member genId
   timeout <- liftIO $ registerDelay defaultTimeout
-  void $ liftConsumer $ tryParse <$> C.getOffsetCommitResponse kafka timeout
+  resp <- liftConsumer $ tryParse <$> C.getOffsetCommitResponse kafka timeout
+  let errs = offsetCommitErrors resp
+  when (not (null errs)) $ do
+    throwError (KafkaOffsetCommitException errs)
 
 commitOffsets :: Consumer ()
 commitOffsets = do
