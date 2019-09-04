@@ -118,7 +118,7 @@ data ConsumerSettings = ConsumerSettings
   , groupName :: !ByteArray -- ^ Name of the group
   , defaultTimeout :: !Int
   , autoCommit :: !AutoCommit
-  } deriving (Show)
+  }
 
 data AutoCommit = AutoCommit | NoAutoCommit
   deriving (Eq, Show)
@@ -132,27 +132,16 @@ data ConsumerState = ConsumerState
   , members :: [Member]
   , offsets :: !(IntMap Int64)
   , partitionCount :: !Int32
-  , sock :: !KafkaSocket
+  , sock :: !(MVar ())
   , quit :: !Interruptedness
-  } deriving (Show)
+  }
 
-newtype KafkaSocket = KafkaSocket { getSock :: MVar () }
-
-putKafkaSocket :: KafkaSocket -> () -> IO ()
-putKafkaSocket = putMVar . getSock
-
-takeKafkaSocket :: KafkaSocket -> IO ()
-takeKafkaSocket = takeMVar . getSock
-
-withSocket :: KafkaSocket -> Consumer a -> Consumer a
+withSocket :: MVar () -> Consumer a -> Consumer a
 withSocket sock consumer = Consumer $ ReaderT $ \r -> ExceptT $ do
-  liftIO (takeKafkaSocket sock)
+  liftIO (takeMVar sock)
   result <- evalConsumer r consumer
-  liftIO (putKafkaSocket sock ())
+  liftIO (putMVar sock ())
   pure result
-
-instance Show KafkaSocket where
-  show _ = "<socket>"
 
 getListedOffsets :: [Int32] -> Consumer (IntMap Int64)
 getListedOffsets allIndices = do
@@ -217,7 +206,7 @@ newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ do
             , members = members
             , offsets = mempty
             , partitionCount = partitionCount
-            , sock = KafkaSocket so
+            , sock = so
             , quit = Uninterrupted
             }
       v <- liftIO (newTVarIO initialState)
