@@ -1,9 +1,11 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# language
+    BangPatterns
+  , DataKinds
+  , DerivingStrategies
+  , GADTs
+  , OverloadedStrings
+  , StandaloneDeriving
+  #-}
 
 module Kafka.Common where
 
@@ -35,20 +37,20 @@ newtype TopicName = TopicName ByteArray
   deriving (Eq, Show)
 
 getTopicName :: Topic -> TopicName
-getTopicName (Topic name _ _) = TopicName name
+getTopicName (Topic name _ _) = coerce name
 
 mkTopicName :: String -> TopicName
-mkTopicName = TopicName . fromString
+mkTopicName = coerce . fromString
 
 data PartitionOffset = PartitionOffset
-  { partitionIndex :: Int32
-  , partitionOffset :: Int64
+  { partitionIndex :: !Int32
+  , partitionOffset :: !Int64
   } deriving (Eq, Show)
 
 data KafkaTimestamp
   = Latest
   | Earliest
-  | At Int64
+  | At !Int64
   deriving (Show)
 
 data AutoCreateTopic
@@ -60,35 +62,37 @@ data KafkaException where
   KafkaSendException :: SendException 'Uninterruptible -> KafkaException
   KafkaReceiveException :: ReceiveException 'Interruptible -> KafkaException
   KafkaParseException :: String -> KafkaException
-  KafkaUnexpectedErrorCodeException :: Int16 -> KafkaException
+  KafkaUnexpectedErrorCodeException :: !Int16 -> KafkaException
   KafkaConnectException :: ConnectException ('Internet 'V4) 'Uninterruptible -> KafkaException
-  KafkaException :: Text -> KafkaException
+  KafkaException :: !Text -> KafkaException
 
 deriving stock instance Show KafkaException
 
-data GroupMember = GroupMember ByteArray (Maybe ByteArray)
+data GroupMember = GroupMember !ByteArray !(Maybe ByteArray)
   deriving (Eq, Show)
 
 data GenerationId = GenerationId
-  { getGenerationId :: Int32
+  { getGenerationId :: !Int32
   } deriving (Eq, Show)
 
 data MemberAssignment = MemberAssignment
-  { assignedMemberId :: ByteArray
+  { assignedMemberId :: !ByteArray
   , assignedTopics :: [TopicAssignment]
   } deriving (Eq, Show)
 
 data TopicAssignment = TopicAssignment
-  { assignedTopicName :: ByteArray
+  { assignedTopicName :: !ByteArray
   , assignedPartitions :: [Int32]
   } deriving (Eq, Show)
 
 data Interruptedness = Interrupted | Uninterrupted
   deriving (Eq, Show)
 
+-- | Attempt to open a connection to Kafka.
 newKafka :: Peer -> IO (Either KafkaException Kafka)
 newKafka = fmap (first KafkaConnectException) . coerce . connect
 
+-- | Kafka on localhost.
 defaultKafka :: Peer
 defaultKafka = Peer (IPv4 0) 9092
 
