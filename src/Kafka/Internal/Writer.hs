@@ -87,7 +87,7 @@ writeBytes ::
   -> Int
   -> KafkaWriter s
 writeBytes (ByteArray src#) (I# len#) = K $ \marr# ix0# s0# ->
-  case copyByteArray# src# ix0# marr# 0# len# s0# of
+  case copyByteArray# src# 0# marr# ix0# len# s0# of
     s1# -> (# s1#, ix0# +# len# #)
 {-# inline writeBytes #-}
 
