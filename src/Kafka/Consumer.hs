@@ -5,7 +5,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Kafka.Consumer
   ( AutoCommit(..)
@@ -112,28 +112,46 @@ evalConsumer v consumer = do
 
 -- | Configuration determined before the consumer starts
 data ConsumerSettings = ConsumerSettings
-  { groupFetchStart :: !KafkaTimestamp -- ^ Where to start if the group is new
-  , maxFetchBytes :: !Int32 -- ^ Maximum number of bytes to allow per response
-  , csTopicName :: !TopicName -- ^ Topic to fetch on
-  , groupName :: !ByteArray -- ^ Name of the group
-  , defaultTimeout :: !Int
+  { groupFetchStart :: !KafkaTimestamp
+    -- ^ Where to start if the group is new
+  , maxFetchBytes :: !Int32
+    -- ^ Maximum number of bytes to allow per response
+  , csTopicName :: !TopicName
+    -- ^ Topic to fetch on
+  , groupName :: !ByteArray
+    -- ^ Name of the group
+  , timeout :: !Int
+    -- ^ Timeout for polling from Kafka, in microseconds
   , autoCommit :: !AutoCommit
+    -- ^ Whether or not to automatically commit offsets
   } deriving (Show)
 
-data AutoCommit = AutoCommit | NoAutoCommit
+-- | Whether or not to automatically commit offsets
+data AutoCommit
+  = AutoCommit -- ^ Automatically commit offsets
+  | NoAutoCommit -- ^ Don't automatically commit offsets
   deriving (Eq, Show)
 
 -- | Consumer information that varies while the consumer is running
 data ConsumerState = ConsumerState
   { kafka :: !Kafka
+    -- ^ Connection to Kafka
   , settings :: !ConsumerSettings
+    -- ^ Settings fro the Consumer
   , member :: !GroupMember
+    -- ^ Member Id (IMPROVE)
   , genId :: !GenerationId
+    -- ^ Generation Id (IMPROVE)
   , members :: [Member]
+    -- ^ Members (IMPROVE)
   , offsets :: !(IntMap Int64)
+    -- ^ Offsets according to each partition
   , partitionCount :: !Int32
+    -- ^ Number of partitions
   , sock :: !KafkaSocket
+    -- ^ KafkaSocket (IMPROVE)
   , quit :: !Interruptedness
+    -- ^ Whether or not consumption has been interrupted.
   } deriving (Show)
 
 newtype KafkaSocket = KafkaSocket { getSock :: MVar () }
@@ -159,7 +177,7 @@ getListedOffsets allIndices = do
   ConsumerState {..} <- getv
   let ConsumerSettings {..} = settings
   liftConsumer $ listOffsets kafka csTopicName allIndices groupFetchStart
-  listOffsetsTimeout <- liftIO (registerDelay defaultTimeout)
+  listOffsetsTimeout <- liftIO (registerDelay timeout)
   listedOffs <- liftConsumer $ tryParse <$>
     L.getListOffsetsResponse kafka listOffsetsTimeout
   pure (listOffsetsMap listedOffs)
@@ -203,7 +221,7 @@ newConsumer ::
   -> IO (Either KafkaException (TVar ConsumerState))
 newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ do
   let initialMember = GroupMember groupName Nothing
-  partitionCount <- ExceptT $ getPartitionCount kafka csTopicName defaultTimeout
+  partitionCount <- ExceptT $ getPartitionCount kafka csTopicName timeout
   (genId', me, members) <- join kafka csTopicName initialMember
   (newGenId, assigns) <- sync kafka csTopicName partitionCount me members genId'
   case partitionsForTopic csTopicName assigns of
@@ -266,7 +284,7 @@ sendHeartbeat = do
   ConsumerState {sock, member, genId, kafka, settings} <- getv
   withSocket sock $ do
     liftConsumer $ heartbeat kafka member genId
-    timeout <- liftIO $ registerDelay (defaultTimeout settings)
+    timeout <- liftIO $ registerDelay (timeout settings)
     resp <- liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout
     when (H.errorCode resp == errorRebalanceInProgress) rejoin
 
@@ -275,7 +293,7 @@ leave = do
   ConsumerState {..} <- getv
   withSocket sock $ do
     liftConsumer $ leaveGroup kafka member
-    timeout <- liftIO $ registerDelay (defaultTimeout settings)
+    timeout <- liftIO $ registerDelay (timeout settings)
     void $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka timeout
     modifyv (\s -> s { quit = Interrupted })
 
@@ -286,7 +304,7 @@ getRecordSet fetchWaitTime = do
     let offsetList = toOffsetList offsets
         ConsumerSettings {..} = settings
     liftConsumer $ fetch kafka csTopicName fetchWaitTime offsetList maxFetchBytes
-    interrupt <- liftIO $ registerDelay defaultTimeout
+    interrupt <- liftIO $ registerDelay timeout
     fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
     let newOffsets = updateOffsets csTopicName offsets fetchResp
     modifyv (\s -> s { offsets = newOffsets })
@@ -298,7 +316,7 @@ latestOffsets :: [Int32] -> Consumer (IntMap Int64)
 latestOffsets indices = do
   ConsumerState {..} <- getv
   liftConsumer $ offsetFetch kafka member (csTopicName settings) indices
-  timeout <- liftIO $ registerDelay (defaultTimeout settings)
+  timeout <- liftIO $ registerDelay (timeout settings)
   offs <- liftConsumer $ tryParse <$> O.getOffsetFetchResponse kafka timeout
   pure (offsetFetchOffsets offs)
 
@@ -312,8 +330,8 @@ commitOffsets' cs = do
   let ConsumerState {..} = cs
   let ConsumerSettings {..} = settings
   liftConsumer $ offsetCommit kafka csTopicName (toOffsetList offsets) member genId
-  timeout <- liftIO $ registerDelay defaultTimeout
-  void $ liftConsumer $ tryParse <$> C.getOffsetCommitResponse kafka timeout
+  timeoutV <- liftIO $ registerDelay timeout
+  void $ liftConsumer $ tryParse <$> C.getOffsetCommitResponse kafka timeoutV
 
 commitOffsets :: Consumer ()
 commitOffsets = do
@@ -357,9 +375,9 @@ expectedSyncErrors =
   , errorMemberIdRequired
   ]
 
--- We want to wait a long time for a response when we join the group because
--- the server may be waiting on members from a previous generation who didn't
--- leave properly
+-- We want to wait a (potentially) long time for a response
+-- when we join the group because the server may be waiting
+-- on members from a previous generation who didn't leave properly
 joinTimeout :: Int
 joinTimeout = 30000000
 

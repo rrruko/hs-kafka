@@ -67,7 +67,7 @@ consumer interrupt = do
             , groupName = fromByteString "ruko-diamond"
             , maxFetchBytes = 30000
             , groupFetchStart = Earliest
-            , defaultTimeout = 5000000
+            , timeout = 5000000
             , autoCommit = AutoCommit
             }
       void $ newConsumer k diamondSettings >>= \case
