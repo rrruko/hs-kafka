@@ -41,11 +41,13 @@ pickMany n xs g =
       (rest, g'') = pickMany (n-1) xs g'
   in  (e:rest, g'')
 
+topicName :: TopicName
+topicName = mkTopicName "example-consumer-group"
+
 main :: IO ()
 main = do
-  let topicName = mkTopicName "example-consumer-group"
-      timeout = 5000000
-  p <- newProducer defaultKafka topicName timeout
+  let timeout = 5000000
+  p <- newProducer defaultKafka timeout
   rand <- getStdGen
   case p of
     Left err -> putStrLn $ "Failed to create producer (" <> show err <> ")"
@@ -54,7 +56,7 @@ main = do
 loop :: Producer -> StdGen -> IO ()
 loop p rand = do
   let (pokes, rand') = pickMany 10000 names rand
-  _ <- produce p (messages pokes)
+  _ <- produce p topicName (messages pokes)
   putStrLn ("sent " <> show (length (concat pokes)) <> " bytes")
   threadDelay 1000000
   loop p rand'
