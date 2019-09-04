@@ -1,5 +1,5 @@
 module Kafka.Producer
-  ( Producer
+  ( Producer(..)
   , newProducer
   , produce
   ) where
