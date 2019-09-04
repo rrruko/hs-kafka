@@ -9,9 +9,6 @@
 
 module Main (main) where
 
-import Control.Applicative (liftA2)
-import Control.Monad (replicateM_)
-import GHC.Exts
 import Unsafe.Coerce (unsafeCoerce)
 
 import Hedgehog
@@ -19,70 +16,38 @@ import Hedgehog.Classes
 --import qualified Hedgehog.Gen as Gen
 --import qualified Hedgehog.Range as Range
 
-import Kafka.Internal.Writer hiding (KafkaWriterBuilder(..))
+import Kafka.Internal.Writer
 
 main :: IO Bool
 main = lawsCheckMany
-  [ ( "KafkaWriter s"
-    , [ functorLaws genKw
-      , applicativeLaws genKw
-      , monadLaws genKw
+  [ ( "KafkaWriterBuilder s"
+    , [ semigroupLaws genKw
+      , monoidLaws genKw
       ]
     )
   ]
 
+defaultKwb :: KafkaWriterBuilder s
+defaultKwb = mconcat (
+     replicate 200 (build8 7)
+  ++ replicate 100 (build16 11)
+  ++ replicate 50 (build32 13)
+  ++ replicate 25 (build64 17))
+
 -- | We assume a size of 1000.
-genKw :: Gen a -> Gen (KafkaWriter s a)
-genKw genA = do
-  a <- genA
-  pure $ do
-    replicateM_ 200 (write8 7)
-    replicateM_ 100 (write16 11)
-    replicateM_ 50 (write32 13)
-    replicateM_ 25 (write64 17)
-    pure a
+genKw :: Gen (KafkaWriterBuilder s)
+genKw = pure defaultKwb
 
-instance Eq a => Eq (KafkaWriter s a) where
+instance Eq (KafkaWriterBuilder s) where
   (==) = reallyUnsafeKafkaWriterEquality
-  {-# inline (==) #-}
 
-instance Show a => Show (KafkaWriter s a) where
-  show = unsafeShowKafkaWriter
-  {-# inline show #-}
+instance Show (KafkaWriterBuilder s) where
+  show _ = "<KafkaWriterBuilder>"
 
-unsafeShowKafkaWriter :: forall s a. Show a
-  => KafkaWriter s a
-  -> String
-unsafeShowKafkaWriter kw = run (unsafeCoerce $ fmap show kw)
-{-# noinline unsafeShowKafkaWriter #-}
-
-reallyUnsafeKafkaWriterEquality :: (Eq a)
-  => KafkaWriter s a
-  -> KafkaWriter s a
+reallyUnsafeKafkaWriterEquality :: ()
+  => KafkaWriterBuilder s
+  -> KafkaWriterBuilder s
   -> Bool
-reallyUnsafeKafkaWriterEquality kw1 kw2 = run
-  (unsafeCoerce $ liftA2 (==) kw1 kw2)
+reallyUnsafeKafkaWriterEquality kw1 kw2 =
+  evaluate (unsafeCoerce kw1) == evaluate (unsafeCoerce kw2)
 {-# noinline reallyUnsafeKafkaWriterEquality #-}
-
-run :: (forall s. KafkaWriter s a) -> a
-run kw = case runRW# (runKafkaWriter# 10000# kw) of
-  (# _, a #) -> a
-
-runKafkaWriter# :: Int# -> KafkaWriter s a -> State# s -> (# State# s, a #)
-runKafkaWriter# sz# (K g) = \s0# -> case newByteArray# sz# s0# of
-  (# s1#, marr# #) -> case g marr# 0# s1# of
-    (# s2#, _, a #) -> (# s2#, a #)
-{-# inline runKafkaWriter# #-}
-
-data KafkaWriterBuilder s a = Kwb
-  !Int -- ^ length
-  !(KafkaWriter s a)
-
-instance Semigroup a => Semigroup (KafkaWriterBuilder s a) where
-  Kwb len1 x <> Kwb len2 y = Kwb (len1 + len2) (x <> y)
-  {-# inline (<>) #-}
-
-instance Monoid a => Monoid (KafkaWriterBuilder s a) where
-  mempty = Kwb 0 mempty
-  {-# inline mempty #-}
-
