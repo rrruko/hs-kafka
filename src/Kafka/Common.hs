@@ -32,7 +32,7 @@ data Topic = Topic
   (IORef Int) -- incrementing number
 
 newtype TopicName = TopicName ByteArray
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 getTopicName :: Topic -> TopicName
 getTopicName (Topic name _ _) = TopicName name
