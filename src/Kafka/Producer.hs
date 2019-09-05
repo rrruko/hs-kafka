@@ -11,12 +11,14 @@ module Kafka.Producer
 import Data.IORef
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
+import GHC.Conc (registerDelay)
 import Socket.Stream.IPv4 (Peer)
 import System.IO (Handle)
 
 import qualified Data.Map.Strict as Map
 
 import Kafka.Common
+import Kafka.Internal.Produce.Response
 import Kafka.Internal.Request.Types
 import Kafka.Internal.Topic (makeTopic)
 
@@ -43,20 +45,34 @@ newProducer peer timeout handle = do
       tops <- newIORef mempty
       pure (Right (Producer k tops timeout handle))
 
+produce' ::
+     Producer
+  -> Topic
+  -> UnliftedArray ByteArray
+  -> IO (Either KafkaException ())
+produce' (Producer k _ timeout handle) topic msgs = do
+  status <- Request.produce k (ProduceRequest topic timeout msgs) handle
+  case status of
+    Left err -> pure (Left err)
+    Right () -> do
+      interrupt <- registerDelay 30000000
+      (fmap . fmap) (const ()) $ getProduceResponse k interrupt handle
+
+
 -- | Send messages to Kafka.
 produce ::
      Producer -- ^ Producer
   -> TopicName -- ^ Topic to which we push
   -> UnliftedArray ByteArray -- ^ Messages
   -> IO (Either KafkaException ())
-produce (Producer k t timeout handle) topicName msgs = do
+produce producer@(Producer k t _ handle) topicName msgs = do
   tops <- readIORef t
   case Map.lookup topicName tops of
-    Just topicState -> Request.produce k (ProduceRequest topicState timeout msgs) handle
+    Just topicState -> produce' producer topicState msgs
     Nothing -> do
       newTopic <- makeTopic k topicName handle
       case newTopic of
         Right top -> do
           modifyIORef t (Map.insert topicName top)
-          Request.produce k (ProduceRequest top timeout msgs) handle
+          produce' producer top msgs
         Left err -> pure (Left err)
