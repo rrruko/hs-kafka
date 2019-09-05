@@ -70,7 +70,6 @@ library
     , ip >= 1.5.0
     , mtl >= 2.2.2 && < 2.3
     , primitive >= 0.7.0.0 && < 0.8.0.0
-    , primitive-convenience >= 0.1 && < 0.2
     , primitive-unaligned >= 0.1.1.0 && < 0.2.0.0
     , primitive-unlifted >= 0.1.1.0 && < 0.2.0.0
     , primitive-slice >= 0.1.0.0 && < 0.2.0.0
