@@ -16,6 +16,7 @@ import Socket.Stream.IPv4 (Peer)
 import qualified Data.Map.Strict as Map
 
 import Kafka.Common
+import Kafka.Internal.Request.Types
 import Kafka.Internal.Topic (makeTopic)
 
 import qualified Kafka.Internal.Request as Request
@@ -48,11 +49,11 @@ produce ::
 produce (Producer k t timeout) topicName msgs = do
   tops <- readIORef t
   case Map.lookup topicName tops of
-    Just topicState -> Request.produce k topicState timeout msgs
+    Just topicState -> Request.produce k (ProduceRequest topicState timeout msgs) Nothing
     Nothing -> do
-      newTopic <- makeTopic k topicName
+      newTopic <- makeTopic k topicName Nothing
       case newTopic of
         Right top -> do
           modifyIORef t (Map.insert topicName top)
-          Request.produce k top timeout msgs
+          Request.produce k (ProduceRequest top timeout msgs) Nothing
         Left err -> pure (Left err)
