@@ -47,7 +47,7 @@ topicName = mkTopicName "example-consumer-group"
 main :: IO ()
 main = do
   let timeout = 5000000
-  p <- newProducer defaultKafka timeout
+  p <- newProducer defaultKafka timeout Nothing
   rand <- getStdGen
   case p of
     Left err -> putStrLn $ "Failed to create producer (" <> show err <> ")"
