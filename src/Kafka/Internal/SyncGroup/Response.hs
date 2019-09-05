@@ -10,6 +10,7 @@ import Data.Attoparsec.ByteString (Parser, (<?>), takeByteString)
 import Data.ByteString (ByteString)
 import Data.Int
 import GHC.Conc
+import System.IO
 
 import Kafka.Internal.Combinator
 import Kafka.Common
@@ -56,5 +57,6 @@ parseSyncGroupResponse = do
 getSyncGroupResponse ::
      Kafka
   -> TVar Bool
+  -> Maybe Handle
   -> IO (Either KafkaException (Either String SyncGroupResponse))
 getSyncGroupResponse = fromKafkaResponse parseSyncGroupResponse

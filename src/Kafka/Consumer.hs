@@ -173,7 +173,7 @@ getListedOffsets allIndices = do
   liftConsumer $ listOffsets kafka (ListOffsetsRequest csTopicName allIndices groupFetchStart) handle
   listOffsetsTimeout <- liftIO (registerDelay timeout)
   listedOffs <- liftConsumer $ tryParse <$>
-    L.getListOffsetsResponse kafka listOffsetsTimeout
+    L.getListOffsetsResponse kafka listOffsetsTimeout handle
   pure (listOffsetsMap listedOffs)
 
 initializeOffsets :: [Int32] -> Consumer ()
@@ -279,7 +279,7 @@ sendHeartbeat = do
   withSocket sock $ do
     liftConsumer $ heartbeat kafka (HeartbeatRequest member genId) (handle settings)
     timeout <- liftIO $ registerDelay (timeout settings)
-    resp <- liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout
+    resp <- liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout (handle settings)
     when (H.errorCode resp == errorRebalanceInProgress) rejoin
 
 leave :: Consumer ()
@@ -288,7 +288,7 @@ leave = do
   withSocket sock $ do
     liftConsumer $ leaveGroup kafka (LeaveGroupRequest member) (handle settings)
     timeout <- liftIO $ registerDelay (timeout settings)
-    void $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka timeout
+    void $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka timeout (handle settings)
     modifyv (\s -> s { quit = Interrupted })
 
 getRecordSet :: Int -> Consumer FetchResponse
@@ -302,7 +302,7 @@ getRecordSet fetchWaitTime = do
       (FetchRequest csTopicName fetchWaitTime offsetList maxFetchBytes)
       handle
     interrupt <- liftIO $ registerDelay timeout
-    fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
+    fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt handle
     let errs = fetchResponseErrors fetchResp
     when (not (null errs)) $ do
       throwError (KafkaFetchException errs)
@@ -384,7 +384,7 @@ latestOffsets indices = do
     (OffsetFetchRequest (csTopicName settings) member indices)
     (handle settings)
   timeout <- liftIO $ registerDelay (timeout settings)
-  offs <- liftConsumer $ tryParse <$> O.getOffsetFetchResponse kafka timeout
+  offs <- liftConsumer $ tryParse <$> O.getOffsetFetchResponse kafka timeout (handle settings)
   pure (offsetFetchOffsets offs)
 
 offsetFetchOffsets :: O.OffsetFetchResponse -> IntMap Int64
@@ -401,7 +401,7 @@ commitOffsets' cs = do
     (OffsetCommitRequest csTopicName (toOffsetList offsets) member genId)
     handle
   timeoutV <- liftIO $ registerDelay timeout
-  resp <- liftConsumer $ tryParse <$> C.getOffsetCommitResponse kafka timeoutV
+  resp <- liftConsumer $ tryParse <$> C.getOffsetCommitResponse kafka timeoutV handle
   let errs = offsetCommitErrors resp
   when (not (null errs)) $ do
     throwError (KafkaOffsetCommitException errs)
@@ -470,7 +470,7 @@ sync kafka topicName partitionCount member members genId handle = do
     (SyncGroupRequest member genId assignments)
     handle
   wait <- liftIO (registerDelay joinTimeout)
-  sgr <- ExceptT $ tryParse <$> S.getSyncGroupResponse kafka wait
+  sgr <- ExceptT $ tryParse <$> S.getSyncGroupResponse kafka wait handle
   if S.errorCode sgr `elem` expectedSyncErrors then do
     (newGenId, newMember, newMembers) <- join kafka topicName member handle
     sync kafka topicName partitionCount newMember newMembers newGenId handle
@@ -492,7 +492,7 @@ join kafka top member@(GroupMember name _) handle = do
     (JoinGroupRequest top member)
     handle
   wait <- liftIO (registerDelay joinTimeout)
-  jgr <- ExceptT $ tryParse <$> getJoinGroupResponse kafka wait
+  jgr <- ExceptT $ tryParse <$> getJoinGroupResponse kafka wait handle
   if J.errorCode jgr == errorMemberIdRequired then do
     let memId = Just (fromByteString (J.memberId jgr))
         assignment = GroupMember name memId

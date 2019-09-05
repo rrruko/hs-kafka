@@ -11,6 +11,7 @@ import Data.Attoparsec.ByteString (Parser, (<?>))
 import Data.ByteString
 import Data.Int
 import GHC.Conc
+import System.IO
 
 import Kafka.Internal.Combinator
 import Kafka.Common
@@ -88,5 +89,6 @@ parseMetadataPartition = do
 getMetadataResponse ::
      Kafka
   -> TVar Bool
+  -> Maybe Handle
   -> IO (Either KafkaException (Either String MetadataResponse))
 getMetadataResponse = fromKafkaResponse parseMetadataResponse

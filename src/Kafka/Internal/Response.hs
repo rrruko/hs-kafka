@@ -9,12 +9,13 @@ module Kafka.Internal.Response
 
 import Data.Attoparsec.ByteString (Parser, parseOnly)
 import Data.Bifunctor
-import Data.ByteString
+import Data.ByteString (ByteString)
 import Data.Bytes.Types
 import Data.Primitive.ByteArray
 import Data.Word
 import GHC.Conc
 import Socket.Stream.Interruptible.MutableBytes
+import System.IO
 
 import Kafka.Common
 
@@ -50,15 +51,19 @@ getResponseSizeHeader kafka interrupt = do
   byteCount <- fromIntegral . byteSwap32 <$> readByteArray responseSizeBuf 0
   pure $ byteCount <$ responseStatus
 
-fromKafkaResponse ::
-     Parser a
+fromKafkaResponse :: (Show a)
+  => Parser a
   -> Kafka
   -> TVar Bool
+  -> Maybe Handle
   -> IO (Either KafkaException (Either String a))
-fromKafkaResponse parser kafka interrupt =
-  (fmap . fmap)
-    (parseOnly parser)
-    (getKafkaResponse kafka interrupt)
+fromKafkaResponse parser kafka interrupt debugHandle =
+  getKafkaResponse kafka interrupt >>= \case
+    Right bytes -> do
+      let res = parseOnly parser bytes
+      maybe (pure ()) (\h' -> hPutStrLn h' (show res)) debugHandle
+      pure (Right res)
+    Left err -> pure (Left err)
 
 tryParse :: Either KafkaException (Either String a) -> Either KafkaException a
 tryParse = \case

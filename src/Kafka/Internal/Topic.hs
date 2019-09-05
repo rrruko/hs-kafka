@@ -33,7 +33,7 @@ getPartitionCount kafka topicName timeout handle = runExceptT $ do
   _ <- ExceptT $ metadata kafka (MetadataRequest topicName NeverCreate) handle
   interrupt <- liftIO $ registerDelay timeout
   parts <- fmap (metadataPartitions topicName) $ ExceptT $
-    tryParse <$> M.getMetadataResponse kafka interrupt
+    tryParse <$> M.getMetadataResponse kafka interrupt handle
   case parts of
     Just p -> pure p
     Nothing -> throwError $

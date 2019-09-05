@@ -67,6 +67,3 @@ data MetadataRequest = MetadataRequest
   { metadataTopic :: TopicName
   , metadataAutoCreateTopic :: AutoCreateTopic
   } deriving Show
-
-
-

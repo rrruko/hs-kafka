@@ -10,6 +10,7 @@ import Data.Attoparsec.ByteString (Parser, (<?>))
 import Data.ByteString
 import Data.Int
 import GHC.Conc
+import System.IO
 
 import Kafka.Internal.Combinator
 import Kafka.Common
@@ -60,5 +61,6 @@ parseOffsetFetchPartitions = do
 getOffsetFetchResponse ::
      Kafka
   -> TVar Bool
+  -> Maybe Handle
   -> IO (Either KafkaException (Either String OffsetFetchResponse))
 getOffsetFetchResponse = fromKafkaResponse parseOffsetFetchResponse

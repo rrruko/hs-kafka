@@ -15,6 +15,7 @@ import Data.Coerce
 import Data.Maybe
 import Net.IPv4 (ipv4)
 import Socket.Stream.IPv4 (Peer(..))
+import System.IO
 import System.IO.Unsafe (unsafePerformIO)
 
 import qualified Data.ByteString.Char8 as B
@@ -62,6 +63,7 @@ consumer interrupt = do
   case kaf of
     Left e -> putStrLn ("failed to connect (" <> show e <> ")")
     Right k -> do
+      h <- openFile "debug" WriteMode
       let diamondSettings = ConsumerSettings
             { csTopicName = TopicName (fromByteString "diamond")
             , groupName = fromByteString "ruko-diamond"
@@ -69,7 +71,7 @@ consumer interrupt = do
             , groupFetchStart = Earliest
             , timeout = 5000000
             , autoCommit = AutoCommit
-            , handle = Nothing
+            , handle = Just h
             }
       void $ newConsumer k diamondSettings >>= \case
         Left err -> putStrLn ("Failed to create consumer: " <> show err)

@@ -21,6 +21,7 @@ import Data.Int
 import Data.List (find)
 import Data.List.NonEmpty (nonEmpty)
 import GHC.Conc
+import System.IO
 
 import Kafka.Common
 import Kafka.Internal.Combinator
@@ -164,6 +165,7 @@ parseHeader = do
 getFetchResponse ::
      Kafka
   -> TVar Bool
+  -> Maybe Handle
   -> IO (Either KafkaException (Either String FetchResponse))
 getFetchResponse = fromKafkaResponse parseFetchResponse
 

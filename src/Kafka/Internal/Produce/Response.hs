@@ -13,6 +13,7 @@ import Data.Attoparsec.ByteString ((<?>), Parser)
 import Data.ByteString (ByteString)
 import Data.Int
 import GHC.Conc
+import System.IO (Handle)
 
 import qualified Data.Attoparsec.ByteString as AT
 
@@ -67,5 +68,6 @@ parseProducePartitionResponse = ProducePartitionResponse
 getProduceResponse ::
      Kafka
   -> TVar Bool
+  -> Maybe Handle
   -> IO (Either KafkaException (Either String ProduceResponse))
 getProduceResponse = fromKafkaResponse parseProduceResponse
