@@ -41,12 +41,14 @@ import Data.Primitive.ByteArray
 import Data.Int
 import Data.IntMap (IntMap)
 import Data.Maybe
+import System.IO (Handle)
 
 import qualified Data.ByteString as B
 import qualified Data.IntMap as IM
 
 import Kafka.Common
 import Kafka.Internal.Request
+import Kafka.Internal.Request.Types
 import Kafka.Internal.Fetch.Response
 import Kafka.Internal.JoinGroup.Response (Member, getJoinGroupResponse)
 import Kafka.Internal.LeaveGroup.Response
@@ -119,6 +121,7 @@ data ConsumerSettings = ConsumerSettings
   , groupName :: !ByteArray -- ^ Name of the group
   , defaultTimeout :: !Int
   , autoCommit :: !AutoCommit
+  , handle :: !(Maybe Handle)
   }
 
 data AutoCommit = AutoCommit | NoAutoCommit
@@ -148,7 +151,7 @@ getListedOffsets :: [Int32] -> Consumer (IntMap Int64)
 getListedOffsets allIndices = do
   ConsumerState {..} <- getv
   let ConsumerSettings {..} = settings
-  liftConsumer $ listOffsets kafka csTopicName allIndices groupFetchStart
+  liftConsumer $ listOffsets kafka (ListOffsetsRequest csTopicName allIndices groupFetchStart) handle
   listOffsetsTimeout <- liftIO (registerDelay defaultTimeout)
   listedOffs <- liftConsumer $ tryParse <$>
     L.getListOffsetsResponse kafka listOffsetsTimeout
@@ -193,9 +196,9 @@ newConsumer ::
   -> IO (Either KafkaException (TVar ConsumerState))
 newConsumer kafka settings@(ConsumerSettings {..}) = runExceptT $ do
   let initialMember = GroupMember groupName Nothing
-  partitionCount <- ExceptT $ getPartitionCount kafka csTopicName defaultTimeout
-  (genId', me, members) <- join kafka csTopicName initialMember
-  (newGenId, assigns) <- sync kafka csTopicName partitionCount me members genId'
+  partitionCount <- ExceptT $ getPartitionCount kafka csTopicName defaultTimeout handle
+  (genId', me, members) <- join kafka csTopicName initialMember handle
+  (newGenId, assigns) <- sync kafka csTopicName partitionCount me members genId' handle
   case partitionsForTopic csTopicName assigns of
     Just indices -> do
       so <- liftIO (newMVar ())
@@ -234,8 +237,8 @@ rejoin :: Consumer ()
 rejoin = do
   ConsumerState {kafka, member, partitionCount, settings} <- getv
   let topicName = csTopicName settings
-  (genId', newMember, members') <- Consumer $ lift $ join kafka topicName member
-  (newGenId, assigns) <- Consumer $ lift $ sync kafka topicName partitionCount newMember members' genId'
+  (genId', newMember, members') <- Consumer $ lift $ join kafka topicName member (handle settings)
+  (newGenId, assigns) <- Consumer $ lift $ sync kafka topicName partitionCount newMember members' genId' (handle settings)
   case partitionsForTopic topicName assigns of
     Just indices -> do
       newOffsets <- latestOffsets indices
@@ -255,7 +258,7 @@ sendHeartbeat :: Consumer ()
 sendHeartbeat = do
   ConsumerState {sock, member, genId, kafka, settings} <- getv
   withSocket sock $ do
-    liftConsumer $ heartbeat kafka member genId
+    liftConsumer $ heartbeat kafka (HeartbeatRequest member genId) (handle settings)
     timeout <- liftIO $ registerDelay (defaultTimeout settings)
     resp <- liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout
     when (H.errorCode resp == errorRebalanceInProgress) rejoin
@@ -264,7 +267,7 @@ leave :: Consumer ()
 leave = do
   ConsumerState {..} <- getv
   withSocket sock $ do
-    liftConsumer $ leaveGroup kafka member
+    liftConsumer $ leaveGroup kafka (LeaveGroupRequest member) (handle settings)
     timeout <- liftIO $ registerDelay (defaultTimeout settings)
     void $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka timeout
     modifyv (\s -> s { quit = Interrupted })
@@ -275,7 +278,10 @@ getRecordSet fetchWaitTime = do
     ConsumerState {..} <- getv
     let offsetList = toOffsetList offsets
         ConsumerSettings {..} = settings
-    liftConsumer $ fetch kafka csTopicName fetchWaitTime offsetList maxFetchBytes
+    liftConsumer $ fetch
+      kafka
+      (FetchRequest csTopicName fetchWaitTime offsetList maxFetchBytes)
+      handle
     interrupt <- liftIO $ registerDelay defaultTimeout
     fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt
     let errs = fetchResponseErrors fetchResp
@@ -354,7 +360,10 @@ fetchResponseErrors resp =
 latestOffsets :: [Int32] -> Consumer (IntMap Int64)
 latestOffsets indices = do
   ConsumerState {..} <- getv
-  liftConsumer $ offsetFetch kafka member (csTopicName settings) indices
+  liftConsumer $ offsetFetch
+    kafka
+    (OffsetFetchRequest (csTopicName settings) member indices)
+    (handle settings)
   timeout <- liftIO $ registerDelay (defaultTimeout settings)
   offs <- liftConsumer $ tryParse <$> O.getOffsetFetchResponse kafka timeout
   pure (offsetFetchOffsets offs)
@@ -368,7 +377,10 @@ commitOffsets' :: ConsumerState -> Consumer ()
 commitOffsets' cs = do
   let ConsumerState {..} = cs
   let ConsumerSettings {..} = settings
-  liftConsumer $ offsetCommit kafka csTopicName (toOffsetList offsets) member genId
+  liftConsumer $ offsetCommit
+    kafka
+    (OffsetCommitRequest csTopicName (toOffsetList offsets) member genId)
+    handle
   timeout <- liftIO $ registerDelay defaultTimeout
   resp <- liftConsumer $ tryParse <$> C.getOffsetCommitResponse kafka timeout
   let errs = offsetCommitErrors resp
@@ -430,15 +442,19 @@ sync ::
   -> GroupMember
   -> [Member]
   -> GenerationId
+  -> Maybe Handle
   -> ExceptT KafkaException IO (GenerationId, [SyncTopicAssignment])
-sync kafka topicName partitionCount member members genId = do
+sync kafka topicName partitionCount member members genId handle = do
   let assignments = assignMembers (length members) topicName partitionCount members
-  ExceptT $ syncGroup kafka member genId assignments
+  ExceptT $ syncGroup
+    kafka
+    (SyncGroupRequest member genId assignments)
+    handle
   wait <- liftIO (registerDelay joinTimeout)
   sgr <- ExceptT $ tryParse <$> S.getSyncGroupResponse kafka wait
   if S.errorCode sgr `elem` expectedSyncErrors then do
-    (newGenId, newMember, newMembers) <- join kafka topicName member
-    sync kafka topicName partitionCount newMember newMembers newGenId
+    (newGenId, newMember, newMembers) <- join kafka topicName member handle
+    sync kafka topicName partitionCount newMember newMembers newGenId handle
   else if S.errorCode sgr == noError then do
     let assigns = S.partitionAssignments <$> S.memberAssignment sgr
     pure (genId, fromMaybe [] assigns)
@@ -449,15 +465,19 @@ join ::
      Kafka
   -> TopicName
   -> GroupMember
+  -> Maybe Handle
   -> ExceptT KafkaException IO (GenerationId, GroupMember, [Member])
-join kafka top member@(GroupMember name _) = do
-  ExceptT $ joinGroup kafka top member
+join kafka top member@(GroupMember name _) handle = do
+  ExceptT $ joinGroup
+    kafka
+    (JoinGroupRequest top member)
+    handle
   wait <- liftIO (registerDelay joinTimeout)
   jgr <- ExceptT $ tryParse <$> getJoinGroupResponse kafka wait
   if J.errorCode jgr == errorMemberIdRequired then do
     let memId = Just (fromByteString (J.memberId jgr))
         assignment = GroupMember name memId
-    join kafka top assignment
+    join kafka top assignment handle
   else if J.errorCode jgr == noError then do
     let genId = GenerationId (J.generationId jgr)
         memId = Just (fromByteString (J.memberId jgr))
