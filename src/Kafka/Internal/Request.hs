@@ -51,7 +51,7 @@ produce ::
   -> Maybe Handle
   -> IO (Either KafkaException ())
 produce kafka req@ProduceRequest{..} handle = do
-  logHandle handle (show req)
+  logHandle handle (showDebug req)
   let Topic topicName parts ctr = produceTopic
   p <- fromIntegral <$> readIORef ctr
   let message = produceRequest
@@ -84,7 +84,7 @@ fetch ::
   -> Maybe Handle
   -> IO (Either KafkaException ())
 fetch kafka req@FetchRequest{..} handle = do
-  logHandle handle (show req)
+  logHandle handle (showDebug req)
   request kafka $ sessionlessFetchRequest
     (fetchWaitTime `div` 1000)
     fetchTopic
@@ -97,7 +97,7 @@ listOffsets ::
   -> Maybe Handle
   -> IO (Either KafkaException ())
 listOffsets kafka req@ListOffsetsRequest{..} handle = do
-  logHandle handle (show req)
+  logHandle handle (showDebug req)
   request kafka $ listOffsetsRequest
     listOffsetsTopic
     listOffsetsIndices
@@ -109,7 +109,7 @@ joinGroup ::
   -> Maybe Handle
   -> IO (Either KafkaException ())
 joinGroup kafka req@JoinGroupRequest{..} handle = do
-  logHandle handle (show req)
+  logHandle handle (showDebug req)
   request kafka $ joinGroupRequest
     joinGroupTopic
     joinGroupMember
@@ -120,7 +120,7 @@ heartbeat ::
   -> Maybe Handle
   -> IO (Either KafkaException ())
 heartbeat kafka req@HeartbeatRequest{..} handle = do
-  logHandle handle (show req)
+  logHandle handle (showDebug req)
   request kafka $ heartbeatRequest
     heartbeatMember
     heartbeatGenId
@@ -131,7 +131,7 @@ syncGroup ::
   -> Maybe Handle
   -> IO (Either KafkaException ())
 syncGroup kafka req@SyncGroupRequest{..} handle = do
-  logHandle handle (show req)
+  logHandle handle (showDebug req)
   request kafka $ syncGroupRequest
     syncGroupMember
     syncGroupGenId
@@ -143,7 +143,7 @@ offsetCommit ::
   -> Maybe Handle
   -> IO (Either KafkaException ())
 offsetCommit kafka req@OffsetCommitRequest{..} handle = do
-  logHandle handle (show req)
+  logHandle handle (showDebug req)
   request kafka $ offsetCommitRequest
     offsetCommitTopic
     offsetCommitOffsets
@@ -156,7 +156,7 @@ offsetFetch ::
   -> Maybe Handle
   -> IO (Either KafkaException ())
 offsetFetch kafka req@OffsetFetchRequest{..} handle = do
-  logHandle handle (show req)
+  logHandle handle (showDebug req)
   request kafka $ offsetFetchRequest
     offsetFetchMember
     offsetFetchTopic
@@ -168,7 +168,7 @@ leaveGroup ::
   -> Maybe Handle
   -> IO (Either KafkaException ())
 leaveGroup kafka req@LeaveGroupRequest{..} handle = do
-  logHandle handle (show req)
+  logHandle handle (showDebug req)
   request kafka $ leaveGroupRequest
     leaveGroupMember
 
@@ -178,7 +178,7 @@ metadata ::
   -> Maybe Handle
   -> IO (Either KafkaException ())
 metadata kafka req@MetadataRequest{..} handle = do
-  logHandle handle (show req)
+  logHandle handle (showDebug req)
   request kafka $ metadataRequest
     metadataTopic
     metadataAutoCreateTopic
