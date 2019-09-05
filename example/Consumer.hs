@@ -69,6 +69,7 @@ consumer interrupt = do
             , groupFetchStart = Earliest
             , timeout = 5000000
             , autoCommit = AutoCommit
+            , handle = Nothing
             }
       void $ newConsumer k diamondSettings >>= \case
         Left err -> putStrLn ("Failed to create consumer: " <> show err)
