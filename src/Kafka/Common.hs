@@ -65,6 +65,8 @@ data KafkaException where
   KafkaUnexpectedErrorCodeException :: !Int16 -> KafkaException
   KafkaConnectException :: ConnectException ('Internet 'V4) 'Uninterruptible -> KafkaException
   KafkaException :: !Text -> KafkaException
+  KafkaOffsetCommitException :: [(BS.ByteString, Int32, Int16)] -> KafkaException
+  KafkaFetchException :: [(BS.ByteString, Int32, Int16)] -> KafkaException
 
 deriving stock instance Show KafkaException
 
