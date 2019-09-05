@@ -61,7 +61,7 @@ fromKafkaResponse parser kafka interrupt debugHandle =
   getKafkaResponse kafka interrupt >>= \case
     Right bytes -> do
       let res = parseOnly parser bytes
-      maybe (pure ()) (\h' -> hPutStrLn h' (show res)) debugHandle
+      maybe (pure ()) (\h' -> hPutStrLn h' (show res) *> hPutStr h' "\n") debugHandle
       pure (Right res)
     Left err -> pure (Left err)
 
