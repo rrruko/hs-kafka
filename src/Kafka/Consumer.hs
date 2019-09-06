@@ -304,13 +304,27 @@ getRecordSet fetchWaitTime = do
     interrupt <- liftIO $ registerDelay timeout
     fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt handle
     let errs = fetchResponseErrors fetchResp
-    when (not (null errs)) $ do
-      throwError (KafkaFetchException errs)
+    forM_ errs $ \(_, partition, errCode) ->
+      case fromErrorCode errCode of
+        Just OffsetOutOfRange -> jumpToLatestOffset partition
+        _ -> throwError (KafkaFetchException errs)
     let newOffsets = updateOffsets csTopicName offsets fetchResp
     modifyv (\s -> s { offsets = newOffsets })
     cs <- getv
     when (autoCommit == AutoCommit) (commitOffsets' cs)
     pure fetchResp
+
+jumpToLatestOffset :: Int32 -> Consumer ()
+jumpToLatestOffset index = do
+  ConsumerState {..} <- getv
+  let ConsumerSettings {..} = settings
+  liftConsumer $ listOffsets kafka (ListOffsetsRequest csTopicName [index] Latest) handle
+  listOffsetsTimeout <- liftIO (registerDelay timeout)
+  resp <- liftConsumer $ tryParse <$>
+    L.getListOffsetsResponse kafka listOffsetsTimeout handle
+  let listedOffs = listOffsetsMap resp
+  -- Right biased union, because we want to jump to the offset in the right map
+  modifyv (\s -> s { offsets = IM.unionWith (\_ y -> y) offsets listedOffs })
 
 data KafkaResponseErrorCode
   = UnknownError
