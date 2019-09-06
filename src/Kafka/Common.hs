@@ -4,7 +4,9 @@
   , DerivingStrategies
   , GADTs
   , OverloadedStrings
+  , ScopedTypeVariables
   , StandaloneDeriving
+  , ViewPatterns
   #-}
 
 module Kafka.Common where
@@ -59,14 +61,33 @@ data AutoCreateTopic
   deriving (Show)
 
 data KafkaException where
-  KafkaSendException :: SendException 'Uninterruptible -> KafkaException
-  KafkaReceiveException :: ReceiveException 'Interruptible -> KafkaException
-  KafkaParseException :: String -> KafkaException
-  KafkaUnexpectedErrorCodeException :: !Int16 -> KafkaException
-  KafkaConnectException :: ConnectException ('Internet 'V4) 'Uninterruptible -> KafkaException
-  KafkaException :: !Text -> KafkaException
-  KafkaOffsetCommitException :: [(BS.ByteString, Int32, Int16)] -> KafkaException
-  KafkaFetchException :: [(BS.ByteString, Int32, Int16)] -> KafkaException
+  KafkaSendException :: ()
+    => SendException 'Uninterruptible
+    -> KafkaException
+  KafkaReceiveException :: ()
+    => ReceiveException 'Interruptible
+    -> KafkaException
+  KafkaCloseException :: ()
+    => CloseException
+    -> KafkaException
+  KafkaParseException :: ()
+    => String
+    -> KafkaException
+  KafkaUnexpectedErrorCodeException :: ()
+    => !Int16
+    -> KafkaException
+  KafkaConnectException :: ()
+    => ConnectException ('Internet 'V4) 'Uninterruptible
+    -> KafkaException
+  KafkaException :: ()
+    => !Text
+    -> KafkaException
+  KafkaOffsetCommitException :: ()
+    => [(BS.ByteString, Int32, Int16)]
+    -> KafkaException
+  KafkaFetchException :: ()
+    => [(BS.ByteString, Int32, Int16)]
+    -> KafkaException
 
 deriving stock instance Show KafkaException
 
@@ -89,6 +110,23 @@ data TopicAssignment = TopicAssignment
 
 data Interruptedness = Interrupted | Uninterrupted
   deriving (Eq, Show)
+
+withKafka :: ()
+  => Peer
+  -> (Kafka -> IO a)
+  -> IO (Either KafkaException a)
+withKafka peer f = do
+  r <- withConnection
+    peer
+    (\e a -> case e of
+      Left c -> pure (Left (KafkaCloseException c))
+      Right () -> pure a
+    )
+    (\(Kafka -> conn) -> fmap Right (f conn)
+    )
+  case r of
+    Left e -> pure (Left (KafkaConnectException e))
+    Right x -> pure x
 
 -- | Attempt to open a connection to Kafka.
 newKafka :: Peer -> IO (Either KafkaException Kafka)
