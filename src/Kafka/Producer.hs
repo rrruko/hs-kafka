@@ -4,6 +4,7 @@
 
 module Kafka.Producer
   ( Producer(..)
+  , withProducer
   , newProducer
   , produce
   ) where
@@ -34,6 +35,17 @@ data Producer = Producer
   , producerDebugHandle :: !(Maybe Handle)
     -- ^ File handle for debug output
   }
+
+withProducer :: ()
+  => Peer
+  -> Int
+  -> Maybe Handle
+  -> (Producer -> IO a)
+  -> IO (Either KafkaException a)
+withProducer peer timeout h f = withKafka peer $ \k -> do
+  topics <- newIORef mempty
+  let producer = Producer k topics timeout h
+  f producer
 
 -- | Attempt to establish a connection to Kafka.
 newProducer :: Peer -> Int -> Maybe Handle -> IO (Either KafkaException Producer)

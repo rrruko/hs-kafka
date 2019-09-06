@@ -4,7 +4,9 @@
   , DerivingStrategies
   , GADTs
   , OverloadedStrings
+  , ScopedTypeVariables
   , StandaloneDeriving
+  , ViewPatterns
   #-}
 
 module Kafka.Common where
@@ -108,6 +110,23 @@ data TopicAssignment = TopicAssignment
 
 data Interruptedness = Interrupted | Uninterrupted
   deriving (Eq, Show)
+
+withKafka :: ()
+  => Peer
+  -> (Kafka -> IO a)
+  -> IO (Either KafkaException a)
+withKafka peer f = do
+  r <- withConnection
+    peer
+    (\e a -> case e of
+      Left c -> pure (Left (KafkaCloseException c))
+      Right () -> pure a
+    )
+    (\(Kafka -> conn) -> fmap Right (f conn)
+    )
+  case r of
+    Left e -> pure (Left (KafkaConnectException e))
+    Right x -> pure x
 
 -- | Attempt to open a connection to Kafka.
 newKafka :: Peer -> IO (Either KafkaException Kafka)

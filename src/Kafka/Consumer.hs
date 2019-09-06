@@ -17,6 +17,7 @@ module Kafka.Consumer
   , getRecordSet
   , leave
   , merge
+  , withConsumer
   , newConsumer
   , getsv
 
@@ -41,6 +42,7 @@ import Data.Primitive.ByteArray
 import Data.Int
 import Data.IntMap (IntMap)
 import Data.Maybe
+import Socket.Stream.IPv4 (Peer)
 import System.IO (Handle)
 
 import qualified Data.ByteString as B
@@ -208,6 +210,21 @@ updateOffsets topicName current r =
     current
   where
   name = toByteString (coerce topicName)
+
+withConsumer :: ()
+  => Peer
+  -> ConsumerSettings
+  -> (TVar ConsumerState -> IO a)
+  -> IO (Either KafkaException a)
+withConsumer peer settings f = do
+  r <- withKafka peer $ \k -> do
+    r <- newConsumer k settings
+    case r of
+      Left e -> pure (Left e)
+      Right state -> fmap Right (f state)
+  case r of
+    Left e -> pure (Left e)
+    Right e -> pure e
 
 newConsumer ::
      Kafka
