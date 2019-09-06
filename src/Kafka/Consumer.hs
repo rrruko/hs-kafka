@@ -325,6 +325,7 @@ jumpToLatestOffset index = do
   let listedOffs = listOffsetsMap resp
   -- Right biased union, because we want to jump to the offset in the right map
   modifyv (\s -> s { offsets = IM.unionWith (\_ y -> y) offsets listedOffs })
+  getv >>= commitOffsets'
 
 data KafkaResponseErrorCode
   = UnknownError
