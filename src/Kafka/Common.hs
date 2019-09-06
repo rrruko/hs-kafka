@@ -59,14 +59,33 @@ data AutoCreateTopic
   deriving (Show)
 
 data KafkaException where
-  KafkaSendException :: SendException 'Uninterruptible -> KafkaException
-  KafkaReceiveException :: ReceiveException 'Interruptible -> KafkaException
-  KafkaParseException :: String -> KafkaException
-  KafkaUnexpectedErrorCodeException :: !Int16 -> KafkaException
-  KafkaConnectException :: ConnectException ('Internet 'V4) 'Uninterruptible -> KafkaException
-  KafkaException :: !Text -> KafkaException
-  KafkaOffsetCommitException :: [(BS.ByteString, Int32, Int16)] -> KafkaException
-  KafkaFetchException :: [(BS.ByteString, Int32, Int16)] -> KafkaException
+  KafkaSendException :: ()
+    => SendException 'Uninterruptible
+    -> KafkaException
+  KafkaReceiveException :: ()
+    => ReceiveException 'Interruptible
+    -> KafkaException
+  KafkaCloseException :: ()
+    => CloseException
+    -> KafkaException
+  KafkaParseException :: ()
+    => String
+    -> KafkaException
+  KafkaUnexpectedErrorCodeException :: ()
+    => !Int16
+    -> KafkaException
+  KafkaConnectException :: ()
+    => ConnectException ('Internet 'V4) 'Uninterruptible
+    -> KafkaException
+  KafkaException :: ()
+    => !Text
+    -> KafkaException
+  KafkaOffsetCommitException :: ()
+    => [(BS.ByteString, Int32, Int16)]
+    -> KafkaException
+  KafkaFetchException :: ()
+    => [(BS.ByteString, Int32, Int16)]
+    -> KafkaException
 
 deriving stock instance Show KafkaException
 
