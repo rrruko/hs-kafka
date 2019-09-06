@@ -304,14 +304,15 @@ getRecordSet fetchWaitTime = do
     interrupt <- liftIO $ registerDelay timeout
     fetchResp <- liftConsumer $ tryParse <$> getFetchResponse kafka interrupt handle
     let errs = fetchResponseErrors fetchResp
-    forM_ errs $ \(_, partition, errCode) ->
-      case fromErrorCode errCode of
-        Just OffsetOutOfRange -> jumpToLatestOffset partition
-        _ -> throwError (KafkaFetchException errs)
     let newOffsets = updateOffsets csTopicName offsets fetchResp
     modifyv (\s -> s { offsets = newOffsets })
     cs <- getv
     when (autoCommit == AutoCommit) (commitOffsets' cs)
+    forM_ errs $ \(_, partition, errCode) ->
+      case fromErrorCode errCode of
+        Just OffsetOutOfRange -> do
+          jumpToLatestOffset partition
+        _ -> throwError (KafkaFetchException errs)
     pure fetchResp
 
 jumpToLatestOffset :: Int32 -> Consumer ()
