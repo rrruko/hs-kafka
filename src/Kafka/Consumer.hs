@@ -310,6 +310,7 @@ getRecordSet fetchWaitTime = do
     when (autoCommit == AutoCommit) (commitOffsets' cs)
     forM_ errs $ \(_, partition, errCode) ->
       case fromErrorCode errCode of
+        Just NoError -> pure ()
         Just OffsetOutOfRange -> do
           jumpToLatestOffset partition
         _ -> throwError (KafkaFetchException errs)
@@ -330,6 +331,7 @@ jumpToLatestOffset index = do
 
 data KafkaResponseErrorCode
   = UnknownError
+  | NoError
   | OffsetOutOfRange
   | UnknownTopicOrPartition
   | NotLeaderForPartition
@@ -342,6 +344,7 @@ data KafkaResponseErrorCode
 
 fromErrorCode :: Int16 -> Maybe KafkaResponseErrorCode
 fromErrorCode = \case
+  0  -> Just NoError
   1  -> Just OffsetOutOfRange
   3  -> Just UnknownTopicOrPartition
   6  -> Just NotLeaderForPartition
