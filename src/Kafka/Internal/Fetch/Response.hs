@@ -18,7 +18,7 @@ module Kafka.Internal.Fetch.Response
 import Data.Attoparsec.ByteString (Parser, (<?>))
 import Data.ByteString (ByteString)
 import Data.Int
-import Data.List (find)
+import Data.List (find, intercalate)
 import Data.List.NonEmpty (nonEmpty)
 import GHC.Conc
 import System.IO
@@ -26,13 +26,82 @@ import System.IO
 import Kafka.Common
 import Kafka.Internal.Combinator
 import Kafka.Internal.Response
+import Kafka.Internal.Request.Types (ShowDebug(..))
+
+showDebugSeq :: ShowDebug a => [a] -> String
+showDebugSeq = concatMap showDebug
+
+instance Show FetchResponse where
+  show = showDebug
+
+instance ShowDebug FetchResponse where
+  showDebug FetchResponse {..} = intercalate "\n"
+    [ "Fetch Response"
+    , " throttle time ms: " <> showDebug throttleTimeMs
+    , " error code: " <> showDebug errorCode
+    , " session id: " <> showDebug sessionId
+    , " topics: "
+    , showDebugSeq topics
+    ]
+
+instance ShowDebug FetchTopic where
+  showDebug FetchTopic {..} = intercalate "\n"
+    [ "    topic: " <> showDebug topic
+    , "    partitions: "
+    , showDebugSeq partitions
+    ]
+
+instance ShowDebug FetchPartition where
+  showDebug FetchPartition {..} = intercalate "\n"
+    [ "      partition header: "
+    , showDebug partitionHeader
+    , "      record set: "
+    , case recordSet of
+        Nothing -> "        Nothing"
+        Just rs -> showDebugSeq rs
+    ]
+
+instance ShowDebug PartitionHeader where
+  showDebug PartitionHeader {..} = intercalate "\n"
+    [ "        partition: " <> showDebug partition
+    , "        partition header error code: " <> showDebug partitionHeaderErrorCode
+    , "        high watermark: " <> showDebug highWatermark
+    , "        lastStableOffset: " <> showDebug lastStableOffset
+    , "        logStartOffset: " <> showDebug logStartOffset
+    , "        abortedTransactions: " <> showDebug abortedTransactions
+    ]
+
+instance ShowDebug RecordBatch where
+  showDebug RecordBatch {..} = intercalate "\n"
+    [ "          base offset: " <> showDebug baseOffset
+    , "          batch length: " <> showDebug batchLength
+    , "          partition leader epoch: " <> showDebug partitionLeaderEpoch
+    , "          magic: " <> showDebug recordBatchMagic
+    , "          crc: " <> showDebug crc
+    , "          attributes: " <> showDebug attributes
+    , "          lastOffsetDelta: " <> showDebug lastOffsetDelta
+    , "          firstTimestamp: " <> showDebug firstTimestamp
+    , "          maxTimestamp: " <> showDebug maxTimestamp
+    , "          producer id: " <> showDebug producerId
+    , "          producerEpoch: " <> showDebug producerEpoch
+    , "          baseSequence: " <> showDebug baseSequence
+    , "          records: <" <> showDebug (length records) <> " records>"
+    ]
+
+instance ShowDebug AbortedTransaction where
+  showDebug AbortedTransaction {..} =
+    "( producer id = "
+    <> showDebug abortedTransactionProducerId
+    <> ", first offset = "
+    <> showDebug firstOffset
+    <> " )"
 
 data FetchResponse = FetchResponse
   { throttleTimeMs :: Int32
   , errorCode :: Int16
   , sessionId :: Int32
   , topics :: [FetchTopic]
-  } deriving (Eq, Show)
+  }
 
 data FetchTopic = FetchTopic
   { topic :: ByteString
@@ -62,7 +131,7 @@ data RecordBatch = RecordBatch
   { baseOffset :: Int64
   , batchLength :: Int32
   , partitionLeaderEpoch :: Int32
-  , magic :: Int8
+  , recordBatchMagic :: Int8
   , crc :: Int32
   , attributes :: Int16
   , lastOffsetDelta :: Int32

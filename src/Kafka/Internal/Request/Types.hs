@@ -4,7 +4,8 @@
 
 module Kafka.Internal.Request.Types where
 
-import Data.Int (Int32)
+import Data.ByteString (ByteString)
+import Data.Int (Int8, Int16, Int32, Int64)
 import Data.List (intercalate)
 import Data.Primitive
 import Data.Primitive.Unlifted.Array
@@ -12,6 +13,24 @@ import Kafka.Common
 
 class ShowDebug a where
   showDebug :: a -> String
+
+instance ShowDebug Int8 where
+  showDebug = show
+
+instance ShowDebug Int16 where
+  showDebug = show
+
+instance ShowDebug Int32 where
+  showDebug = show
+
+instance ShowDebug Int64 where
+  showDebug = show
+
+instance ShowDebug Int where
+  showDebug = show
+
+instance ShowDebug ByteString where
+  showDebug = show
 
 instance ShowDebug a => ShowDebug [a] where
   showDebug xs = "[" <> intercalate ", " (fmap showDebug xs) <> "]"
