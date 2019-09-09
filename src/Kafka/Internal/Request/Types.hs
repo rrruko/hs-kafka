@@ -21,8 +21,7 @@ instance ShowDebug ProduceRequest where
     [ "Produce Request"
     , "  topic: " <> showDebug produceTopic
     , "  wait time: " <> show produceWaitTime
-    , "  payloads: "
-        <> show (fmap toByteString (unliftedArrayToList producePayloads))
+    , "  payloads: <payloads>"
     ]
 
 data FetchRequest = FetchRequest
