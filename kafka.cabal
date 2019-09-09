@@ -47,6 +47,7 @@ library
     Kafka.Internal.Request
     Kafka.Internal.Request.Types
     Kafka.Internal.Response
+    Kafka.Internal.ShowDebug
     Kafka.Internal.SyncGroup.Request
     Kafka.Internal.SyncGroup.Response
     Kafka.Internal.Topic

@@ -30,8 +30,9 @@ import Kafka.Internal.Metadata.Request
 import Kafka.Internal.OffsetCommit.Request
 import Kafka.Internal.OffsetFetch.Request
 import Kafka.Internal.Produce.Request
-import Kafka.Internal.SyncGroup.Request
 import Kafka.Internal.Request.Types
+import Kafka.Internal.ShowDebug
+import Kafka.Internal.SyncGroup.Request
 
 request ::
      Kafka

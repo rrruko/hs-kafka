@@ -26,7 +26,7 @@ import System.IO
 import Kafka.Common
 import Kafka.Internal.Combinator
 import Kafka.Internal.Response
-import Kafka.Internal.Request.Types (ShowDebug(..))
+import Kafka.Internal.ShowDebug
 
 showDebugSeq :: ShowDebug a => [a] -> String
 showDebugSeq = concatMap showDebug
