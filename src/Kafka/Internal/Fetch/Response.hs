@@ -29,7 +29,7 @@ import Kafka.Internal.Response
 import Kafka.Internal.ShowDebug
 
 showDebugSeq :: ShowDebug a => [a] -> String
-showDebugSeq = concatMap showDebug
+showDebugSeq = intercalate "\n" . fmap showDebug
 
 instance Show FetchResponse where
   show = showDebug
@@ -37,55 +37,59 @@ instance Show FetchResponse where
 instance ShowDebug FetchResponse where
   showDebug FetchResponse {..} = intercalate "\n"
     [ "Fetch Response"
-    , " throttle time ms: " <> showDebug throttleTimeMs
-    , " error code: " <> showDebug errorCode
-    , " session id: " <> showDebug sessionId
-    , " topics: "
+    , "  throttle time ms: " <> showDebug throttleTimeMs
+    , "  error code: " <> showDebug errorCode
+    , "  session id: " <> showDebug sessionId
+    , "  topics: "
     , showDebugSeq topics
     ]
 
 instance ShowDebug FetchTopic where
   showDebug FetchTopic {..} = intercalate "\n"
-    [ "    topic: " <> showDebug topic
-    , "    partitions: "
+    [ "    Topic"
+    , "      topic: " <> showDebug topic
+    , "      partitions: "
     , showDebugSeq partitions
     ]
 
 instance ShowDebug FetchPartition where
   showDebug FetchPartition {..} = intercalate "\n"
-    [ "      partition header: "
+    [ "        Partition"
+    , "          partition header: "
     , showDebug partitionHeader
-    , "      record set: "
+    , "          record set: "
     , case recordSet of
-        Nothing -> "        Nothing"
+        Nothing -> "            Nothing"
         Just rs -> showDebugSeq rs
     ]
 
 instance ShowDebug PartitionHeader where
   showDebug PartitionHeader {..} = intercalate "\n"
-    [ "        partition: " <> showDebug partition
-    , "        partition header error code: " <> showDebug partitionHeaderErrorCode
-    , "        high watermark: " <> showDebug highWatermark
-    , "        lastStableOffset: " <> showDebug lastStableOffset
-    , "        logStartOffset: " <> showDebug logStartOffset
-    , "        abortedTransactions: " <> showDebug abortedTransactions
+    [ "            Partition Header"
+    , "              partition: " <> showDebug partition
+    , "              partition header error code: " <> showDebug partitionHeaderErrorCode
+    , "              high watermark: " <> showDebug highWatermark
+    , "              lastStableOffset: " <> showDebug lastStableOffset
+    , "              logStartOffset: " <> showDebug logStartOffset
+    , "              abortedTransactions: " <> showDebug abortedTransactions
     ]
 
 instance ShowDebug RecordBatch where
   showDebug RecordBatch {..} = intercalate "\n"
-    [ "          base offset: " <> showDebug baseOffset
-    , "          batch length: " <> showDebug batchLength
-    , "          partition leader epoch: " <> showDebug partitionLeaderEpoch
-    , "          magic: " <> showDebug recordBatchMagic
-    , "          crc: " <> showDebug crc
-    , "          attributes: " <> showDebug attributes
-    , "          lastOffsetDelta: " <> showDebug lastOffsetDelta
-    , "          firstTimestamp: " <> showDebug firstTimestamp
-    , "          maxTimestamp: " <> showDebug maxTimestamp
-    , "          producer id: " <> showDebug producerId
-    , "          producerEpoch: " <> showDebug producerEpoch
-    , "          baseSequence: " <> showDebug baseSequence
-    , "          records: <" <> showDebug (length records) <> " records>"
+    [ "            Record Batch"
+    , "              base offset: " <> showDebug baseOffset
+    , "              batch length: " <> showDebug batchLength
+    , "              partition leader epoch: " <> showDebug partitionLeaderEpoch
+    , "              magic: " <> showDebug recordBatchMagic
+    , "              crc: " <> showDebug crc
+    , "              attributes: " <> showDebug attributes
+    , "              lastOffsetDelta: " <> showDebug lastOffsetDelta
+    , "              firstTimestamp: " <> showDebug firstTimestamp
+    , "              maxTimestamp: " <> showDebug maxTimestamp
+    , "              producer id: " <> showDebug producerId
+    , "              producerEpoch: " <> showDebug producerEpoch
+    , "              baseSequence: " <> showDebug baseSequence
+    , "              records: <" <> showDebug (length records) <> " records>"
     ]
 
 instance ShowDebug AbortedTransaction where
