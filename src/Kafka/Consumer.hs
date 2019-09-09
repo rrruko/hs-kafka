@@ -45,7 +45,6 @@ import Data.Maybe
 import Socket.Stream.IPv4 (Peer)
 import System.IO (Handle)
 
-import qualified Data.ByteString as B
 import qualified Data.IntMap as IM
 
 import Kafka.Common
@@ -325,7 +324,7 @@ getRecordSet fetchWaitTime = do
     modifyv (\s -> s { offsets = newOffsets })
     cs <- getv
     when (autoCommit == AutoCommit) (commitOffsets' cs)
-    forM_ errs $ \(_, partition, errCode) ->
+    forM_ errs $ \(FetchErrorMessage _ partition errCode) ->
       case fromErrorCode errCode of
         Just NoError -> pure ()
         Just OffsetOutOfRange -> do
@@ -373,12 +372,12 @@ fromErrorCode = \case
   -1 -> Just UnknownError
   _  -> Nothing
 
-offsetCommitErrors :: C.OffsetCommitResponse -> [(B.ByteString, Int32, Int16)]
+offsetCommitErrors :: C.OffsetCommitResponse -> [OffsetCommitErrorMessage]
 offsetCommitErrors resp =
   let tops = C.topics resp
   in  foldMap
         (\t ->
-          [(C.topic t, p, e)
+          [OffsetCommitErrorMessage (C.topic t) p e
             | p <- fmap C.partitionIndex (C.partitions t)
             , e <- fmap C.errorCode (C.partitions t)
             , maybe False (`elem` fatalErrors) (fromErrorCode e)
@@ -392,12 +391,12 @@ offsetCommitErrors resp =
     , InvalidCommitOffsetSize
     ]
 
-fetchResponseErrors :: FetchResponse -> [(B.ByteString, Int32, Int16)]
+fetchResponseErrors :: FetchResponse -> [FetchErrorMessage]
 fetchResponseErrors resp =
   let tops = topics resp
   in  foldMap
         (\t ->
-          [(topic t, p, e)
+          [FetchErrorMessage (topic t) p e
             | p <- fmap (partition . partitionHeader) (partitions t)
             , e <- fmap (partitionHeaderErrorCode . partitionHeader) (partitions t)
             , maybe False (`elem` fatalErrors) (fromErrorCode e)

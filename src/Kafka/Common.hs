@@ -83,11 +83,23 @@ data KafkaException where
     => !Text
     -> KafkaException
   KafkaOffsetCommitException :: ()
-    => [(BS.ByteString, Int32, Int16)]
+    => [OffsetCommitErrorMessage]
     -> KafkaException
   KafkaFetchException :: ()
-    => [(BS.ByteString, Int32, Int16)]
+    => [FetchErrorMessage]
     -> KafkaException
+
+data OffsetCommitErrorMessage = OffsetCommitErrorMessage
+  { commitErrorTopic :: BS.ByteString
+  , commitErrorPartition :: Int32
+  , commitErrorCode :: Int16
+  } deriving Show
+
+data FetchErrorMessage = FetchErrorMessage
+  { fetchErrorTopic :: BS.ByteString
+  , fetchErrorPartition :: Int32
+  , fetchErrorCode :: Int16
+  } deriving Show
 
 deriving stock instance Show KafkaException
 
