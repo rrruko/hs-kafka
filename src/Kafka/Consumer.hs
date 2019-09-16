@@ -52,6 +52,7 @@ import Kafka.Internal.Request
 import Kafka.Internal.Request.Types
 import Kafka.Internal.Fetch.Response
 import Kafka.Internal.JoinGroup.Response (Member, getJoinGroupResponse)
+import Kafka.Internal.FindCoordinator.Response (getFindCoordinatorResponse)
 import Kafka.Internal.LeaveGroup.Response
 import Kafka.Internal.Heartbeat.Response (getHeartbeatResponse)
 import Kafka.Internal.ListOffsets.Response (ListOffsetsResponse)
@@ -522,11 +523,18 @@ join ::
   -> Maybe Handle
   -> ExceptT KafkaException IO (GenerationId, GroupMember, [Member])
 join kafka top member@(GroupMember name _) handle = do
+  ExceptT $ findCoordinator
+    kafka
+    (FindCoordinatorRequest name 0)
+    handle
+  wait <- liftIO (registerDelay joinTimeout)
+  -- Ignoring the response from FindCoordinator. Probably not
+  -- a good idea.
+  _ <- ExceptT $ tryParse <$> getFindCoordinatorResponse kafka wait handle
   ExceptT $ joinGroup
     kafka
     (JoinGroupRequest top member)
     handle
-  wait <- liftIO (registerDelay joinTimeout)
   jgr <- ExceptT $ tryParse <$> getJoinGroupResponse kafka wait handle
   if J.errorCode jgr == errorMemberIdRequired then do
     let memId = Just (fromByteString (J.memberId jgr))
