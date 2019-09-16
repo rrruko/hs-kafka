@@ -26,6 +26,7 @@ library
     Kafka.Producer
 
     Kafka.Internal.Combinator
+    Kafka.Internal.FindCoordinator.Request
     Kafka.Internal.Fetch.Request
     Kafka.Internal.Fetch.Response
     Kafka.Internal.Heartbeat.Request

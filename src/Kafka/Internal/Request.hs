@@ -4,6 +4,7 @@ module Kafka.Internal.Request
   ( fetch
   , heartbeat
   , joinGroup
+  , findCoordinator
   , leaveGroup
   , listOffsets
   , metadata
@@ -22,6 +23,7 @@ import System.IO (Handle, hPutStrLn)
 
 import Kafka.Common
 import Kafka.Internal.Fetch.Request
+import Kafka.Internal.FindCoordinator.Request
 import Kafka.Internal.Heartbeat.Request
 import Kafka.Internal.JoinGroup.Request
 import Kafka.Internal.LeaveGroup.Request
@@ -114,6 +116,20 @@ joinGroup kafka req@JoinGroupRequest{..} handle = do
   request kafka $ joinGroupRequest
     joinGroupTopic
     joinGroupMember
+
+-- Like most of the other functions in this module, findCoordinator
+-- largely ignores the response from kafka. This is probably not a
+-- good idea, and it may need to be revisited eventually.
+findCoordinator ::
+     Kafka
+  -> FindCoordinatorRequest
+  -> Maybe Handle
+  -> IO (Either KafkaException ())
+findCoordinator kafka req@FindCoordinatorRequest{..} handle = do
+  logHandle handle (showDebug req)
+  request kafka $ findCoordinatorRequest
+    findCoordinatorKey
+    findCoordinatorKeyType
 
 heartbeat ::
      Kafka

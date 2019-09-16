@@ -4,7 +4,7 @@
 
 module Kafka.Internal.Request.Types where
 
-import Data.Int (Int32)
+import Data.Int (Int32,Int8)
 import Data.Primitive
 import Data.Primitive.Unlifted.Array
 import Kafka.Common
@@ -64,6 +64,18 @@ instance ShowDebug JoinGroupRequest where
     [ "JoinGroup Request"
     , "  topic: " <> showDebug joinGroupTopic
     , "  member: " <> showDebug joinGroupMember
+    ]
+
+data FindCoordinatorRequest = FindCoordinatorRequest
+  { findCoordinatorKey :: TopicName
+  , findCoordinatorKeyType :: !Int8
+  }
+
+instance ShowDebug FindCoordinatorRequest where
+  showDebug FindCoordinatorRequest{..} = unlines
+    [ "FindCoordinator Request"
+    , "  key: " <> showDebug findCoordinatorKey
+    , "  key_type: " <> showDebug findCoordinatorKeyType
     ]
 
 data HeartbeatRequest = HeartbeatRequest
