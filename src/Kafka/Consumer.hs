@@ -522,6 +522,10 @@ join ::
   -> Maybe Handle
   -> ExceptT KafkaException IO (GenerationId, GroupMember, [Member])
 join kafka top member@(GroupMember name _) handle = do
+  ExceptT $ findCoordinator
+    kafka
+    (FindCoordinatorRequest name 0)
+    handle
   ExceptT $ joinGroup
     kafka
     (JoinGroupRequest top member)

@@ -20,10 +20,10 @@ findCoordinatorApiKey :: Int16
 findCoordinatorApiKey = 10
 
 findCoordinatorRequest ::
-     TopicName
+     ByteArray -- key, a.k.a. group name
   -> Int8
   -> UnliftedArray ByteArray
-findCoordinatorRequest (TopicName !key) !keyType =
+findCoordinatorRequest !key !keyType =
   let
     keyLength = sizeofByteArray key
     reqSize = evaluate $
@@ -31,6 +31,8 @@ findCoordinatorRequest (TopicName !key) !keyType =
     req = evaluate $
       build16 findCoordinatorApiKey
       <> build16 findCoordinatorApiVersion
+      <> build32 correlationId
+      <> buildString (fromByteString clientId) (fromIntegral clientIdLength)
       <> buildString key (fromIntegral keyLength)
       <> build8 keyType
   in

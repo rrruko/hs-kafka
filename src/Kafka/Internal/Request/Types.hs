@@ -67,7 +67,7 @@ instance ShowDebug JoinGroupRequest where
     ]
 
 data FindCoordinatorRequest = FindCoordinatorRequest
-  { findCoordinatorKey :: TopicName
+  { findCoordinatorKey :: !ByteArray
   , findCoordinatorKeyType :: !Int8
   }
 
