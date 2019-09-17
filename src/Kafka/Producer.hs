@@ -1,5 +1,6 @@
 {-# language
     BangPatterns
+  , LambdaCase
   #-}
 
 module Kafka.Producer
@@ -68,7 +69,19 @@ produce' (Producer k _ timeout handle) topic msgs = do
     Left err -> pure (Left err)
     Right () -> do
       interrupt <- registerDelay 30000000
-      (fmap . fmap) (const ()) $ getProduceResponse k interrupt handle
+      getProduceResponse k interrupt handle >>= \case
+        Left err -> pure (Left err)
+        Right (Left msg) -> pure (Left (KafkaParseException msg))
+        Right (Right resp) ->
+          let errs =
+                [ prResponseErrorCode r
+                | x <- produceResponseMessages resp
+                , r <- prPartitionResponses x
+                , prResponseErrorCode r /= 0
+                ]
+           in case errs of
+                [] -> pure (Right ())
+                err : _ -> pure (Left (KafkaProduceException err))
 
 
 -- | Send messages to Kafka.

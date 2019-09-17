@@ -88,6 +88,9 @@ data KafkaException where
   KafkaFetchException :: ()
     => [FetchErrorMessage]
     -> KafkaException
+  KafkaProduceException :: ()
+    => !Int16
+    -> KafkaException
 
 data OffsetCommitErrorMessage = OffsetCommitErrorMessage
   { commitErrorTopic :: BS.ByteString
