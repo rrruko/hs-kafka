@@ -25,7 +25,7 @@ import Kafka.Internal.JoinGroup.Request
 import Kafka.Internal.ListOffsets.Request
 import Kafka.Internal.Produce.Request
 import Kafka.Internal.Produce.Response
-import Kafka.Internal.Writer
+import qualified Kafka.Internal.Writer as W
 import Kafka.Internal.Zigzag
 
 import qualified Kafka.Internal.Fetch.Response as Fetch
@@ -219,35 +219,35 @@ parseProduce :: ByteArray -> Either String ProduceResponse
 parseProduce ba = AT.parseOnly parseProduceResponse (toByteString ba)
 
 oneMsgProduceResponseBytes :: ByteArray
-oneMsgProduceResponseBytes = evaluate $
-  build32 0
-  <> build32 1
-  <> buildString (fromByteString "topic-name") 10
-  <> build32 1
-  <> build32 10
-  <> build16 11
-  <> build64 12
-  <> build64 13
-  <> build64 14
-  <> build32 1
+oneMsgProduceResponseBytes = W.build $
+  W.int32 0
+  <> W.int32 1
+  <> W.string (fromByteString "topic-name") 10
+  <> W.int32 1
+  <> W.int32 10
+  <> W.int16 11
+  <> W.int64 12
+  <> W.int64 13
+  <> W.int64 14
+  <> W.int32 1
 
 twoMsgProduceResponseBytes :: ByteArray
-twoMsgProduceResponseBytes = evaluate $
-  build32 0
-  <> build32 1
-  <> buildString (fromByteString "topic-name") 10
-  <> build32 2
-  <> build32 10
-  <> build16 11
-  <> build64 12
-  <> build64 13
-  <> build64 14
-  <> build32 20
-  <> build16 21
-  <> build64 22
-  <> build64 23
-  <> build64 24
-  <> build32 1
+twoMsgProduceResponseBytes = W.build $
+  W.int32 0
+  <> W.int32 1
+  <> W.string (fromByteString "topic-name") 10
+  <> W.int32 2
+  <> W.int32 10
+  <> W.int16 11
+  <> W.int64 12
+  <> W.int64 13
+  <> W.int64 14
+  <> W.int32 20
+  <> W.int16 21
+  <> W.int64 22
+  <> W.int64 23
+  <> W.int64 24
+  <> W.int32 1
 
 oneMsgProduceResponse :: ProduceResponse
 oneMsgProduceResponse =

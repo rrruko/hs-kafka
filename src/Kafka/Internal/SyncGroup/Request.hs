@@ -18,25 +18,25 @@ syncGroupApiVersion = 2
 syncGroupApiKey :: Int16
 syncGroupApiKey = 14
 
-defaultAssignmentData :: MemberAssignment -> forall s. KafkaWriterBuilder s
+defaultAssignmentData :: MemberAssignment -> Builder
 defaultAssignmentData assignment =
   let
     assn = mconcat
-      [ build16 0 -- version
-      , buildMapArray (assignedTopics assignment)
+      [ int16 0 -- version
+      , mapArray (assignedTopics assignment)
           (\top -> mconcat
-            [ buildString
+            [ string
                 (assignedTopicName top)
                 (sizeofByteArray $ assignedTopicName top)
-            , buildMapArray
+            , mapArray
                 (assignedPartitions top)
-                (\part -> build32 part)
+                (\part -> int32 part)
             ])
-      , build32 0 -- userdata bytes length
+      , int32 0 -- userdata bytes length
       ]
   in mconcat
-    [ buildString memId memIdSize
-    , build32 (size32 $ evaluate assn)
+    [ string memId memIdSize
+    , int32 (size32 (build assn))
     , assn
     ]
   where
@@ -51,20 +51,20 @@ syncGroupRequest ::
 syncGroupRequest (GroupMember gid mid) (GenerationId genId) assignments =
   let
     groupIdLength = sizeofByteArray gid
-    reqSize = evaluate $
-      build32 (fromIntegral $ sizeofByteArray req)
-    req = evaluate $
-      build16 syncGroupApiKey
-      <> build16 syncGroupApiVersion
-      <> build32 correlationId
-      <> buildString (fromByteString clientId) (fromIntegral clientIdLength)
-      <> buildString gid (fromIntegral groupIdLength)
-      <> build32 genId
+    reqSize = build $
+      int32 (fromIntegral $ sizeofByteArray req)
+    req = build $
+      int16 syncGroupApiKey
+      <> int16 syncGroupApiVersion
+      <> int32 correlationId
+      <> string (fromByteString clientId) (fromIntegral clientIdLength)
+      <> string gid (fromIntegral groupIdLength)
+      <> int32 genId
       <> maybe
-          (build16 0)
-          (\m -> buildString m (sizeofByteArray m))
+          (int16 0)
+          (\m -> string m (sizeofByteArray m))
           mid
-      <> buildMapArray assignments defaultAssignmentData
+      <> mapArray assignments defaultAssignmentData
   in
     runUnliftedArray $ do
       arr <- newUnliftedArray 2 mempty

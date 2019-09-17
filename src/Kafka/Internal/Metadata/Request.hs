@@ -21,15 +21,15 @@ metadataRequest ::
   -> UnliftedArray ByteArray
 metadataRequest (TopicName topicName) autoCreate =
   let
-    reqSize = evaluate $ (build32 (fromIntegral $ sizeofByteArray req))
-    req = evaluate $
-      build16 metadataApiKey
-      <> build16 metadataApiVersion
-      <> build32 correlationId
-      <> buildString (fromByteString clientId) (fromIntegral clientIdLength)
-      <> build32 1
-      <> buildString topicName (sizeofByteArray topicName)
-      <> buildBool (case autoCreate of Create -> True; NeverCreate -> False)
+    reqSize = build $ (int32 (fromIntegral $ sizeofByteArray req))
+    req = build $
+      int16 metadataApiKey
+      <> int16 metadataApiVersion
+      <> int32 correlationId
+      <> string (fromByteString clientId) (fromIntegral clientIdLength)
+      <> int32 1
+      <> string topicName (sizeofByteArray topicName)
+      <> bool (case autoCreate of Create -> True; NeverCreate -> False)
   in
     runUnliftedArray $ do
       arr <- newUnliftedArray 2 mempty

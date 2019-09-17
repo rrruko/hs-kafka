@@ -10,12 +10,12 @@ import Data.Primitive.Unlifted.Array
 import Kafka.Common
 import Kafka.Internal.Writer
 
-serializePartition :: PartitionOffset -> KafkaWriterBuilder s
+serializePartition :: PartitionOffset -> Builder
 serializePartition a =
-  build32 (partitionIndex a)
-  <> build64 (partitionOffset a)
-  <> build32 (-1) -- leader epoch
-  <> build16 (-1) -- metadata
+  int32 (partitionIndex a)
+  <> int64 (partitionOffset a)
+  <> int32 (-1) -- leader epoch
+  <> int16 (-1) -- metadata
 
 offsetCommitApiKey :: Int16
 offsetCommitApiKey = 8
@@ -34,22 +34,22 @@ offsetCommitRequest topic offs groupMember generationId =
     GroupMember gid mid = groupMember
     TopicName topicName = topic
     GenerationId genId = generationId
-    reqSize = evaluate (build32 (size32 req))
+    reqSize = build (int32 (size32 req))
     req =
-      evaluate $
-        build16 offsetCommitApiKey
-        <> build16 offsetCommitApiVersion
-        <> build32 correlationId
-        <> buildString (fromByteString clientId) clientIdLength
-        <> buildString gid (sizeofByteArray gid)
-        <> build32 genId
+      build $
+        int16 offsetCommitApiKey
+        <> int16 offsetCommitApiVersion
+        <> int32 correlationId
+        <> string (fromByteString clientId) clientIdLength
+        <> string gid (sizeofByteArray gid)
+        <> int32 genId
         <> maybe
-            (build16 0)
-            (\m -> buildString m (sizeofByteArray m))
+            (int16 0)
+            (\m -> string m (sizeofByteArray m))
             mid
-        <> build32 1 -- 1 topic
-        <> buildString topicName (sizeofByteArray topicName)
-        <> build32 (fromIntegral $ length offs)
+        <> int32 1 -- 1 topic
+        <> string topicName (sizeofByteArray topicName)
+        <> int32 (fromIntegral $ length offs)
         <> foldl'
             (\acc e -> acc <> serializePartition e)
             mempty

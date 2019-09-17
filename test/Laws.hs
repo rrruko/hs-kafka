@@ -9,45 +9,52 @@
 
 module Main (main) where
 
-import Unsafe.Coerce (unsafeCoerce)
-
 import Hedgehog
 import Hedgehog.Classes
---import qualified Hedgehog.Gen as Gen
---import qualified Hedgehog.Range as Range
+import qualified Hedgehog.Gen as Gen
+import qualified Hedgehog.Range as Range
 
 import Kafka.Internal.Writer
 
 main :: IO Bool
 main = lawsCheckMany
-  [ ( "KafkaWriterBuilder s"
-    , [ semigroupLaws genKw
-      , monoidLaws genKw
+  [ ( "Builder"
+    , [ semigroupLaws genBuilder
+      , monoidLaws genBuilder
       ]
     )
   ]
 
-defaultKwb :: KafkaWriterBuilder s
-defaultKwb = mconcat (
-     replicate 200 (build8 7)
-  ++ replicate 100 (build16 11)
-  ++ replicate 50 (build32 13)
-  ++ replicate 25 (build64 17))
+genLen :: Gen Int
+genLen = Gen.int (Range.linear 25 200)
 
--- | We assume a size of 1000.
-genKw :: Gen (KafkaWriterBuilder s)
-genKw = pure defaultKwb
+builders :: [Gen Builder]
+builders = map pure [ int8 7, int16 11, int32 13, int64 17 ]
 
-instance Eq (KafkaWriterBuilder s) where
+genSmallBuilder :: Gen Builder
+genSmallBuilder = do
+  len <- genLen
+  b <- Gen.choice builders
+  pure $ mconcat (replicate len b)
+
+genBuilder :: Gen Builder
+genBuilder = do
+  a <- genSmallBuilder
+  b <- genSmallBuilder
+  c <- genSmallBuilder
+  d <- genSmallBuilder
+  pure (a <> b <> c <> d)
+
+instance Eq Builder where
   (==) = reallyUnsafeKafkaWriterEquality
 
-instance Show (KafkaWriterBuilder s) where
-  show _ = "<KafkaWriterBuilder>"
+instance Show Builder where
+  show _ = "<Builder>"
 
 reallyUnsafeKafkaWriterEquality :: ()
-  => KafkaWriterBuilder s
-  -> KafkaWriterBuilder s
+  => Builder
+  -> Builder
   -> Bool
-reallyUnsafeKafkaWriterEquality kw1 kw2 =
-  evaluate (unsafeCoerce kw1) == evaluate (unsafeCoerce kw2)
+reallyUnsafeKafkaWriterEquality b1 b2 =
+  build b1 == build b2
 {-# noinline reallyUnsafeKafkaWriterEquality #-}

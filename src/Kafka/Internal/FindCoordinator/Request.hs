@@ -26,15 +26,15 @@ findCoordinatorRequest ::
 findCoordinatorRequest !key !keyType =
   let
     keyLength = sizeofByteArray key
-    reqSize = evaluate $
-      build32 (fromIntegral $ sizeofByteArray req)
-    req = evaluate $
-      build16 findCoordinatorApiKey
-      <> build16 findCoordinatorApiVersion
-      <> build32 correlationId
-      <> buildString (fromByteString clientId) (fromIntegral clientIdLength)
-      <> buildString key (fromIntegral keyLength)
-      <> build8 keyType
+    reqSize = build $
+      int32 (fromIntegral $ sizeofByteArray req)
+    req = build $
+      int16 findCoordinatorApiKey
+      <> int16 findCoordinatorApiVersion
+      <> int32 correlationId
+      <> string (fromByteString clientId) (fromIntegral clientIdLength)
+      <> string key (fromIntegral keyLength)
+      <> int8 keyType
   in
     runUnliftedArray $ do
       arr <- newUnliftedArray 2 mempty

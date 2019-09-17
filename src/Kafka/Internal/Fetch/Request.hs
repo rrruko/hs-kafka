@@ -60,33 +60,33 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions maxBytes 
       + partitionMessageSize * partitionCount
       + topicNameSize
       + clientIdLength
-    requestMetadata = evaluate $
-      build32 (fromIntegral requestSize) -- size
+    requestMetadata = build $
+      int32 (fromIntegral requestSize) -- size
       -- common request headers
-      <> build16 fetchApiKey
-      <> build16 fetchApiVersion
-      <> build32 correlationId
-      <> buildString (fromByteString clientId) clientIdLength
+      <> int16 fetchApiKey
+      <> int16 fetchApiVersion
+      <> int32 correlationId
+      <> string (fromByteString clientId) clientIdLength
       -- fetch request
-      <> build32 defaultReplicaId
-      <> build32 (fromIntegral timeout) -- max_wait_time
-      <> build32 defaultMinBytes
-      <> build32 maxBytes
-      <> build8 (isolationLevel ReadUncommitted)
-      <> build32 fetchSessionId
-      <> build32 fetchSessionEpoch
-      <> build32 1 -- number of following topics
+      <> int32 defaultReplicaId
+      <> int32 (fromIntegral timeout) -- max_wait_time
+      <> int32 defaultMinBytes
+      <> int32 maxBytes
+      <> int8 (isolationLevel ReadUncommitted)
+      <> int32 fetchSessionId
+      <> int32 fetchSessionEpoch
+      <> int32 1 -- number of following topics
 
-      <> buildString topicName topicNameSize
-      <> build32 (fromIntegral partitionCount) -- number of following partitions
+      <> string topicName topicNameSize
+      <> int32 (fromIntegral partitionCount) -- number of following partitions
       <> foldMap
-          (\p -> build32 (partitionIndex p)
-            <> build32 defaultCurrentLeaderEpoch
-            <> build64 (partitionOffset p)
-            <> build64 defaultLogStartOffset
-            <> build32 maxBytes -- partition_max_bytes
+          (\p -> int32 (partitionIndex p)
+            <> int32 defaultCurrentLeaderEpoch
+            <> int64 (partitionOffset p)
+            <> int64 defaultLogStartOffset
+            <> int32 maxBytes -- partition_max_bytes
           ) partitions
-      <> build32 0
+      <> int32 0
   in
     runUnliftedArray $ do
       arr <- newUnliftedArray 1 mempty

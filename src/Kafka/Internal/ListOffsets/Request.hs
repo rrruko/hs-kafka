@@ -51,24 +51,24 @@ listOffsetsRequest topic partitions timestamp =
       + clientIdLength
       + topicNameSize
       + partitionMessageSize * partitionCount
-    req = evaluate $
-      build32 reqSize
+    req = build $
+      int32 reqSize
       -- common request headers
-      <> build16 listOffsetsApiKey
-      <> build16 listOffsetsApiVersion
-      <> build32 correlationId
-      <> buildString (fromByteString clientId) clientIdLength
+      <> int16 listOffsetsApiKey
+      <> int16 listOffsetsApiVersion
+      <> int32 correlationId
+      <> string (fromByteString clientId) clientIdLength
       -- listoffsets request
-      <> build32 defaultReplicaId
-      <> build8 defaultIsolationLevel
-      <> build32 1 -- number of following topics
+      <> int32 defaultReplicaId
+      <> int8 defaultIsolationLevel
+      <> int32 1 -- number of following topics
 
-      <> buildString topicName topicNameSize
-      <> buildArray
+      <> string topicName topicNameSize
+      <> array
           ( map
-            (\p -> build32 p
-              <> build32 defaultCurrentLeaderEpoch
-              <> build64 (kafkaTimestamp timestamp)
+            (\p -> int32 p
+              <> int32 defaultCurrentLeaderEpoch
+              <> int64 (kafkaTimestamp timestamp)
             )
             partitions
           )

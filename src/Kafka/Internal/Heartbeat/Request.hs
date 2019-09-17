@@ -22,17 +22,17 @@ heartbeatRequest ::
 heartbeatRequest (GroupMember gid mid) (GenerationId genId) =
   let
     groupIdLength = sizeofByteArray gid
-    reqSize = evaluate $ build32 (fromIntegral $ sizeofByteArray req)
-    req = evaluate $
-      build16 heartbeatApiKey
-      <> build16 heartbeatApiVersion
-      <> build32 correlationId
-      <> buildString (fromByteString clientId) (fromIntegral clientIdLength)
-      <> buildString gid (fromIntegral groupIdLength)
-      <> build32 genId
+    reqSize = build $ int32 (fromIntegral $ sizeofByteArray req)
+    req = build $
+      int16 heartbeatApiKey
+      <> int16 heartbeatApiVersion
+      <> int32 correlationId
+      <> string (fromByteString clientId) (fromIntegral clientIdLength)
+      <> string gid (fromIntegral groupIdLength)
+      <> int32 genId
       <> maybe
-          (build16 0)
-          (\m -> buildString m (sizeofByteArray m))
+          (int16 0)
+          (\m -> string m (sizeofByteArray m))
           mid
   in
     runUnliftedArray $ do

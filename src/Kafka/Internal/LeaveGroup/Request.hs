@@ -21,16 +21,16 @@ leaveGroupRequest ::
 leaveGroupRequest (GroupMember gid mid) =
   let
     groupIdLength = sizeofByteArray gid
-    reqSize = evaluate $ (build32 (fromIntegral $ sizeofByteArray req))
-    req = evaluate $
-      build16 leaveGroupApiKey
-      <> build16 leaveGroupApiVersion
-      <> build32 correlationId
-      <> buildString (fromByteString clientId) (fromIntegral clientIdLength)
-      <> buildString gid (fromIntegral groupIdLength)
+    reqSize = build $ (int32 (fromIntegral $ sizeofByteArray req))
+    req = build $
+      int16 leaveGroupApiKey
+      <> int16 leaveGroupApiVersion
+      <> int32 correlationId
+      <> string (fromByteString clientId) (fromIntegral clientIdLength)
+      <> string gid (fromIntegral groupIdLength)
       <> maybe
-          (build16 0)
-          (\m -> buildString m (sizeofByteArray m))
+          (int16 0)
+          (\m -> string m (sizeofByteArray m))
           mid
   in
     runUnliftedArray $ do
