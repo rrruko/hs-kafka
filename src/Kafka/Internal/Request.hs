@@ -19,7 +19,7 @@ import Data.IORef
 import Data.Primitive
 import Data.Primitive.Unlifted.Array
 import Socket.Stream.Uninterruptible.Bytes
-import System.IO (Handle, hPutStrLn)
+import System.IO (Handle, hPutStr, hFlush)
 
 import Kafka.Common
 import Kafka.Internal.Fetch.Request
@@ -46,7 +46,9 @@ logHandle :: Maybe Handle -> String -> IO ()
 logHandle handle str =
   case handle of
     Nothing -> pure ()
-    Just h -> hPutStrLn h str
+    Just h -> do
+      hPutStr h (str ++ "\n")
+      hFlush h
 
 produce ::
      Kafka

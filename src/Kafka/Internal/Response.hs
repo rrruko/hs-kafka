@@ -51,6 +51,13 @@ getResponseSizeHeader kafka interrupt = do
   byteCount <- fromIntegral . byteSwap32 <$> readByteArray responseSizeBuf 0
   pure $ byteCount <$ responseStatus
 
+logMaybe :: Show a => a -> Maybe Handle -> IO ()
+logMaybe a = \case
+  Nothing -> pure ()
+  Just h -> do
+    hPutStr h (show a ++ "\n\n")
+    hFlush h
+
 fromKafkaResponse :: (Show a)
   => Parser a
   -> Kafka
@@ -61,7 +68,7 @@ fromKafkaResponse parser kafka interrupt debugHandle =
   getKafkaResponse kafka interrupt >>= \case
     Right bytes -> do
       let res = parseOnly parser bytes
-      maybe (pure ()) (\h' -> hPutStrLn h' (show res) *> hPutStr h' "\n") debugHandle
+      logMaybe res debugHandle
       pure (Right res)
     Left err -> pure (Left err)
 
