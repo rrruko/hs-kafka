@@ -29,6 +29,10 @@ import Kafka.Common
 import Kafka.Internal.Writer
 import Kafka.Internal.Zigzag (zigzag)
 
+-- idk what this is
+magic :: Int8
+magic = 2
+
 produceApiVersion :: Int16
 produceApiVersion = 7
 

@@ -68,7 +68,10 @@ produce' (Producer k _ timeout handle) topic msgs = do
                 ]
            in case errs of
                 [] -> pure (Right ())
-                err : _ -> pure (Left (KafkaProduceException err))
+                err : _ -> case fromErrorCode err of
+                  -- TODO: should this be turned into `UnknownServerError`?
+                  Nothing -> pure (Right ())
+                  Just e -> pure (Left (KafkaProtocolException e))
 
 -- | Send messages to Kafka.
 produce ::

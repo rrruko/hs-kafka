@@ -36,7 +36,7 @@ getKafkaResponse kafka interrupt = do
           responseBufferSlice
       responseBytes <- unsafeFreezeByteArray responseBuffer
       pure $ responseBytes <$ responseStatus
-    Left e -> pure $ Left e
+    Left e -> pure (Left e)
 
 getResponseSizeHeader ::
      Kafka

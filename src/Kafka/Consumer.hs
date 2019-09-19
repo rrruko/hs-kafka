@@ -320,7 +320,7 @@ getRecordSet fetchWaitTime = do
     when (autoCommit == AutoCommit) (commitOffsets' cs)
     forM_ errs $ \(FetchErrorMessage _ partition errCode) ->
       case fromErrorCode errCode of
-        Just NoError -> pure ()
+        Just None -> pure ()
         Just OffsetOutOfRange -> do
           jumpToLatestOffset partition
         _ -> throwError (KafkaFetchException errs)
@@ -338,33 +338,6 @@ jumpToLatestOffset index = do
   -- Right biased union, because we want to jump to the offset in the right map
   modifyv (\s -> s { offsets = IM.unionWith (\_ y -> y) offsets listedOffs })
   getv >>= commitOffsets'
-
-data KafkaResponseErrorCode
-  = UnknownError
-  | NoError
-  | OffsetOutOfRange
-  | UnknownTopicOrPartition
-  | NotLeaderForPartition
-  | ReplicaNotAvailable
-  | OffsetMetadataTooLarge
-  | IllegalGeneration
-  | UnknownMemberId
-  | InvalidCommitOffsetSize
-  deriving Eq
-
-fromErrorCode :: Int16 -> Maybe KafkaResponseErrorCode
-fromErrorCode = \case
-  0  -> Just NoError
-  1  -> Just OffsetOutOfRange
-  3  -> Just UnknownTopicOrPartition
-  6  -> Just NotLeaderForPartition
-  9  -> Just ReplicaNotAvailable
-  12 -> Just OffsetMetadataTooLarge
-  22 -> Just IllegalGeneration
-  25 -> Just UnknownMemberId
-  28 -> Just InvalidCommitOffsetSize
-  -1 -> Just UnknownError
-  _  -> Nothing
 
 offsetCommitErrors :: C.OffsetCommitResponse -> [OffsetCommitErrorMessage]
 offsetCommitErrors resp =
@@ -396,7 +369,7 @@ fetchResponseErrors resp =
         ]
   where
   fatalErrors =
-    [ UnknownError
+    [ UnknownServerError
     , OffsetOutOfRange
     , UnknownTopicOrPartition
     , NotLeaderForPartition
