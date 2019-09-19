@@ -22,8 +22,6 @@ import Data.Foldable
 import Data.Primitive.Slice (UnliftedVector(UnliftedVector))
 import Data.Primitive.Unlifted.Array
 
-import Debug.Trace
-
 import qualified Crc32c as CRC
 import qualified String.Ascii as S
 
@@ -157,10 +155,10 @@ makeRequestMetadata !rbss !timeout tn !partition = build $
     minimumSize = 36
     topicNameSize = S.length (coerce tn)
     size = fromIntegral $ 0
-      + (trace ("\nminimumSize: " <> show minimumSize) minimumSize)
-      + (trace ("clientIdLength: " <> show clientIdLength) clientIdLength)
-      + (trace ("topicNameSize: " <> show topicNameSize) topicNameSize)
-      + (trace ("rbss: " <> show rbss) rbss)
+      + minimumSize
+      + clientIdLength
+      + topicNameSize
+      + rbss
 
 produceRequest ::
      Int

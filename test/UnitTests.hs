@@ -170,14 +170,13 @@ goldenTests = testGroup "Golden tests"
 
 produceTest :: IO ByteString
 produceTest = do
-  let payload = fromByteString $ "\"im not owned! im not owned!!\", i continue to insist as i slowly shrink and transform into a corn cob"
+  let payload = fromByteString $ "\"im not owned! im not owned!!\", i continue to insist as i slowlyshrink and transform into a corn cob"
   payloads <- do
     payloads <- newUnliftedArray 1 payload
     freezeUnliftedArray payloads 0 1
   let got = toByteString
         . unChunks
         $ produceRequest 30000 "test" 0 payloads
-  --expected <- B.readFile "test/golden/produce-one-payload-request"
   pure got
 
 unChunks :: UnliftedArray ByteArray -> ByteArray
@@ -197,14 +196,14 @@ multipleProduceTest = do
   pure req
 
 
-{-
-fetchTest :: IO ByteString
-fetchTest = do
-  let topicName = fromByteString "test"
-      req = toByteString $ unChunks $
-        sessionlessFetchRequest 30000 (TopicName topicName) [PartitionOffset 0 0] 30000000
-  pure req
+--fetchTest :: IO ByteString
+--fetchTest = do
+--  let req = toByteString
+--        . unChunks
+--        $ sessionlessFetchRequest 30000 "test" [PartitionOffset 0 0] 30000000
+--  pure req
 
+{-
 multipleFetchTest :: IO ByteString
 multipleFetchTest = do
   let topicName = fromByteString "test"
