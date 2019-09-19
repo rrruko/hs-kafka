@@ -1,3 +1,7 @@
+{-# language
+    BangPatterns
+  #-}
+
 module Kafka.Internal.OffsetFetch.Response
   ( OffsetFetchResponse(..)
   , OffsetFetchTopic(..)
@@ -6,57 +10,49 @@ module Kafka.Internal.OffsetFetch.Response
   , parseOffsetFetchResponse
   ) where
 
-import Data.Attoparsec.ByteString (Parser, (<?>))
-import Data.ByteString
-import Data.Int
-import GHC.Conc
-import System.IO
-
 import Kafka.Internal.Combinator
 import Kafka.Common
 import Kafka.Internal.Response
 
 data OffsetFetchResponse = OffsetFetchResponse
-  { throttleTimeMs :: Int32
+  { throttleTimeMs :: {-# UNPACK #-} !Int32
   , topics :: [OffsetFetchTopic]
-  , errorCode :: Int16
+  , errorCode :: !Int16
   } deriving (Eq, Show)
 
 data OffsetFetchTopic = OffsetFetchTopic
-  { topic :: ByteString
+  { topic :: {-# UNPACK #-} !TopicName
   , partitions :: [OffsetFetchPartition]
   } deriving (Eq, Show)
 
 data OffsetFetchPartition = OffsetFetchPartition
-  { partitionIndex :: Int32
-  , offset :: Int64
-  , leaderEpoch :: Int32
-  , metadata :: Maybe ByteString
-  , partitionErrorCode :: Int16
+  { partitionIndex :: {-# UNPACK #-} !Int32
+  , offset :: {-# UNPACK #-} !Int64
+  , leaderEpoch :: {-# UNPACK #-} !Int32
+  , metadata :: !(Maybe ByteArray)
+  , partitionErrorCode :: {-# UNPACK #-} !Int16
   } deriving (Eq, Show)
 
 parseOffsetFetchResponse :: Parser OffsetFetchResponse
 parseOffsetFetchResponse = do
-  _correlationId <- int32 <?> "correlation id"
+  _correlationId <- int32 "correlation id"
   OffsetFetchResponse
-    <$> (int32 <?> "throttle time")
+    <$> (int32 "throttle time")
     <*> (array parseOffsetFetchTopic <?> "topics")
-    <*> (int16 <?> "error code")
+    <*> (int16 "error code")
 
 parseOffsetFetchTopic :: Parser OffsetFetchTopic
-parseOffsetFetchTopic = do
-  OffsetFetchTopic
-    <$> (byteString <?> "topic name")
-    <*> (array parseOffsetFetchPartitions <?> "partitions")
+parseOffsetFetchTopic = OffsetFetchTopic
+  <$> (topicName <?> "topic name")
+  <*> (array parseOffsetFetchPartitions <?> "partitions")
 
 parseOffsetFetchPartitions :: Parser OffsetFetchPartition
-parseOffsetFetchPartitions = do
-  OffsetFetchPartition
-    <$> (int32 <?> "partition id")
-    <*> (int64 <?> "offset")
-    <*> (int32 <?> "leader epoch")
-    <*> (nullableByteString <?> "metadata")
-    <*> (int16 <?> "error code")
+parseOffsetFetchPartitions = OffsetFetchPartition
+  <$> (int32 "partition id")
+  <*> (int64 "offset")
+  <*> (int32 "leader epoch")
+  <*> (nullableByteArray <?> "metadata")
+  <*> (int16 "error code")
 
 getOffsetFetchResponse ::
      Kafka

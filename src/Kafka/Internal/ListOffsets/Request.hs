@@ -2,12 +2,12 @@ module Kafka.Internal.ListOffsets.Request
   ( listOffsetsRequest
   ) where
 
-import Data.Int
-import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 
 import Kafka.Common
 import Kafka.Internal.Writer
+
+import qualified String.Ascii as S
 
 listOffsetsApiVersion :: Int16
 listOffsetsApiVersion = 5
@@ -57,15 +57,15 @@ listOffsetsRequest topic partitions timestamp =
       <> int16 listOffsetsApiKey
       <> int16 listOffsetsApiVersion
       <> int32 correlationId
-      <> string (fromByteString clientId) clientIdLength
+      <> string clientId clientIdLength
       -- listoffsets request
       <> int32 defaultReplicaId
       <> int8 defaultIsolationLevel
       <> int32 1 -- number of following topics
 
-      <> string topicName topicNameSize
+      <> topicName topic
       <> array
-          ( map
+          ( fmap
             (\p -> int32 p
               <> int32 defaultCurrentLeaderEpoch
               <> int64 (kafkaTimestamp timestamp)
@@ -79,6 +79,5 @@ listOffsetsRequest topic partitions timestamp =
       writeUnliftedArray arr 0 req
       pure arr
   where
-    TopicName topicName = topic
-    topicNameSize = sizeofByteArray topicName
+    topicNameSize = S.length (coerce topic)
     partitionCount = length partitions

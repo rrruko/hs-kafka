@@ -1,7 +1,9 @@
 module Kafka.Internal.Writer
   ( module B
   , mapArray
+  , topicName
   , string
+  , bytearray
   , array
   , size32
   , bool
@@ -12,12 +14,13 @@ module Kafka.Internal.Writer
   , int64
   ) where
 
-import Data.Int (Int8,Int16,Int32,Int64)
-import Data.Primitive.ByteArray
 import Data.Word (byteSwap16,byteSwap32,byteSwap64)
 
+import Kafka.Common
+
 import qualified Builder as B
-import Builder as B hiding (int8,int16,int32,int64)
+import Builder as B hiding (int8,int16,int32,int64,bytearray)
+import qualified String.Ascii as S
 
 size32 :: ByteArray -> Int32
 size32 = fromIntegral . sizeofByteArray
@@ -25,8 +28,16 @@ size32 = fromIntegral . sizeofByteArray
 mapArray :: Foldable t => t a -> (a -> B.Builder) -> B.Builder
 mapArray xs f = int32 (fromIntegral (length xs)) <> foldMap f xs
 
-string :: ByteArray -> Int -> B.Builder
-string src len = int16 (fromIntegral len) <> B.bytearray src 0 len
+bytearray :: ByteArray -> Int -> B.Builder
+bytearray src len = int16 (fromIntegral len)
+  <> B.bytearray src 0 len
+
+string :: S.String -> Int -> B.Builder
+string src len = int16 (fromIntegral len)
+  <> (S.asByteArray src $ \b -> B.bytearray b 0 len)
+
+topicName :: TopicName -> B.Builder
+topicName (TopicName tn) = string tn (S.length tn)
 
 array :: [B.Builder] -> Int -> B.Builder
 array src len = int32 (fromIntegral len) <> mconcat src

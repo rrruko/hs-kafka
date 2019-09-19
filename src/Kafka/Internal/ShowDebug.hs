@@ -2,11 +2,10 @@ module Kafka.Internal.ShowDebug
   (ShowDebug(..)
   ) where
 
-import Data.ByteString (ByteString)
-import Data.Int (Int8, Int16, Int32, Int64)
 import Data.List (intercalate)
-import Data.Primitive
 import Kafka.Common
+
+import qualified String.Ascii as S
 
 class ShowDebug a where
   showDebug :: a -> String
@@ -26,9 +25,6 @@ instance ShowDebug Int64 where
 instance ShowDebug Int where
   showDebug = show
 
-instance ShowDebug ByteString where
-  showDebug = show
-
 instance ShowDebug a => ShowDebug [a] where
   showDebug xs = "[" <> intercalate ", " (fmap showDebug xs) <> "]"
 
@@ -37,7 +33,10 @@ instance ShowDebug a => ShowDebug (Maybe a) where
   showDebug (Just x) = "Just " <> showDebug x
 
 instance ShowDebug ByteArray where
-  showDebug = show . toByteString
+  showDebug = show . S.fromByteArray
+
+instance ShowDebug S.String where
+  showDebug b = S.asByteArray b show
 
 instance ShowDebug Topic where
   showDebug (Topic topicName parts _) =

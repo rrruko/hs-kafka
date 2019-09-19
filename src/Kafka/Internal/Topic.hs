@@ -6,11 +6,7 @@ module Kafka.Internal.Topic
   , getPartitionCount
   ) where
 
-import Control.Concurrent.STM.TVar
 import Control.Monad.Except
-import Data.Coerce
-import Data.IORef
-import Data.Int
 import Data.List
 import System.IO (Handle)
 
@@ -42,6 +38,6 @@ getPartitionCount kafka topicName timeout handle = runExceptT $ do
 metadataPartitions :: TopicName -> M.MetadataResponse -> Maybe Int32
 metadataPartitions topicName mdr =
   let tops = M.topics mdr
-  in  case find ((== topicName) . coerce . fromByteString . M.name) tops of
+  in  case find ((== topicName) . M.name) tops of
         Just top -> Just (fromIntegral $ length (M.partitions top))
         Nothing -> Nothing

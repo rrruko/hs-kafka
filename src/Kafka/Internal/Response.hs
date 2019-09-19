@@ -1,4 +1,7 @@
-{-# LANGUAGE LambdaCase #-}
+{-# language
+    LambdaCase
+  , RankNTypes
+  #-}
 
 module Kafka.Internal.Response
   ( fromKafkaResponse
@@ -7,22 +10,20 @@ module Kafka.Internal.Response
   , tryParse
   ) where
 
-import Data.Attoparsec.ByteString (Parser, parseOnly)
-import Data.Bifunctor
-import Data.ByteString (ByteString)
 import Data.Bytes.Types
-import Data.Primitive.ByteArray
-import Data.Word
-import GHC.Conc
+import Data.Word (byteSwap32)
 import Socket.Stream.Interruptible.MutableBytes
 import System.IO
 
 import Kafka.Common
+import Kafka.Internal.Combinator
+
+import qualified Data.Bytes.Parser as Smith
 
 getKafkaResponse ::
      Kafka
   -> TVar Bool
-  -> IO (Either KafkaException ByteString)
+  -> IO (Either KafkaException ByteArray)
 getKafkaResponse kafka interrupt = do
   getResponseSizeHeader kafka interrupt >>= \case
     Right responseByteCount -> do
@@ -33,7 +34,7 @@ getKafkaResponse kafka interrupt = do
           interrupt
           (getKafka kafka)
           responseBufferSlice
-      responseBytes <- toByteString <$> unsafeFreezeByteArray responseBuffer
+      responseBytes <- unsafeFreezeByteArray responseBuffer
       pure $ responseBytes <$ responseStatus
     Left e -> pure $ Left e
 
@@ -67,9 +68,11 @@ fromKafkaResponse :: (Show a)
 fromKafkaResponse parser kafka interrupt debugHandle =
   getKafkaResponse kafka interrupt >>= \case
     Right bytes -> do
-      let res = parseOnly parser bytes
+      let res = Smith.parseByteArray parser bytes
       logMaybe res debugHandle
-      pure (Right res)
+      case res of
+        Smith.Failure e -> pure (Right (Left e))
+        Smith.Success a _ -> pure (Right (Right a))
     Left err -> pure (Left err)
 
 tryParse :: Either KafkaException (Either String a) -> Either KafkaException a
