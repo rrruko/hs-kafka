@@ -30,12 +30,12 @@ parseOffsetCommitResponse = do
   _correlationId <- int32 "correlation id"
   OffsetCommitResponse
     <$> (int32 "throttle time")
-    <*> (array parseOffsetCommitTopic) -- <?> "topics")
+    <*> (array parseOffsetCommitTopic <?> "topics")
 
 parseOffsetCommitTopic :: Parser OffsetCommitTopic
 parseOffsetCommitTopic = OffsetCommitTopic
-  <$> (topicName) -- <?> "topic name")
-  <*> (array parseOffsetCommitPartitions) -- <?> "partitions")
+  <$> (topicName <?> "topic name")
+  <*> (array parseOffsetCommitPartitions <?> "partitions")
 
 parseOffsetCommitPartitions :: Parser OffsetCommitPartition
 parseOffsetCommitPartitions = OffsetCommitPartition

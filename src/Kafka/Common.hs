@@ -34,7 +34,6 @@ module Kafka.Common
   ) where
 
 --import Data.Primitive.Unlifted.Array
-import Data.Text (Text)
 import Socket.Stream.IPv4
 
 import qualified String.Ascii as S
@@ -91,7 +90,7 @@ data KafkaException where
     => ConnectException ('Internet 'V4) 'Uninterruptible
     -> KafkaException
   KafkaException :: ()
-    => !Text
+    => String
     -> KafkaException
   KafkaOffsetCommitException :: ()
     => [OffsetCommitErrorMessage]

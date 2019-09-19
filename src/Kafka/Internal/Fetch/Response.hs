@@ -118,14 +118,14 @@ parseFetchResponse = do
 
 parseFetchTopic :: Parser FetchTopic
 parseFetchTopic = do
-  t <- topicName -- <?> "topic name"
+  t <- topicName <?> "topic name"
   rs <- nullableArray parseFetchPartition
   pure (FetchTopic t rs)
 
 parseFetchPartition :: Parser FetchPartition
 parseFetchPartition = FetchPartition
-  <$> (parsePartitionHeader) -- <?> "partition header")
-  <*> (nullableSequence parseRecordBatch) -- <?> "record batch")
+  <$> (parsePartitionHeader <?> "partition header")
+  <*> (nullableSequence parseRecordBatch <?> "record batch")
 
 parsePartitionHeader :: Parser PartitionHeader
 parsePartitionHeader = PartitionHeader
@@ -134,7 +134,7 @@ parsePartitionHeader = PartitionHeader
   <*> (int64 "high watermark")
   <*> (int64 "last stable offset")
   <*> (int64 "log start offset")
-  <*> (nullableArray parseAbortedTransaction) -- <?> "aborted transactions")
+  <*> (nullableArray parseAbortedTransaction <?> "aborted transactions")
 
 parseAbortedTransaction :: Parser AbortedTransaction
 parseAbortedTransaction = AbortedTransaction
@@ -159,13 +159,13 @@ parseRecordBatch = RecordBatch
 
 parseRecord :: Parser Record
 parseRecord = do
-  recordLength <- varInt -- <?> "record length"
+  recordLength <- varInt <?> "record length"
   recordAttributes <- int8 "record attributes"
-  recordTimestampDelta <- varInt -- <?> "record timestamp delta"
-  recordOffsetDelta <- varInt -- <?> "record offset delta"
-  recordKey <- nullableByteArrayVar -- <?> "record key"
-  recordValue <- nullableByteArrayVar -- <?> "record value"
-  recordHeaders <- varintArray parseHeader -- <?> "record headers"
+  recordTimestampDelta <- varInt <?> "record timestamp delta"
+  recordOffsetDelta <- varInt <?> "record offset delta"
+  recordKey <- nullableByteArrayVar <?> "record key"
+  recordValue <- nullableByteArrayVar <?> "record value"
+  recordHeaders <- varintArray parseHeader <?> "record headers"
   pure (Record {..})
 
 varintArray :: Parser a -> Parser [a]
@@ -175,8 +175,8 @@ varintArray p = do
 
 parseHeader :: Parser Header
 parseHeader = do
-  headerKey <- nullableByteArrayVar -- <?> "header key"
-  headerValue <- nullableByteArrayVar -- <?> "header value"
+  headerKey <- nullableByteArrayVar <?> "header key"
+  headerValue <- nullableByteArrayVar <?> "header value"
   pure (Header {..})
 
 getFetchResponse ::

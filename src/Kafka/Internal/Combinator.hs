@@ -23,6 +23,7 @@ module Kafka.Internal.Combinator
   , nullableSequence
   , takeByteArray
   , varInt
+  , (<?>)
   )
   where
 
@@ -33,6 +34,9 @@ import qualified Data.Bytes as B
 import qualified Data.Bytes.Parser as Smith
 import qualified Data.Bytes.Parser.BigEndian as Smith
 import qualified String.Ascii as S
+
+(<?>) :: Smith.Parser e s a -> e -> Smith.Parser e s a
+(<?>) p e = p `Smith.orElse` (Smith.fail e)
 
 type Parser a = forall s. Smith.Parser String s a
 

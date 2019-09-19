@@ -33,14 +33,14 @@ data SyncTopicAssignment = SyncTopicAssignment
 
 parseTopicPartitions :: Parser SyncTopicAssignment
 parseTopicPartitions = SyncTopicAssignment
-  <$> topicName --bytearray -- <?> "assigned topic")
-  <*> (array (int32 "assigned partitions")) -- <?> "assigned partitions")
+  <$> (topicName <?> "assigned topic")
+  <*> (array (int32 "assigned partitions")  <?> "assigned partitions")
 
 parseMemberAssignment :: Parser SyncMemberAssignment
 parseMemberAssignment = SyncMemberAssignment
   <$> (int16 "assignment version")
-  <*> (array parseTopicPartitions) -- "topic partitions"
-  <*> takeByteArray -- "user data"
+  <*> (array parseTopicPartitions <?> "topic partitions")
+  <*> (takeByteArray <?> "user data")
 
 parseSyncGroupResponse :: Parser SyncGroupResponse
 parseSyncGroupResponse = do
@@ -48,7 +48,7 @@ parseSyncGroupResponse = do
   SyncGroupResponse
     <$> (int32 "throttle time")
     <*> (int16 "error code")
-    <*> (nullableBytes parseMemberAssignment) -- <?> "member assignment")
+    <*> (nullableBytes parseMemberAssignment <?> "member assignment")
 
 getSyncGroupResponse ::
      Kafka

@@ -46,7 +46,7 @@ parseProduceResponse = do
   _correlationId <- int32 "correlationId"
   responsesCount <- int32 "responses count"
   ProduceResponse
-    <$> (count responsesCount parseProduceResponseMessage) -- response messages
+    <$> (count responsesCount parseProduceResponseMessage <?> "response messages")
     <*> (int32 "throttle time")
 
 parseProduceResponseMessage :: Parser ProduceResponseMessage

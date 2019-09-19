@@ -34,7 +34,7 @@ parseListOffsetsResponse = do
   _correlationId <- int32 "correlation id"
   ListOffsetsResponse
     <$> int32 "throttleTimeMs"
-    <*> array parseListOffsetsTopic
+    <*> (array parseListOffsetsTopic <?> "list offsets: topic name")
 
 parseListOffsetsTopic :: Parser ListOffsetsTopic
 parseListOffsetsTopic = ListOffsetsTopic

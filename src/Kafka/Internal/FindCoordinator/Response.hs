@@ -25,9 +25,9 @@ parseFindCoordinatorResponse = do
   FindCoordinatorResponse
     <$> (int32 "throttle time")
     <*> (int16 "error code")
-    <*> (nullableByteArray) -- <?> "generation id")
+    <*> (nullableByteArray <?> "generation id")
     <*> (int32 "group protocol")
-    <*> (bytearray) -- <?> "leader id")
+    <*> (bytearray <?> "leader id")
     <*> (int32 "member id")
 
 getFindCoordinatorResponse ::

@@ -48,25 +48,25 @@ parseMetadataResponse = do
   _correlationId <- int32 "correlation id"
   MetadataResponse
     <$> (int32 "throttle time")
-    <*> (array parseMetadataBroker) -- <?> "brokers")
-    <*> (nullableByteArray) -- <?> "cluster id")
+    <*> (array parseMetadataBroker <?> "brokers")
+    <*> (nullableByteArray <?> "cluster id")
     <*> (int32 "controller id")
-    <*> (array parseMetadataTopic) -- <?> "topics")
+    <*> (array parseMetadataTopic <?> "topics")
 
 parseMetadataBroker :: Parser MetadataBroker
 parseMetadataBroker = MetadataBroker
   <$> (int32 "node id")
-  <*> (bytearray) -- <?> "host")
+  <*> (bytearray <?> "host")
   <*> (int32 "port")
-  <*> (nullableByteArray) -- <?> "rack")
+  <*> (nullableByteArray <?> "rack")
 
 parseMetadataTopic :: Parser MetadataTopic
 parseMetadataTopic = do
   MetadataTopic
     <$> (int16 "error code")
-    <*> (topicName) -- <?> "name")
+    <*> (topicName <?> "name")
     <*> (bool "is internal")
-    <*> (array parseMetadataPartition) -- <?> "partitions")
+    <*> (array parseMetadataPartition <?> "partitions")
 
 parseMetadataPartition :: Parser MetadataPartition
 parseMetadataPartition = do

@@ -38,20 +38,20 @@ parseOffsetFetchResponse = do
   _correlationId <- int32 "correlation id"
   OffsetFetchResponse
     <$> (int32 "throttle time")
-    <*> (array parseOffsetFetchTopic) -- topics <?> "topics")
+    <*> (array parseOffsetFetchTopic <?> "topics")
     <*> (int16 "error code")
 
 parseOffsetFetchTopic :: Parser OffsetFetchTopic
 parseOffsetFetchTopic = OffsetFetchTopic
-  <$> (topicName) --String <?> "topic name")
-  <*> (array parseOffsetFetchPartitions) -- <?> "partitions")
+  <$> (topicName <?> "topic name")
+  <*> (array parseOffsetFetchPartitions <?> "partitions")
 
 parseOffsetFetchPartitions :: Parser OffsetFetchPartition
 parseOffsetFetchPartitions = OffsetFetchPartition
   <$> (int32 "partition id")
   <*> (int64 "offset")
   <*> (int32 "leader epoch")
-  <*> nullableByteArray -- <?> "metadata")
+  <*> (nullableByteArray <?> "metadata")
   <*> (int16 "error code")
 
 getOffsetFetchResponse ::

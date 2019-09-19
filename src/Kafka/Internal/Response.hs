@@ -11,7 +11,7 @@ module Kafka.Internal.Response
   ) where
 
 import Data.Bytes.Types
-import Data.Word
+import Data.Word (byteSwap32)
 import Socket.Stream.Interruptible.MutableBytes
 import System.IO
 

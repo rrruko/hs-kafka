@@ -36,15 +36,15 @@ parseJoinGroupResponse = do
     <$> (int32 "throttle time")
     <*> (int16 "error code")
     <*> (int32 "generation id")
-    <*> (bytearray) -- "group protocol")
-    <*> (bytearray) -- "leader id")
-    <*> (bytearray) -- "member id")
-    <*> (array parseMember) -- "members")
+    <*> (bytearray <?> "group protocol")
+    <*> (bytearray <?> "leader id")
+    <*> (bytearray <?> "member id")
+    <*> (array parseMember <?> "members")
 
 parseMember :: Parser Member
 parseMember = Member
-  <$> (bytearray) -- <?> "member id")
-  <*> (sizedBytes) -- <?> "member metadata")
+  <$> (bytearray <?> "member id")
+  <*> (sizedBytes <?> "member metadata")
 
 getJoinGroupResponse ::
      Kafka
