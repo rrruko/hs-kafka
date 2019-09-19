@@ -1,4 +1,7 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# language
+    LambdaCase
+  , RecordWildCards
+  #-}
 
 module Kafka.Internal.Request
   ( fetch
@@ -37,7 +40,8 @@ request ::
      Kafka
   -> UnliftedArray ByteArray
   -> IO (Either KafkaException ())
-request kafka msg = first KafkaSendException <$> sendMany (getKafka kafka) msg
+request kafka msg = first KafkaSendException
+  <$> sendMany (getKafka kafka) msg
 
 logHandle :: Maybe Handle -> String -> IO ()
 logHandle handle str =
@@ -61,8 +65,13 @@ produce kafka req@ProduceRequest{..} handle = do
         topicName
         p
         producePayloads
-  e <- request kafka message
-  either (pure . Left) (\a -> increment parts ctr >> pure (Right a)) e
+  case message of
+    Nothing -> pure (Left KafkaProduceSizeZeroException)
+    Just m -> request kafka m >>= \case
+      Left err -> pure (Left err)
+      Right a -> do
+        increment parts ctr
+        pure (Right a)
 
 --
 -- [Note: Partitioning algorithm]
