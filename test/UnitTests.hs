@@ -1,31 +1,27 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-{-# options_ghc -Wwarn #-}
-
 module Main (main) where
 
 import Data.Int
 import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 import Data.Word
-import Data.String (fromString)
 import Test.Tasty
 import Test.Tasty.Golden
 import Test.Tasty.HUnit
 import Prelude hiding (readFile)
 import Data.ByteString (ByteString)
 
-import qualified Data.List as L
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC8
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Bytes.Parser as Smith
 import qualified String.Ascii as S
 import qualified Data.IntMap as IM
-import qualified System.IO as IO
 
 import Data.Bytes.Parser (Result(..))
 
+import Kafka.Common
 import Kafka.Consumer (merge)
 import Kafka.Internal.Combinator
 import Kafka.Internal.Fetch.Request
@@ -33,10 +29,9 @@ import Kafka.Internal.JoinGroup.Request
 import Kafka.Internal.ListOffsets.Request
 import Kafka.Internal.Produce.Request
 import Kafka.Internal.Produce.Response
-import qualified Kafka.Internal.Writer as W
 import Kafka.Internal.Zigzag
-
 import qualified Kafka.Internal.Fetch.Response as Fetch
+import qualified Kafka.Internal.Writer as W
 
 main :: IO ()
 main = defaultMain (testGroup "Tests" [unitTests, goldenTests])
@@ -119,70 +114,67 @@ goldenTests = testGroup "Golden tests"
       [ goldenVsString
           "One payload"
           "test/golden/produce-one-payload-request"
-          (BL.fromStrict <$> produceTest)
+          produceTest
       , goldenVsString
           "Many payloads"
           "test/golden/produce-many-payloads-request"
-          (BL.fromStrict <$> multipleProduceTest)
+          multipleProduceTest
       ]
-  ]
-{-
   , testGroup "Fetch"
       [ goldenVsString
           "One partition"
           "test/golden/fetch-one-partition-request"
-          (BL.fromStrict <$> fetchTest)
+          fetchTest
       , goldenVsString
           "Many partitions"
           "test/golden/fetch-many-partitions-request"
-          (BL.fromStrict <$> multipleFetchTest)
+          multipleFetchTest
       ]
   , testGroup "ListOffsets"
       [ goldenVsString
           "No partitions"
           "test/golden/listoffsets-no-partitions-request"
-          (BL.fromStrict <$> listOffsetsTest [])
+          (listOffsetsTest [])
       , goldenVsString
           "One partition"
           "test/golden/listoffsets-one-partition-request"
-          (BL.fromStrict <$> listOffsetsTest [0])
+          (listOffsetsTest [0])
       , goldenVsString
           "Many partitions"
           "test/golden/listoffsets-many-partitions-request"
-          (BL.fromStrict <$> listOffsetsTest [0,1,2,3,4,5])
+          (listOffsetsTest [0,1,2,3,4,5])
       ]
   , testGroup "JoinGroup"
       [ goldenVsString
           "null member id"
           "test/golden/joingroup-null-member-id-request"
-          (BL.fromStrict <$> joinGroupTest
+          (joinGroupTest
             (GroupMember (fromByteString "test-group") Nothing))
       , goldenVsString
           "with member id"
           "test/golden/joingroup-with-member-id-request"
-          (BL.fromStrict <$> joinGroupTest
+          (joinGroupTest
             (GroupMember
               (fromByteString "test-group")
               (Just $ fromByteString "test-member-id")))
       ]
   ]
--}
 
-produceTest :: IO ByteString
+toSpec :: UnliftedArray ByteArray -> BL.ByteString
+toSpec = BL.fromStrict . toByteString . unChunks
+
+produceTest :: IO BL.ByteString
 produceTest = do
   let payload = fromByteString $ "\"im not owned! im not owned!!\", i continue to insist as i slowlyshrink and transform into a corn cob"
   payloads <- do
     payloads <- newUnliftedArray 1 payload
     freezeUnliftedArray payloads 0 1
-  let got = toByteString
-        . unChunks
-        $ produceRequest 30000 "test" 0 payloads
-  pure got
+  pure (toSpec (produceRequest 30000 "test" 0 payloads))
 
 unChunks :: UnliftedArray ByteArray -> ByteArray
 unChunks = foldrUnliftedArray (<>) mempty
 
-multipleProduceTest :: IO ByteString
+multipleProduceTest :: IO BL.ByteString
 multipleProduceTest = do
   let payloads = unliftedArrayFromList
         [ fromByteString "i'm dying"
@@ -190,38 +182,23 @@ multipleProduceTest = do
         , fromByteString "it's like a dream"
         , fromByteString "i want to dream"
         ]
-  let req = toByteString
-        . unChunks
-        $ produceRequest 30000 "test" 0 payloads
-  pure req
+  pure (toSpec (produceRequest 30000 "test" 0 payloads))
 
+fetchTest :: IO BL.ByteString
+fetchTest = do
+  pure (toSpec (sessionlessFetchRequest 30000 "test" [PartitionOffset 0 0] 30000000))
 
---fetchTest :: IO ByteString
---fetchTest = do
---  let req = toByteString
---        . unChunks
---        $ sessionlessFetchRequest 30000 "test" [PartitionOffset 0 0] 30000000
---  pure req
-
-{-
-multipleFetchTest :: IO ByteString
+multipleFetchTest :: IO BL.ByteString
 multipleFetchTest = do
-  let topicName = fromByteString "test"
-      req = toByteString $ unChunks $
-        sessionlessFetchRequest 30000 (TopicName topicName)
-          [PartitionOffset 0 0, PartitionOffset 1 0, PartitionOffset 2 0] 30000000
-  pure req
+  pure (toSpec (sessionlessFetchRequest 30000 "test" [PartitionOffset 0 0, PartitionOffset 1 0, PartitionOffset 2 0] 30000000))
 
-listOffsetsTest :: [Int32] -> IO ByteArray
+listOffsetsTest :: [Int32] -> IO BL.ByteString
 listOffsetsTest partitions = do
-  let req = unChunks (listOffsetsRequest "test" partitions Latest)
-  pure req
+  pure (toSpec (listOffsetsRequest "test" partitions Latest))
 
-joinGroupTest :: GroupMember -> IO ByteArray
+joinGroupTest :: GroupMember -> IO BL.ByteString
 joinGroupTest groupMember = do
-  let req = unChunks (joinGroupRequest "test" groupMember)
-  pure req
--}
+  pure (toSpec (joinGroupRequest "test" groupMember))
 
 produceResponseTest :: TestTree
 produceResponseTest = testGroup "Produce"
