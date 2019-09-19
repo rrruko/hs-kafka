@@ -33,7 +33,6 @@ module Kafka.Common
   , magic
   ) where
 
---import Data.Primitive.Unlifted.Array
 import Socket.Stream.IPv4
 
 import qualified String.Ascii as S
@@ -94,6 +93,9 @@ data KafkaException where
     -> KafkaException
   KafkaOffsetCommitException :: ()
     => [OffsetCommitErrorMessage]
+    -> KafkaException
+  KafkaProduceException :: ()
+    => !Int16
     -> KafkaException
   KafkaFetchException :: ()
     => [FetchErrorMessage]

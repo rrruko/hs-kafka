@@ -18,7 +18,6 @@ module Kafka.Consumer
   , leave
   , merge
   , withConsumer
-  , newConsumer
   , getsv
 
   , FetchResponse(..)
@@ -144,15 +143,15 @@ data ConsumerState = ConsumerState
   , member :: !GroupMember
     -- ^ Member Id (IMPROVE)
   , genId :: !GenerationId
-    -- ^ Generation Id (IMPROVE)
+    -- ^ Generation Id (IMPROVE) -- improve how?
   , members :: [Member]
-    -- ^ Members (IMPROVE)
+    -- ^ Members (IMPROVE) -- improve how?
   , offsets :: !(IntMap Int64)
     -- ^ Offsets according to each partition
   , partitionCount :: !Int32
     -- ^ Number of partitions
   , sock :: !(MVar ())
-    -- ^ KafkaSocket (IMPROVE)
+    -- ^ KafkaSocket (IMPROVE) -- improve how?
   , quit :: !Interruptedness
     -- ^ Whether or not consumption has been interrupted.
   }

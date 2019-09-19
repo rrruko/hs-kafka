@@ -93,18 +93,18 @@ data RecordBatch = RecordBatch
   } deriving (Eq, Show)
 
 data Record = Record
-  { recordLength :: Int
-  , recordAttributes :: Int8
-  , recordTimestampDelta :: Int
-  , recordOffsetDelta :: Int
-  , recordKey :: Maybe ByteArray
-  , recordValue :: Maybe ByteArray
+  { recordLength :: !Int
+  , recordAttributes :: !Int8
+  , recordTimestampDelta :: !Int
+  , recordOffsetDelta :: !Int
+  , recordKey :: !(Maybe ByteArray)
+  , recordValue :: !(Maybe ByteArray)
   , recordHeaders :: [Header]
   } deriving (Eq, Show)
 
 data Header = Header
-  { headerKey :: Maybe ByteArray
-  , headerValue :: Maybe ByteArray
+  { headerKey :: !(Maybe ByteArray)
+  , headerValue :: !(Maybe ByteArray)
   } deriving (Eq, Show)
 
 parseFetchResponse :: Parser FetchResponse
