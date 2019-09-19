@@ -1,29 +1,31 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UnboxedTuples #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# language
+    BangPatterns
+  , DataKinds
+  , DeriveFunctor
+  , FlexibleContexts
+  , GeneralizedNewtypeDeriving
+  , MultiParamTypeClasses
+  , OverloadedStrings
+  , PolyKinds
+  , RankNTypes
+  , TypeFamilies
+  , UnboxedTuples
+  , UndecidableInstances
+  #-}
 
 module Kafka.Internal.Produce.Request
   ( produceRequest
   ) where
 
-import Control.Monad.ST
 import Data.Bytes.Types
 import Data.Foldable
-import Data.Int
-import Data.Primitive.ByteArray
 import Data.Primitive.Slice (UnliftedVector(UnliftedVector))
 import Data.Primitive.Unlifted.Array
-import Data.Word
+
+import Debug.Trace
 
 import qualified Crc32c as CRC
+import qualified String.Ascii as S
 
 import Kafka.Common
 import Kafka.Internal.Writer
@@ -131,36 +133,34 @@ produceRequestRecordBatchMetadata payloadsSectionChunks payloadCount payloadsSec
   in
     preCrc <> postCrc
 
-makeRequestMetadata ::
-     Int
-  -> Int
-  -> TopicName
-  -> Int32
+makeRequestMetadata :: ()
+  => Int -- ^ record batch section size
+  -> Int -- ^ timeout (microseconds)
+  -> TopicName -- ^ topic name
+  -> Int32 -- ^ partition
   -> ByteArray
-makeRequestMetadata recordBatchSectionSize timeout topic partition =
-  build $
-    int32 size
-    <> int16 produceApiKey
-    <> int16 produceApiVersion
-    <> int32 correlationId
-    <> string (fromByteString clientId) clientIdLength
-    <> int16 (-1) -- transactional_id length
-    <> int16 (acks defaultAcknowledgments) -- acks
-    <> int32 (fromIntegral timeout) -- timeout in ms
-    <> int32 1 -- following array length
-    <> string topicName topicNameSize -- topic_data topic
-    <> int32 1 -- following array [data] length
-    <> int32 partition -- partition
-    <> int32 (fromIntegral recordBatchSectionSize) -- record_set length
+makeRequestMetadata !rbss !timeout tn !partition = build $
+  int32 size
+  <> int16 produceApiKey
+  <> int16 produceApiVersion
+  <> int32 correlationId
+  <> string clientId clientIdLength
+  <> int16 (-1) -- transactional_id length
+  <> int16 (acks defaultAcknowledgments) -- acks
+  <> int32 (fromIntegral timeout) -- timeout in ms
+  <> int32 1 -- following array length
+  <> topicName tn -- topic_data topic
+  <> int32 1 -- following array [data] length
+  <> int32 partition -- partition
+  <> int32 (fromIntegral rbss) -- record_set length
   where
-    TopicName topicName = topic
-    topicNameSize = sizeofByteArray topicName
     minimumSize = 36
-    size = fromIntegral $
-        minimumSize
-      + clientIdLength
-      + topicNameSize
-      + recordBatchSectionSize
+    topicNameSize = S.length (coerce tn)
+    size = fromIntegral $ 0
+      + (trace ("\nminimumSize: " <> show minimumSize) minimumSize)
+      + (trace ("clientIdLength: " <> show clientIdLength) clientIdLength)
+      + (trace ("topicNameSize: " <> show topicNameSize) topicNameSize)
+      + (trace ("rbss: " <> show rbss) rbss)
 
 produceRequest ::
      Int
@@ -175,8 +175,8 @@ produceRequest timeout topic partition payloads =
       ba <- newByteArray 1
       writeByteArray ba 0 (0 :: Word8)
       unsafeFreezeByteArray ba
-    recordBatchSectionSize =
-        sumSizes payloadsSectionChunks
+    recordBatchSectionSize = 0
+      + sumSizes payloadsSectionChunks
       + sizeofByteArray recordBatchMetadata
     requestMetadata = makeRequestMetadata
       recordBatchSectionSize
@@ -192,7 +192,7 @@ produceRequest timeout topic partition payloads =
       arr <- newUnliftedArray (3 * payloadCount) zero
       itraverseUnliftedArray_
         (\i payload -> do
-          writeUnliftedArray arr (i * 3)     (makeRecordMetadata i payload)
+          writeUnliftedArray arr (i * 3) (makeRecordMetadata i payload)
           writeUnliftedArray arr (i * 3 + 1) payload
           writeUnliftedArray arr (i * 3 + 2) zero)
         payloads

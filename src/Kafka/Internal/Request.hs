@@ -14,9 +14,6 @@ module Kafka.Internal.Request
   , syncGroup
   ) where
 
-import Data.Bifunctor (first)
-import Data.IORef
-import Data.Primitive
 import Data.Primitive.Unlifted.Array
 import Socket.Stream.Uninterruptible.Bytes
 import System.IO (Handle, hPutStr, hFlush)
@@ -61,7 +58,7 @@ produce kafka req@ProduceRequest{..} handle = do
   p <- fromIntegral <$> readIORef ctr
   let message = produceRequest
         (produceWaitTime `div` 1000)
-        (TopicName topicName)
+        topicName
         p
         producePayloads
   e <- request kafka message

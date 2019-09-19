@@ -31,16 +31,12 @@ module Kafka.Consumer
   ) where
 
 import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.MVar
-import Control.Concurrent.STM
 import Control.Monad hiding (join)
 import Control.Monad.Except hiding (join)
 import Control.Monad.Reader hiding (join)
-import Data.Coerce
 import Data.Foldable
-import Data.Primitive.ByteArray
-import Data.Int
 import Data.IntMap (IntMap)
+import qualified Data.List as List
 import Data.Maybe
 import Socket.Stream.IPv4 (Peer)
 import System.IO (Handle)
@@ -195,21 +191,19 @@ merge lor ofr = mergeId (\l o -> Just $ if o < 0 then l else o) lor ofr
   mergeId f a b = IM.mergeWithKey (\_ left right -> f left right) id id a b
 
 toOffsetList :: IntMap Int64 -> [PartitionOffset]
-toOffsetList = map (\(k, v) -> PartitionOffset (fromIntegral k) v) . IM.toList
+toOffsetList = fmap (\(k, v) -> PartitionOffset (fromIntegral k) v) . IM.toList
 
 listOffsetsMap :: ListOffsetsResponse -> IntMap Int64
-listOffsetsMap lor = IM.fromList $ map
+listOffsetsMap lor = IM.fromList $ fmap
   (\pr -> (fromIntegral (L.partition pr), L.offset pr))
   (concatMap L.partitions $ L.topics lor)
 
 updateOffsets :: TopicName -> IntMap Int64 -> FetchResponse -> IntMap Int64
-updateOffsets topicName current r =
+updateOffsets name current r =
   IM.mapWithKey
     (\pid offs -> fromMaybe offs
       (F.partitionLastSeenOffset r name (fromIntegral pid)))
     current
-  where
-  name = toByteString (coerce topicName)
 
 withConsumer :: ()
   => Peer
@@ -287,8 +281,8 @@ rejoin = do
       "The topic was not present in the assignment set"
 
 partitionsForTopic :: TopicName -> [SyncTopicAssignment] -> Maybe [Int32]
-partitionsForTopic (TopicName n) assigns =
-  S.partitions <$> find (\a -> S.topic a == toByteString n) assigns
+partitionsForTopic t assigns =
+  S.partitions <$> find (\a -> S.topic a == t) assigns
 
 sendHeartbeat :: Consumer ()
 sendHeartbeat = do
@@ -395,14 +389,12 @@ offsetCommitErrors resp =
 fetchResponseErrors :: FetchResponse -> [FetchErrorMessage]
 fetchResponseErrors resp =
   let tops = topics resp
-  in  foldMap
-        (\t ->
-          [FetchErrorMessage (topic t) p e
-            | p <- fmap (partition . partitionHeader) (partitions t)
-            , e <- fmap (partitionHeaderErrorCode . partitionHeader) (partitions t)
-            , maybe False (`elem` fatalErrors) (fromErrorCode e)
-          ])
-        tops
+  in  flip foldMap tops $ \t ->
+        [ FetchErrorMessage (topic t) p e
+        | p <- fmap (partition . partitionHeader) (partitions t)
+        , e <- fmap (partitionHeaderErrorCode . partitionHeader) (partitions t)
+        , maybe False (`elem` fatalErrors) (fromErrorCode e)
+        ]
   where
   fatalErrors =
     [ UnknownError
@@ -449,7 +441,7 @@ commitOffsets = do
 
 assignMembers :: Int -> TopicName -> Int32 -> [Member] -> [MemberAssignment]
 assignMembers memberCount topicName partitionCount groupMembers =
-  fmap (assignMember memberCount topicName partitionCount) (zip groupMembers [0..])
+  fmap (assignMember memberCount topicName partitionCount) (List.zip groupMembers [0..])
 
 assignMember :: Int -> TopicName -> Int32 -> (Member, Int) -> MemberAssignment
 assignMember memberCount topicName partitionCount (member, i) =
@@ -457,7 +449,7 @@ assignMember memberCount topicName partitionCount (member, i) =
     memberName
     [TopicAssignment (coerce topicName) assignments]
   where
-  memberName = fromByteString (J.groupMemberId member)
+  memberName = J.groupMemberId member
   assignments = fromIntegral <$>
     assignPartitions memberCount i partitionCount
 
@@ -537,12 +529,12 @@ join kafka top member@(GroupMember name _) handle = do
     handle
   jgr <- ExceptT $ tryParse <$> getJoinGroupResponse kafka wait handle
   if J.errorCode jgr == errorMemberIdRequired then do
-    let memId = Just (fromByteString (J.memberId jgr))
+    let memId = Just (J.memberId jgr)
         assignment = GroupMember name memId
     join kafka top assignment handle
   else if J.errorCode jgr == noError then do
     let genId = GenerationId (J.generationId jgr)
-        memId = Just (fromByteString (J.memberId jgr))
+        memId = Just (J.memberId jgr)
         assignment = GroupMember name memId
     pure (genId, assignment, J.members jgr)
   else

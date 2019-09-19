@@ -2,8 +2,6 @@ module Kafka.Internal.Heartbeat.Request
   ( heartbeatRequest
   ) where
 
-import Data.Int
-import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 
 import Kafka.Common
@@ -27,12 +25,12 @@ heartbeatRequest (GroupMember gid mid) (GenerationId genId) =
       int16 heartbeatApiKey
       <> int16 heartbeatApiVersion
       <> int32 correlationId
-      <> string (fromByteString clientId) (fromIntegral clientIdLength)
-      <> string gid (fromIntegral groupIdLength)
+      <> string clientId (fromIntegral clientIdLength)
+      <> bytearray gid (fromIntegral groupIdLength)
       <> int32 genId
       <> maybe
           (int16 0)
-          (\m -> string m (sizeofByteArray m))
+          (\m -> bytearray m (sizeofByteArray m))
           mid
   in
     runUnliftedArray $ do

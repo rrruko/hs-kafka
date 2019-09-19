@@ -2,9 +2,6 @@ module Kafka.Internal.OffsetCommit.Request
   ( offsetCommitRequest
   ) where
 
-import Data.Int
-import Data.List
-import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 
 import Kafka.Common
@@ -32,7 +29,6 @@ offsetCommitRequest ::
 offsetCommitRequest topic offs groupMember generationId =
   let
     GroupMember gid mid = groupMember
-    TopicName topicName = topic
     GenerationId genId = generationId
     reqSize = build (int32 (size32 req))
     req =
@@ -40,15 +36,15 @@ offsetCommitRequest topic offs groupMember generationId =
         int16 offsetCommitApiKey
         <> int16 offsetCommitApiVersion
         <> int32 correlationId
-        <> string (fromByteString clientId) clientIdLength
-        <> string gid (sizeofByteArray gid)
+        <> string clientId clientIdLength
+        <> bytearray gid (sizeofByteArray gid)
         <> int32 genId
         <> maybe
             (int16 0)
-            (\m -> string m (sizeofByteArray m))
+            (\m -> bytearray m (sizeofByteArray m))
             mid
         <> int32 1 -- 1 topic
-        <> string topicName (sizeofByteArray topicName)
+        <> topicName topic
         <> int32 (fromIntegral $ length offs)
         <> foldl'
             (\acc e -> acc <> serializePartition e)

@@ -3,12 +3,12 @@ module Kafka.Internal.Fetch.Request
   , sessionlessFetchRequest
   ) where
 
-import Data.Int
-import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 
 import Kafka.Common
 import Kafka.Internal.Writer
+
+import qualified String.Ascii as S
 
 fetchApiVersion :: Int16
 fetchApiVersion = 10
@@ -66,7 +66,7 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions maxBytes 
       <> int16 fetchApiKey
       <> int16 fetchApiVersion
       <> int32 correlationId
-      <> string (fromByteString clientId) clientIdLength
+      <> string clientId clientIdLength
       -- fetch request
       <> int32 defaultReplicaId
       <> int32 (fromIntegral timeout) -- max_wait_time
@@ -77,7 +77,7 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions maxBytes 
       <> int32 fetchSessionEpoch
       <> int32 1 -- number of following topics
 
-      <> string topicName topicNameSize
+      <> topicName topic
       <> int32 (fromIntegral partitionCount) -- number of following partitions
       <> foldMap
           (\p -> int32 (partitionIndex p)
@@ -93,6 +93,5 @@ fetchRequest fetchSessionId fetchSessionEpoch timeout topic partitions maxBytes 
       writeUnliftedArray arr 0 requestMetadata
       pure arr
   where
-    TopicName topicName = topic
-    topicNameSize = sizeofByteArray topicName
+    topicNameSize = S.length (coerce topic)
     partitionCount = length partitions

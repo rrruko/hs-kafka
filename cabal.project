@@ -19,3 +19,13 @@ source-repository-package
   type: git
   location: https://github.com/haskell-primitive/primitive-convenience
   tag: fde7951620547bad3d3b90b3b56e00a99e8579bc
+
+source-repository-package
+  type: git
+  location: https://github.com/chessai/bytesmith
+  tag: 75a94311aa98408b40a5beb06b673557abdb1c22  
+
+source-repository-package
+  type: git
+  location: https://github.com/chessai/string
+  tag: 0618faa1d608b3b06108dd6e6c7478f8f511e05f

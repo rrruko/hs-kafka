@@ -1,132 +1,153 @@
-{-# LANGUAGE LambdaCase #-}
+{-# language
+    BangPatterns
+  , LambdaCase
+  , RankNTypes
+  #-}
 
 module Kafka.Internal.Combinator
-  ( array
-  , bool
-  , byteString
+  ( Parser
+  , array
   , count
+  , bool
+  , bytearray
+  , topicName
   , int8
   , int16
   , int32
   , int64
-  , networkByteOrder
   , nullableArray
-  , nullableByteString
-  , nullableByteStringVar
+  , sizedBytes
+  , nullableByteArray
+  , nullableByteArrayVar
   , nullableBytes
   , nullableSequence
-  , parseVarint
-  , sizedBytes
-  ) where
+  , takeByteArray
+  , varInt
+  )
+  where
 
-import Control.Applicative (many)
-import Data.Attoparsec.ByteString (Parser, (<?>))
-import Data.Bits
-import Data.ByteString (ByteString)
-import Data.Int
+import Control.Monad (replicateM)
+import Kafka.Common
 
-import qualified Data.Attoparsec.ByteString as AT
+import qualified Data.Bytes as B
+import qualified Data.Bytes.Parser as Smith
+import qualified Data.Bytes.Parser.BigEndian as Smith
+import qualified String.Ascii as S
 
-int8 :: Parser Int8
-int8 = fromIntegral <$> AT.anyWord8
+type Parser a = forall s. Smith.Parser String s a
 
-int16 :: Parser Int16
-int16 = networkByteOrder . map fromIntegral <$> AT.count 2 AT.anyWord8
+int8 :: String -> Parser Int8
+int8 = Smith.int8
 
-int32 :: Parser Int32
-int32 = networkByteOrder . map fromIntegral <$> AT.count 4 AT.anyWord8
+int16 :: String -> Parser Int16
+int16 = Smith.int16
 
-int64 :: Parser Int64
-int64 = networkByteOrder . map fromIntegral <$> AT.count 8 AT.anyWord8
+int32 :: String -> Parser Int32
+int32 = Smith.int32
 
-bool :: Parser Bool
-bool = AT.anyWord8 >>= \case
+int64 :: String -> Parser Int64
+int64 = Smith.int64
+
+bool :: String -> Parser Bool
+bool e = Smith.word8 e >>= \case
   0 -> pure False
-  1 -> pure True
-  _ -> fail "Expected 0 or 1"
+  _ -> pure True
 
-networkByteOrder :: Integral a => [Word] -> a
-networkByteOrder =
-  fst . foldr
-    (\byte (acc, i) -> (acc + fromIntegral byte * i, i * 0x100))
-    (0, 1)
-{-# inlineable networkByteOrder #-}
-
-count :: Integral n => n -> Parser a -> Parser [a]
-count = AT.count . fromIntegral
+count :: Integral i => i -> Parser a -> Parser [a]
+count = replicateM . fromIntegral
 {-# inlineable count #-}
 
 array :: Parser a -> Parser [a]
 array p = do
-  arraySize <- int32
+  arraySize <- int32 "array: arraySize"
   count arraySize p
 
 nullableArray :: Parser a -> Parser [a]
 nullableArray p = do
-  arraySize <- int32
+  arraySize <- int32 "nullableArray: array size"
   if arraySize <= 0
     then pure []
     else count arraySize p
 
-byteString :: Parser ByteString
-byteString = do
-  stringLength <- int16 <?> "string length"
-  AT.take (fromIntegral stringLength) <?> "string contents"
+bytearray :: Parser ByteArray
+bytearray = do
+  len <- int16 "bytearray: len"
+  bytes <- Smith.take ("take " <> show len) (fromIntegral len)
+  pure (B.toByteArray bytes)
 
-sizedBytes :: Parser ByteString
+topicName :: Parser TopicName
+topicName = do
+  b <- bytearray
+  case S.fromByteArray b of
+    Nothing -> fail "topicName: non-ascii"
+    Just str -> pure (TopicName str)
+
+sizedBytes :: Parser ByteArray
 sizedBytes = do
-  bytesLength <- int32 <?> "bytes length"
-  AT.take (fromIntegral bytesLength) <?> "bytes"
+  len <- int32 "sizedBytes: len"
+  bytes <- Smith.take ("take " <> show len) (fromIntegral len)
+  pure (B.toByteArray bytes)
 
-parseVarint :: Parser Int
-parseVarint = unZigzag <$> go 1
-  where
-    go :: Int -> Parser Int
-    go n = do
-      b <- fromIntegral <$> AT.anyWord8
-      case testBit b 7 of
-        True -> do
-          rest <- go (n * 128)
-          pure (clearBit b 7 * n + rest)
-        False -> pure (b * n)
+nullableByteArray :: Parser (Maybe ByteArray)
+nullableByteArray = do
+  len <- int16 "nullableByteArray: len"
+  if len < 0
+    then pure Nothing
+    else do
+      bytes <- Smith.take ("take " <> show len) (fromIntegral len)
+      pure (Just (B.toByteArray bytes))
 
-unZigzag :: Int -> Int
-unZigzag n
-  | even n    = n `div` 2
-  | otherwise = (-1) * ((n + 1) `div` 2)
-
-nullableByteString :: Parser (Maybe ByteString)
-nullableByteString = do
-  bytesLength <- int16
-  if bytesLength < 0 then
-    pure Nothing
-  else
-    Just <$> AT.take (fromIntegral bytesLength)
-
-nullableByteStringVar :: Parser (Maybe ByteString)
-nullableByteStringVar = do
-  bytesLength <- parseVarint
-  if bytesLength < 0 then
-    pure Nothing
-  else
-    Just <$> AT.take (fromIntegral bytesLength)
-
+nullableByteArrayVar :: Parser (Maybe ByteArray)
+nullableByteArrayVar = do
+  len <- varInt
+  if len < 0
+    then pure Nothing
+    else do
+      bytes <- Smith.take ("take " <> show len) (fromIntegral len)
+      pure (Just (B.toByteArray bytes))
 
 nullableBytes :: Parser a -> Parser (Maybe a)
 nullableBytes p = do
-  bytesLength <- int32
-  if bytesLength <= 0 then
-    pure Nothing
-  else
-    Just <$> p
+  len <- int32 "nullableBytes: len"
+  if len <= 0
+    then pure Nothing
+    else Just <$> p
+
+takeByteArray :: Parser ByteArray
+takeByteArray = do
+  bytes <- Smith.remaining
+  pure (B.toByteArray bytes)
+
+many :: Parser a -> Parser [a]
+many v = many_v
+  where
+     many_v = some_v `Smith.orElse` pure []
+     some_v = liftA2 (:) v many_v
 
 nullableSequence :: Parser a -> Parser (Maybe [a])
 nullableSequence p = do
-  bytesLength <- int32
-  bytes <- AT.take (fromIntegral bytesLength)
-  if bytesLength <= 0 then
-    pure Nothing
-  else
-    case AT.parseOnly (many p) bytes of
-      Right r -> pure (Just r)
-      Left e -> fail e
+  len <- int32 "nullableSequence: len"
+  bytes <- Smith.take ("take " <> show len) (fromIntegral len)
+  if len <= 0
+    then pure Nothing
+    else case Smith.parseBytes (many p) bytes of
+      Smith.Failure _ -> pure Nothing
+      Smith.Success as _ -> pure (Just as)
+
+varInt :: Parser Int
+varInt = fmap unZigZag (go 1)
+  where
+    go :: Int -> Parser Int
+    go !n = do
+      b <- fromIntegral <$> Smith.any ("varInt: " <> show n)
+      if testBit b 7
+        then do
+          rest <- go (n * 128)
+          pure (clearBit b 7 * n + rest)
+        else do
+          pure (b * n)
+
+unZigZag :: Int -> Int
+unZigZag n
+  | even n = n `div` 2
+  | otherwise = (-1) * ((n + 1) `div` 2)

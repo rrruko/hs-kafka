@@ -6,8 +6,6 @@ module Kafka.Internal.FindCoordinator.Request
   ( findCoordinatorRequest
   ) where
 
-import Data.Int
-import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 
 import Kafka.Common
@@ -32,8 +30,8 @@ findCoordinatorRequest !key !keyType =
       int16 findCoordinatorApiKey
       <> int16 findCoordinatorApiVersion
       <> int32 correlationId
-      <> string (fromByteString clientId) (fromIntegral clientIdLength)
-      <> string key (fromIntegral keyLength)
+      <> string clientId (fromIntegral clientIdLength)
+      <> bytearray key (fromIntegral keyLength)
       <> int8 keyType
   in
     runUnliftedArray $ do

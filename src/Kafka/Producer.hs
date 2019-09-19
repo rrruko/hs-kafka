@@ -5,12 +5,9 @@
 module Kafka.Producer
   ( Producer(..)
   , withProducer
-  , newProducer
   , produce
   ) where
 
-import Data.IORef
-import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 import GHC.Conc (registerDelay)
 import Socket.Stream.IPv4 (Peer)
@@ -46,16 +43,6 @@ withProducer peer timeout h f = withKafka peer $ \k -> do
   topics <- newIORef mempty
   let producer = Producer k topics timeout h
   f producer
-
--- | Attempt to establish a connection to Kafka.
-newProducer :: Peer -> Int -> Maybe Handle -> IO (Either KafkaException Producer)
-newProducer peer timeout handle = do
-  kafka <- newKafka peer
-  case kafka of
-    Left err -> pure (Left err)
-    Right k -> do
-      tops <- newIORef mempty
-      pure (Right (Producer k tops timeout handle))
 
 produce' ::
      Producer

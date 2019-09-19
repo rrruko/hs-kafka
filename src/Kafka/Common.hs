@@ -2,6 +2,7 @@
     BangPatterns
   , DataKinds
   , DerivingStrategies
+  , GeneralizedNewtypeDeriving
   , GADTs
   , OverloadedStrings
   , ScopedTypeVariables
@@ -9,21 +10,34 @@
   , ViewPatterns
   #-}
 
-module Kafka.Common where
+module Kafka.Common
+  ( Kafka(..)
+  , withKafka
+  , Topic(..)
+  , TopicName(..)
+  , getTopicName
+  , PartitionOffset(..)
+  , TopicAssignment(..)
+  , Interruptedness(..)
+  , KafkaTimestamp(..)
+  , AutoCreateTopic(..)
+  , KafkaException(..)
+  , GroupMember(..)
+  , GenerationId(..)
+  , MemberAssignment(..)
+  , FetchErrorMessage(..)
+  , OffsetCommitErrorMessage(..)
+  , clientId
+  , clientIdLength
+  , correlationId
+  , magic
+  ) where
 
-import Data.Bifunctor (first)
-import Data.ByteString (ByteString)
-import Data.Coerce
-import Data.Int
-import Data.IORef
-import Data.Primitive
-import Data.Primitive.Unlifted.Array
-import Data.Text
-import Net.IPv4 (IPv4(..))
+--import Data.Primitive.Unlifted.Array
+import Data.Text (Text)
 import Socket.Stream.IPv4
 
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BC8
+import qualified String.Ascii as S
 
 newtype Kafka = Kafka { getKafka :: Connection }
 
@@ -31,18 +45,15 @@ instance Show Kafka where
   show _ = "<Kafka>"
 
 data Topic = Topic
-  ByteArray -- Topic name
-  Int -- Number of partitions
-  (IORef Int) -- incrementing number
+  {-# UNPACK #-} !TopicName -- Topic name
+  {-# UNPACK #-} !Int -- Number of partitions
+  {-# UNPACK #-} !(IORef Int) -- incrementing number
 
-newtype TopicName = TopicName ByteArray
-  deriving (Eq, Ord, Show)
+newtype TopicName = TopicName S.String
+  deriving newtype (Eq, Ord, Show, IsString)
 
 getTopicName :: Topic -> TopicName
-getTopicName (Topic name _ _) = coerce name
-
-mkTopicName :: String -> TopicName
-mkTopicName = coerce . fromString
+getTopicName (Topic name _ _) = name
 
 data PartitionOffset = PartitionOffset
   { partitionIndex :: !Int32
@@ -89,34 +100,37 @@ data KafkaException where
     => [FetchErrorMessage]
     -> KafkaException
 
+deriving stock instance Show KafkaException
+
 data OffsetCommitErrorMessage = OffsetCommitErrorMessage
-  { commitErrorTopic :: BS.ByteString
-  , commitErrorPartition :: Int32
-  , commitErrorCode :: Int16
+  { commitErrorTopic :: {-# UNPACK #-} !TopicName
+  , commitErrorPartition :: {-# UNPACK #-} !Int32
+  , commitErrorCode :: {-# UNPACK #-} !Int16
   } deriving Show
 
 data FetchErrorMessage = FetchErrorMessage
-  { fetchErrorTopic :: BS.ByteString
-  , fetchErrorPartition :: Int32
-  , fetchErrorCode :: Int16
+  { fetchErrorTopic :: {-# UNPACK #-} !TopicName
+  , fetchErrorPartition :: {-# UNPACK #-} !Int32
+  , fetchErrorCode :: {-# UNPACK #-} !Int16
   } deriving Show
 
-deriving stock instance Show KafkaException
-
-data GroupMember = GroupMember !ByteArray !(Maybe ByteArray)
+data GroupMember = GroupMember
+  { nameThis0 :: {-# UNPACK #-} !ByteArray
+  , nameThis1 :: !(Maybe ByteArray)
+  }
   deriving (Eq, Show)
 
 data GenerationId = GenerationId
-  { getGenerationId :: !Int32
+  { getGenerationId :: {-# UNPACK #-} !Int32
   } deriving (Eq, Show)
 
 data MemberAssignment = MemberAssignment
-  { assignedMemberId :: !ByteArray
+  { assignedMemberId :: {-# UNPACK #-} !ByteArray
   , assignedTopics :: [TopicAssignment]
   } deriving (Eq, Show)
 
 data TopicAssignment = TopicAssignment
-  { assignedTopicName :: !ByteArray
+  { assignedTopicName :: !TopicName
   , assignedPartitions :: [Int32]
   } deriving (Eq, Show)
 
@@ -140,34 +154,11 @@ withKafka peer f = do
     Left e -> pure (Left (KafkaConnectException e))
     Right x -> pure x
 
--- | Attempt to open a connection to Kafka.
-newKafka :: Peer -> IO (Either KafkaException Kafka)
-newKafka = fmap (first KafkaConnectException) . coerce . connect
-
--- | Kafka on localhost.
-defaultKafka :: Peer
-defaultKafka = Peer (IPv4 0) 9092
-
-toByteString :: ByteArray -> ByteString
-toByteString = BS.pack . foldrByteArray (:) []
-
-fromByteString :: ByteString -> ByteArray
-fromByteString = byteArrayFromList . BS.unpack
-
-fromString :: String -> ByteArray
-fromString = fromByteString . BC8.pack
-
-messages :: [String] -> UnliftedArray ByteArray
-messages = unliftedArrayFromList . fmap fromString
-
-foldByteArrays :: UnliftedArray ByteArray -> ByteArray
-foldByteArrays = foldrUnliftedArray (<>) (byteArrayFromList ([]::[Char]))
-
-clientId :: ByteString
+clientId :: S.String
 clientId = "ruko"
 
 clientIdLength :: Int
-clientIdLength = BS.length clientId
+clientIdLength = S.length clientId
 
 correlationId :: Int32
 correlationId = 0xbeef

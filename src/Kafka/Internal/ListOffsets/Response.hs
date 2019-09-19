@@ -7,55 +7,47 @@ module Kafka.Internal.ListOffsets.Response
   , getListOffsetsResponse
   ) where
 
-import Data.Attoparsec.ByteString (Parser, (<?>))
-import Data.ByteString (ByteString)
-import Data.Int
-import GHC.Conc
-import System.IO
-
 import Kafka.Internal.Combinator
 import Kafka.Common
 import Kafka.Internal.Response
 
 data ListOffsetsResponse = ListOffsetsResponse
-  { throttleTimeMs :: Int32
+  { throttleTimeMs :: {-# UNPACK #-} !Int32
   , topics :: [ListOffsetsTopic]
   } deriving (Eq, Show)
 
 data ListOffsetsTopic = ListOffsetsTopic
-  { topic :: ByteString
+  { topic :: {-# UNPACK #-} !TopicName
   , partitions :: [ListOffsetPartition]
   } deriving (Eq, Show)
 
 data ListOffsetPartition = ListOffsetPartition
-  { partition :: Int32
-  , errorCode :: Int16
-  , timestamp :: Int64
-  , offset :: Int64
-  , leaderEpoch :: Int32
+  { partition :: {-# UNPACK #-} !Int32
+  , errorCode :: {-# UNPACK #-} !Int16
+  , timestamp :: {-# UNPACK #-} !Int64
+  , offset :: {-# UNPACK #-} !Int64
+  , leaderEpoch :: {-# UNPACK #-} !Int32
   } deriving (Eq, Show)
 
 parseListOffsetsResponse :: Parser ListOffsetsResponse
 parseListOffsetsResponse = do
-  _correlationId <- int32 <?> "correlation id"
+  _correlationId <- int32 "correlation id"
   ListOffsetsResponse
-    <$> int32
+    <$> int32 "throttleTimeMs"
     <*> array parseListOffsetsTopic
 
 parseListOffsetsTopic :: Parser ListOffsetsTopic
-parseListOffsetsTopic =
-  ListOffsetsTopic
-    <$> byteString
-    <*> array parseListOffsetPartition
+parseListOffsetsTopic = ListOffsetsTopic
+  <$> topicName
+  <*> array parseListOffsetPartition
 
 parseListOffsetPartition :: Parser ListOffsetPartition
-parseListOffsetPartition =
-  ListOffsetPartition
-    <$> int32
-    <*> int16
-    <*> int64
-    <*> int64
-    <*> int32
+parseListOffsetPartition = ListOffsetPartition
+  <$> int32 "partition"
+  <*> int16 "error code"
+  <*> int64 "timestamp"
+  <*> int64 "offset"
+  <*> int32 "leader epoch"
 
 getListOffsetsResponse ::
      Kafka

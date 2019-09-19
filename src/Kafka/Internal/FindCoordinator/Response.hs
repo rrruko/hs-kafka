@@ -6,35 +6,29 @@ module Kafka.Internal.FindCoordinator.Response
   , parseFindCoordinatorResponse
   ) where
 
-import Data.Attoparsec.ByteString (Parser, (<?>))
-import Data.ByteString (ByteString)
-import Data.Int
-import GHC.Conc
-import System.IO
-
 import Kafka.Common
 import Kafka.Internal.Combinator
 import Kafka.Internal.Response
 
 data FindCoordinatorResponse = FindCoordinatorResponse
-  { throttleTimeMs :: !Int32
-  , errorCode :: !Int16
-  , errorMessage :: Maybe ByteString
-  , node_id :: !Int32
-  , host :: ByteString
-  , port :: !Int32
+  { throttleTimeMs :: {-# UNPACK #-} !Int32
+  , errorCode :: {-# UNPACK #-} !Int16
+  , errorMessage :: !(Maybe ByteArray)
+  , node_id :: {-# UNPACK #-} !Int32
+  , host :: {-# UNPACK #-} !ByteArray
+  , port :: {-# UNPACK #-} !Int32
   } deriving (Eq, Show)
 
 parseFindCoordinatorResponse :: Parser FindCoordinatorResponse
 parseFindCoordinatorResponse = do
-  _correlationId <- int32 <?> "correlation id"
+  _correlationId <- int32 "correlation id"
   FindCoordinatorResponse
-    <$> (int32 <?> "throttle time")
-    <*> (int16 <?> "error code")
-    <*> (nullableByteString <?> "generation id")
-    <*> (int32 <?> "group protocol")
-    <*> (byteString <?> "leader id")
-    <*> (int32 <?> "member id")
+    <$> (int32 "throttle time")
+    <*> (int16 "error code")
+    <*> (nullableByteArray) -- <?> "generation id")
+    <*> (int32 "group protocol")
+    <*> (bytearray) -- <?> "leader id")
+    <*> (int32 "member id")
 
 getFindCoordinatorResponse ::
      Kafka

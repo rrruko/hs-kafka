@@ -7,84 +7,77 @@ module Kafka.Internal.Metadata.Response
   , parseMetadataResponse
   ) where
 
-import Data.Attoparsec.ByteString (Parser, (<?>))
-import Data.ByteString
-import Data.Int
-import GHC.Conc
-import System.IO
-
 import Kafka.Internal.Combinator
 import Kafka.Common
 import Kafka.Internal.Response
 
 data MetadataResponse = MetadataResponse
-  { throttleTimeMs :: Int32
+  { throttleTimeMs :: {-# UNPACK #-} !Int32
   , brokers :: [MetadataBroker]
-  , clusterId :: Maybe ByteString
-  , controllerId :: Int32
+  , clusterId :: !(Maybe ByteArray)
+  , controllerId :: {-# UNPACK #-} !Int32
   , topics :: [MetadataTopic]
   } deriving (Eq, Show)
 
 data MetadataBroker = MetadataBroker
-  { nodeId :: Int32
-  , host :: ByteString
-  , port :: Int32
-  , rack :: Maybe ByteString
+  { nodeId :: {-# UNPACK #-} !Int32
+  , host :: {-# UNPACK #-} !ByteArray
+  , port :: {-# UNPACK #-} !Int32
+  , rack :: !(Maybe ByteArray)
   } deriving (Eq, Show)
 
 data MetadataTopic = MetadataTopic
-  { errorCode :: Int16
-  , name :: ByteString
-  , isInternal :: Bool
+  { errorCode :: {-# UNPACK #-} !Int16
+  , name :: !TopicName
+  , isInternal :: !Bool
   , partitions :: [MetadataPartition]
   } deriving (Eq, Show)
 
 data MetadataPartition = MetadataPartition
-  { partitionErrorCode :: Int16
-  , partitionIndex :: Int32
-  , leaderId :: Int32
-  , leaderEpoch :: Int32
-  , replicaNodes :: Int32
-  , isrNodes :: Int32
-  , offlineReplicas :: Int32
+  { partitionErrorCode :: {-# UNPACK #-} !Int16
+  , partitionIndex :: {-# UNPACK #-} !Int32
+  , leaderId :: {-# UNPACK #-} !Int32
+  , leaderEpoch :: {-# UNPACK #-} !Int32
+  , replicaNodes :: {-# UNPACK #-} !Int32
+  , isrNodes :: {-# UNPACK #-} !Int32
+  , offlineReplicas :: {-# UNPACK #-} !Int32
   } deriving (Eq, Show)
 
 parseMetadataResponse :: Parser MetadataResponse
 parseMetadataResponse = do
-  _correlationId <- int32 <?> "correlation id"
+  _correlationId <- int32 "correlation id"
   MetadataResponse
-    <$> (int32 <?> "throttle time")
-    <*> (array parseMetadataBroker <?> "brokers")
-    <*> (nullableByteString <?> "cluster id")
-    <*> (int32 <?> "controller id")
-    <*> (array parseMetadataTopic <?> "topics")
+    <$> (int32 "throttle time")
+    <*> (array parseMetadataBroker) -- <?> "brokers")
+    <*> (nullableByteArray) -- <?> "cluster id")
+    <*> (int32 "controller id")
+    <*> (array parseMetadataTopic) -- <?> "topics")
 
 parseMetadataBroker :: Parser MetadataBroker
-parseMetadataBroker = do
-  MetadataBroker
-    <$> (int32 <?> "node id")
-    <*> (byteString <?> "host")
-    <*> (int32 <?> "port")
-    <*> (nullableByteString <?> "rack")
+parseMetadataBroker = MetadataBroker
+  <$> (int32 "node id")
+  <*> (bytearray) -- <?> "host")
+  <*> (int32 "port")
+  <*> (nullableByteArray) -- <?> "rack")
 
 parseMetadataTopic :: Parser MetadataTopic
 parseMetadataTopic = do
   MetadataTopic
-    <$> (int16 <?> "error code")
-    <*> (byteString <?> "name")
-    <*> (bool <?> "is internal")
-    <*> (array parseMetadataPartition <?> "partitions")
+    <$> (int16 "error code")
+    <*> (topicName) -- <?> "name")
+    <*> (bool "is internal")
+    <*> (array parseMetadataPartition) -- <?> "partitions")
 
 parseMetadataPartition :: Parser MetadataPartition
 parseMetadataPartition = do
   MetadataPartition
-    <$> (int16 <?> "error code")
-    <*> (int32 <?> "partition index")
-    <*> (int32 <?> "leader id")
-    <*> (int32 <?> "leader epoch")
-    <*> (int32 <?> "replica nodes")
-    <*> (int32 <?> "isr nodes")
-    <*> (int32 <?> "offline replicas")
+    <$> (int16 "error code")
+    <*> (int32 "partition index")
+    <*> (int32 "leader id")
+    <*> (int32 "leader epoch")
+    <*> (int32 "replica nodes")
+    <*> (int32 "isr nodes")
+    <*> (int32 "offline replicas")
 
 getMetadataResponse ::
      Kafka

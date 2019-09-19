@@ -1,7 +1,5 @@
 module Kafka.Internal.OffsetFetch.Request where
 
-import Data.Int
-import Data.Primitive.ByteArray
 import Data.Primitive.Unlifted.Array
 
 import Kafka.Common
@@ -18,7 +16,7 @@ offsetFetchRequest ::
   -> TopicName
   -> [Int32]
   -> UnliftedArray ByteArray
-offsetFetchRequest (GroupMember gid _) (TopicName topicName) offs =
+offsetFetchRequest (GroupMember gid _) tn offs =
   let
     reqSize = build (int32 (size32 req))
     req =
@@ -26,10 +24,10 @@ offsetFetchRequest (GroupMember gid _) (TopicName topicName) offs =
         int16 offsetFetchApiKey
         <> int16 offsetFetchApiVersion
         <> int32 correlationId
-        <> string (fromByteString clientId) clientIdLength
-        <> string gid (sizeofByteArray gid)
+        <> string clientId clientIdLength
+        <> bytearray gid (sizeofByteArray gid)
         <> int32 1 -- 1 topic
-        <> string topicName (sizeofByteArray topicName)
+        <> topicName tn
         <> int32 (fromIntegral (length offs))
         <> foldMap int32 offs
   in
