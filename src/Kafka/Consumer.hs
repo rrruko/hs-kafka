@@ -48,12 +48,13 @@ import Kafka.Internal.Request.Types
 import Kafka.Internal.Fetch.Response
 import Kafka.Internal.JoinGroup.Response (Member, getJoinGroupResponse)
 import Kafka.Internal.FindCoordinator.Response (getFindCoordinatorResponse)
-import Kafka.Internal.LeaveGroup.Response
+import Kafka.Internal.LeaveGroup.Response (getLeaveGroupResponse)
 import Kafka.Internal.Heartbeat.Response (getHeartbeatResponse)
 import Kafka.Internal.ListOffsets.Response (ListOffsetsResponse)
 import Kafka.Internal.SyncGroup.Response (SyncTopicAssignment)
 import Kafka.Internal.Topic
 
+import qualified Kafka.Internal.LeaveGroup.Response as LeaveGroup
 import qualified Kafka.Internal.Fetch.Response as F
 import qualified Kafka.Internal.Heartbeat.Response as H
 import qualified Kafka.Internal.JoinGroup.Response as J
@@ -171,7 +172,18 @@ getListedOffsets allIndices = do
   listOffsetsTimeout <- liftIO (registerDelay timeout)
   listedOffs <- liftConsumer $ tryParse <$>
     L.getListOffsetsResponse kafka listOffsetsTimeout handle
-  pure (listOffsetsMap listedOffs)
+  let lots = L.topics listedOffs
+  let errs = case List.find ((== csTopicName) . L.topic) lots of
+        Nothing -> []
+        Just lot -> catMaybes
+          [ x
+          | x <- fmap (fromErrorCode . L.errorCode) (L.partitions lot)
+          , x /= Just None
+          , x /= Nothing
+          ]
+  case errs of
+    [] -> pure (listOffsetsMap listedOffs)
+    (err:_) -> throwError (KafkaProtocolException err)
 
 initializeOffsets :: [Int32] -> Consumer ()
 initializeOffsets assignedPartitions = do
@@ -290,7 +302,11 @@ sendHeartbeat = do
     liftConsumer $ heartbeat kafka (HeartbeatRequest member genId) (handle settings)
     timeout <- liftIO $ registerDelay (timeout settings)
     resp <- liftConsumer $ tryParse <$> getHeartbeatResponse kafka timeout (handle settings)
-    when (H.errorCode resp == errorRebalanceInProgress) rejoin
+    case fromErrorCode (H.errorCode resp) of
+      Nothing -> pure ()
+      Just None -> pure ()
+      Just RebalanceInProgress -> rejoin
+      Just x -> throwError (KafkaProtocolException x)
 
 leave :: Consumer ()
 leave = do
@@ -298,8 +314,13 @@ leave = do
   withSocket sock $ do
     liftConsumer $ leaveGroup kafka (LeaveGroupRequest member) (handle settings)
     timeout <- liftIO $ registerDelay (timeout settings)
-    void $ liftConsumer $ tryParse <$> getLeaveGroupResponse kafka timeout (handle settings)
-    modifyv (\s -> s { quit = Interrupted })
+    resp <- liftConsumer $ tryParse <$> getLeaveGroupResponse kafka timeout (handle settings)
+    case fromErrorCode (LeaveGroup.errorCode resp) of
+      Nothing -> modifyv (\s -> s { quit = Interrupted })
+      Just None -> modifyv (\s -> s { quit = Interrupted })
+      Just x -> do
+        modifyv (\s -> s { quit = Interrupted })
+        throwError (KafkaProtocolException x)
 
 getRecordSet :: Int -> Consumer FetchResponse
 getRecordSet fetchWaitTime = do
@@ -339,8 +360,9 @@ jumpToLatestOffset index = do
   modifyv (\s -> s { offsets = IM.unionWith (\_ y -> y) offsets listedOffs })
   getv >>= commitOffsets'
 
-offsetCommitErrors :: C.OffsetCommitResponse -> [OffsetCommitErrorMessage]
-offsetCommitErrors resp =
+{-
+_offsetCommitErrors :: C.OffsetCommitResponse -> [OffsetCommitErrorMessage]
+_offsetCommitErrors resp =
   let tops = C.topics resp
   in  foldMap
         (\t ->
@@ -357,6 +379,7 @@ offsetCommitErrors resp =
     , UnknownMemberId
     , InvalidCommitOffsetSize
     ]
+-}
 
 fetchResponseErrors :: FetchResponse -> [FetchErrorMessage]
 fetchResponseErrors resp =
@@ -385,7 +408,10 @@ latestOffsets indices = do
     (handle settings)
   timeout <- liftIO $ registerDelay (timeout settings)
   offs <- liftConsumer $ tryParse <$> O.getOffsetFetchResponse kafka timeout (handle settings)
-  pure (offsetFetchOffsets offs)
+  case fromErrorCode (O.errorCode offs) of
+    Nothing -> pure (offsetFetchOffsets offs)
+    Just None -> pure (offsetFetchOffsets offs)
+    Just x -> throwError (KafkaProtocolException x)
 
 offsetFetchOffsets :: O.OffsetFetchResponse -> IntMap Int64
 offsetFetchOffsets ofr = IM.fromList $ fmap
@@ -402,9 +428,22 @@ commitOffsets' cs = do
     handle
   timeoutV <- liftIO $ registerDelay timeout
   resp <- liftConsumer $ tryParse <$> C.getOffsetCommitResponse kafka timeoutV handle
-  let errs = offsetCommitErrors resp
-  when (not (null errs)) $ do
-    throwError (KafkaOffsetCommitException errs)
+  let tops = C.topics resp
+  let errs = case List.find ((== csTopicName) . C.topic) tops of
+        Nothing -> []
+        Just top -> catMaybes
+          [ x
+          | x <- fmap (fromErrorCode . C.errorCode) (C.partitions top)
+          , x /= Just None
+          , x /= Nothing
+          ]
+  case errs of
+    [] -> pure ()
+    (err:_) -> throwError (KafkaProtocolException err)
+
+  --let errs = offsetCommitErrors resp
+  --when (not (null errs)) $ do
+  --  throwError (KafkaOffsetCommitException errs)
 
 commitOffsets :: Consumer ()
 commitOffsets = do
@@ -500,14 +539,16 @@ join kafka top member@(GroupMember name _) handle = do
     (JoinGroupRequest top member)
     handle
   jgr <- ExceptT $ tryParse <$> getJoinGroupResponse kafka wait handle
-  if J.errorCode jgr == errorMemberIdRequired then do
-    let memId = Just (J.memberId jgr)
-        assignment = GroupMember name memId
-    join kafka top assignment handle
-  else if J.errorCode jgr == noError then do
-    let genId = GenerationId (J.generationId jgr)
-        memId = Just (J.memberId jgr)
-        assignment = GroupMember name memId
-    pure (genId, assignment, J.members jgr)
-  else
-    throwError (KafkaUnexpectedErrorCodeException (J.errorCode jgr))
+  let no_error_join = do
+        let genId = GenerationId (J.generationId jgr)
+        let memId = Just (J.memberId jgr)
+        let assignment = GroupMember name memId
+        pure (genId, assignment, J.members jgr)
+  case fromErrorCode (J.errorCode jgr) of
+    Nothing -> no_error_join
+    Just None -> no_error_join
+    Just MemberIdRequired -> do
+      let memId = Just (J.memberId jgr)
+      let assignment = GroupMember name memId
+      join kafka top assignment handle
+    Just x -> throwError (KafkaProtocolException x)
