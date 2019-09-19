@@ -105,8 +105,6 @@ data KafkaException where
   KafkaProtocolException :: ()
     => !KafkaProtocolError
     -> KafkaException
-  KafkaProduceSizeZeroException :: ()
-    => KafkaException
 
 deriving stock instance Show KafkaException
 
