@@ -149,13 +149,13 @@ goldenTests = testGroup "Golden tests"
           "null member id"
           "test/golden/joingroup-null-member-id-request"
           (joinGroupTest
-            (GroupMember (fromByteString "test-group") Nothing))
+            (GroupMember "test-group" Nothing))
       , goldenVsString
           "with member id"
           "test/golden/joingroup-with-member-id-request"
           (joinGroupTest
             (GroupMember
-              (fromByteString "test-group")
+              ("test-group")
               (Just $ fromByteString "test-member-id")))
       ]
   ]
@@ -169,7 +169,10 @@ produceTest = do
   payloads <- do
     payloads <- newUnliftedArray 1 payload
     freezeUnliftedArray payloads 0 1
-  pure (toSpec (produceRequest 30000 "test" 0 payloads))
+  let mreq = produceRequest 30000 "test" 0 payloads
+  case mreq of
+    Nothing -> pure "Empty produce request! Failure!"
+    Just req -> pure (toSpec req)
 
 unChunks :: UnliftedArray ByteArray -> ByteArray
 unChunks = foldrUnliftedArray (<>) mempty
@@ -182,7 +185,10 @@ multipleProduceTest = do
         , fromByteString "it's like a dream"
         , fromByteString "i want to dream"
         ]
-  pure (toSpec (produceRequest 30000 "test" 0 payloads))
+  let mreq = produceRequest 30000 "test" 0 payloads
+  case mreq of
+    Nothing -> pure "Empty produce request! Failure!"
+    Just req -> pure (toSpec req)
 
 fetchTest :: IO BL.ByteString
 fetchTest = do

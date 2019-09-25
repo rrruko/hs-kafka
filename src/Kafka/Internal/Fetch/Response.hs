@@ -30,14 +30,13 @@ import Kafka.Internal.Combinator
 import Kafka.Internal.Response
 
 fetchResponseContents :: FetchResponse -> [ByteArray]
-fetchResponseContents fetchResponse =
-    mapMaybe recordValue
-  . concatMap records
-  . concat
-  . mapMaybe recordSet
-  . concatMap partitions
-  . topics
-  $ fetchResponse
+fetchResponseContents = id
+  . mapMaybe recordValue -- [Records] -> [ByteArray]
+  . concatMap records -- [RecordBatch] -> [Records]
+  . concat -- [[RecordBatch]] -> [RecordBatch]
+  . mapMaybe recordSet -- [FetchPartition] -> [[RecordBatch]]
+  . concatMap partitions -- [FetchTopic] -> [FetchPartition]
+  . topics -- FetchResponse -> [FetchTopic]
 
 instance Show FetchResponse where
   show resp =
@@ -93,10 +92,10 @@ data RecordBatch = RecordBatch
   } deriving (Eq, Show)
 
 data Record = Record
-  { recordLength :: !Int
-  , recordAttributes :: !Int8
-  , recordTimestampDelta :: !Int
-  , recordOffsetDelta :: !Int
+  { recordLength :: {-# UNPACK #-} !Int
+  , recordAttributes :: {-# UNPACK #-} !Int8
+  , recordTimestampDelta :: {-# UNPACK #-} !Int
+  , recordOffsetDelta :: {-# UNPACK #-} !Int
   , recordKey :: !(Maybe ByteArray)
   , recordValue :: !(Maybe ByteArray)
   , recordHeaders :: [Header]

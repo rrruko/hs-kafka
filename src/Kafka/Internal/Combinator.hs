@@ -2,6 +2,7 @@
     BangPatterns
   , LambdaCase
   , RankNTypes
+  , ScopedTypeVariables
   #-}
 
 module Kafka.Internal.Combinator
@@ -29,10 +30,12 @@ module Kafka.Internal.Combinator
 
 import Control.Monad (replicateM)
 import Kafka.Common
+--import Data.Bytes.Parser ((<?>))
 
 import qualified Data.Bytes as B
 import qualified Data.Bytes.Parser as Smith
 import qualified Data.Bytes.Parser.BigEndian as Smith
+--import qualified Data.Primitive.Contiguous as C
 import qualified String.Ascii as S
 
 type Parser a = forall s. Smith.Parser String s a
@@ -58,6 +61,27 @@ count :: Integral i => i -> Parser a -> Parser [a]
 count = replicateM . fromIntegral
 {-# inlineable count #-}
 
+{-
+c_array :: forall arr a. (Contiguous arr, Element arr a)
+  => Parser a
+  -> Parser (arr a)
+c_array p = do
+  len <- fromIntegral <$> int32 "c_array: len"
+  marr :: Mutable arr s a <- Smith.effect (C.new len)
+  let go :: Int -> Smith.Parser String s ()
+      go !ix = if ix < len
+        then do
+          (a :: a) <- p <?> ("c_array: element " <> show ix)
+          Smith.effect (C.write marr ix a)
+          go (ix + 1)
+        else do
+          pure ()
+  go 0
+  Smith.effect (C.unsafeFreeze marr)
+{-# inlineable c_array #-}
+-}
+
+--nullableArray :: forall arr a. (Contiguous arr, Element arr a)
 array :: Parser a -> Parser [a]
 array p = do
   arraySize <- int32 "array: arraySize"

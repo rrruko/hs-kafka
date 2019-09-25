@@ -38,6 +38,9 @@ instance ShowDebug ByteArray where
 instance ShowDebug S.String where
   showDebug b = S.asByteArray b show
 
+instance ShowDebug GroupName where
+  showDebug (GroupName gid) = "GroupName(" <> showDebug gid <> ")"
+
 instance ShowDebug Topic where
   showDebug (Topic topicName parts _) =
     "Topic (" <> showDebug topicName <> ", " <> show parts <> ")"

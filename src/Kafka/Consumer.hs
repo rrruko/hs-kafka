@@ -63,6 +63,8 @@ import qualified Kafka.Internal.OffsetCommit.Response as C
 import qualified Kafka.Internal.OffsetFetch.Response as O
 import qualified Kafka.Internal.SyncGroup.Response as S
 
+import qualified String.Ascii as Str
+
 -- | This module provides a high-level interface to the Kafka API for
 -- consumers by wrapping the low-level request and response type modules.
 newtype Consumer a
@@ -119,7 +121,7 @@ data ConsumerSettings = ConsumerSettings
     -- ^ Maximum number of bytes to allow per response
   , csTopicName :: !TopicName
     -- ^ Topic to fetch on
-  , groupName :: !ByteArray
+  , groupName :: !GroupName
     -- ^ Name of the group
   , timeout :: !Int
     -- ^ Timeout for polling from Kafka, in microseconds
@@ -525,10 +527,10 @@ join ::
   -> GroupMember
   -> Maybe Handle
   -> ExceptT KafkaException IO (GenerationId, GroupMember, [Member])
-join kafka top member@(GroupMember name _) handle = do
+join kafka top member@(GroupMember name@(GroupName gid) _) handle = do
   ExceptT $ findCoordinator
     kafka
-    (FindCoordinatorRequest name 0)
+    (FindCoordinatorRequest (Str.toByteArray gid) 0)
     handle
   wait <- liftIO (registerDelay joinTimeout)
   -- Ignoring the response from FindCoordinator. Probably not

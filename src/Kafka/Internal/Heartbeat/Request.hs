@@ -7,6 +7,8 @@ import Data.Primitive.Unlifted.Array
 import Kafka.Common
 import Kafka.Internal.Writer
 
+import qualified String.Ascii as S
+
 heartbeatApiVersion :: Int16
 heartbeatApiVersion = 2
 
@@ -17,16 +19,16 @@ heartbeatRequest ::
      GroupMember
   -> GenerationId
   -> UnliftedArray ByteArray
-heartbeatRequest (GroupMember gid mid) (GenerationId genId) =
+heartbeatRequest (GroupMember (GroupName gid) mid) (GenerationId genId) =
   let
-    groupIdLength = sizeofByteArray gid
+    groupIdLength = S.length gid
     reqSize = build $ int32 (fromIntegral $ sizeofByteArray req)
     req = build $
       int16 heartbeatApiKey
       <> int16 heartbeatApiVersion
       <> int32 correlationId
       <> string clientId (fromIntegral clientIdLength)
-      <> bytearray gid (fromIntegral groupIdLength)
+      <> string gid (fromIntegral groupIdLength)
       <> int32 genId
       <> maybe
           (int16 0)

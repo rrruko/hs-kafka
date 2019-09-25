@@ -24,6 +24,7 @@ module Kafka.Common
   , AutoCreateTopic(..)
   , KafkaException(..)
   , GroupMember(..)
+  , GroupName(..)
   , GenerationId(..)
   , KafkaProtocolError(..)
   , MemberAssignment(..)
@@ -121,13 +122,17 @@ data FetchErrorMessage = FetchErrorMessage
   } deriving Show
 
 data GroupMember = GroupMember
-  { nameThis0 :: {-# UNPACK #-} !ByteArray
-  , nameThis1 :: !(Maybe ByteArray)
+  { groupName :: !GroupName
+  , memberId :: !(Maybe ByteArray)
   }
   deriving (Eq, Show)
 
-data GenerationId = GenerationId
-  { getGenerationId :: {-# UNPACK #-} !Int32
+newtype GroupName = GroupName
+  { getGroupName :: S.String
+  } deriving (Eq, Show, IsString)
+
+newtype GenerationId = GenerationId
+  { getGenerationId :: Int32
   } deriving (Eq, Show)
 
 data MemberAssignment = MemberAssignment

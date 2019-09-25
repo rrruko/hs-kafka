@@ -7,6 +7,8 @@ import Data.Primitive.Unlifted.Array
 import Kafka.Common
 import Kafka.Internal.Writer
 
+import qualified String.Ascii as S
+
 leaveGroupApiVersion :: Int16
 leaveGroupApiVersion = 2
 
@@ -16,16 +18,16 @@ leaveGroupApiKey = 13
 leaveGroupRequest ::
      GroupMember
   -> UnliftedArray ByteArray
-leaveGroupRequest (GroupMember gid mid) =
+leaveGroupRequest (GroupMember (GroupName gid) mid) =
   let
-    groupIdLength = sizeofByteArray gid
+    groupIdLength = S.length gid
     reqSize = build $ (int32 (fromIntegral $ sizeofByteArray req))
     req = build $
       int16 leaveGroupApiKey
       <> int16 leaveGroupApiVersion
       <> int32 correlationId
       <> string clientId (fromIntegral clientIdLength)
-      <> bytearray gid (fromIntegral groupIdLength)
+      <> string gid (fromIntegral groupIdLength)
       <> maybe
           (int16 0)
           (\m -> bytearray m (sizeofByteArray m))

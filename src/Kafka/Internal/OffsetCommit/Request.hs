@@ -7,6 +7,8 @@ import Data.Primitive.Unlifted.Array
 import Kafka.Common
 import Kafka.Internal.Writer
 
+import qualified String.Ascii as S
+
 serializePartition :: PartitionOffset -> Builder
 serializePartition a =
   int32 (partitionIndex a)
@@ -28,7 +30,7 @@ offsetCommitRequest ::
   -> UnliftedArray ByteArray
 offsetCommitRequest topic offs groupMember generationId =
   let
-    GroupMember gid mid = groupMember
+    GroupMember (GroupName gid) mid = groupMember
     GenerationId genId = generationId
     reqSize = build (int32 (size32 req))
     req =
@@ -37,7 +39,7 @@ offsetCommitRequest topic offs groupMember generationId =
         <> int16 offsetCommitApiVersion
         <> int32 correlationId
         <> string clientId clientIdLength
-        <> bytearray gid (sizeofByteArray gid)
+        <> string gid (S.length gid)
         <> int32 genId
         <> maybe
             (int16 0)

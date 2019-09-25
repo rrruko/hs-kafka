@@ -10,6 +10,8 @@ import Data.Primitive.Unlifted.Array
 import Kafka.Common
 import Kafka.Internal.Writer
 
+import qualified String.Ascii as S
+
 syncGroupApiVersion :: Int16
 syncGroupApiVersion = 2
 
@@ -43,9 +45,9 @@ syncGroupRequest ::
   -> GenerationId
   -> [MemberAssignment]
   -> UnliftedArray ByteArray
-syncGroupRequest (GroupMember gid mid) (GenerationId genId) assignments =
+syncGroupRequest (GroupMember (GroupName gid) mid) (GenerationId genId) assignments =
   let
-    groupIdLength = sizeofByteArray gid
+    groupIdLength = S.length gid
     reqSize = build $
       int32 (fromIntegral $ sizeofByteArray req)
     req = build $
@@ -53,7 +55,7 @@ syncGroupRequest (GroupMember gid mid) (GenerationId genId) assignments =
       <> int16 syncGroupApiVersion
       <> int32 correlationId
       <> string clientId (fromIntegral clientIdLength)
-      <> bytearray gid (fromIntegral groupIdLength)
+      <> string gid (fromIntegral groupIdLength)
       <> int32 genId
       <> maybe (int16 0) (\m -> bytearray m (sizeofByteArray m)) mid
       <> mapArray assignments defaultAssignmentData

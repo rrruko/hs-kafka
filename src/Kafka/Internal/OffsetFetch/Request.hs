@@ -5,6 +5,8 @@ import Data.Primitive.Unlifted.Array
 import Kafka.Common
 import Kafka.Internal.Writer
 
+import qualified String.Ascii as S
+
 offsetFetchApiKey :: Int16
 offsetFetchApiKey = 9
 
@@ -16,7 +18,7 @@ offsetFetchRequest ::
   -> TopicName
   -> [Int32]
   -> UnliftedArray ByteArray
-offsetFetchRequest (GroupMember gid _) tn offs =
+offsetFetchRequest (GroupMember (GroupName gid) _) tn offs =
   let
     reqSize = build (int32 (size32 req))
     req =
@@ -25,7 +27,7 @@ offsetFetchRequest (GroupMember gid _) tn offs =
         <> int16 offsetFetchApiVersion
         <> int32 correlationId
         <> string clientId clientIdLength
-        <> bytearray gid (sizeofByteArray gid)
+        <> string gid (S.length gid)
         <> int32 1 -- 1 topic
         <> topicName tn
         <> int32 (fromIntegral (length offs))

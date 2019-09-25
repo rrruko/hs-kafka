@@ -49,16 +49,16 @@ joinGroupRequest ::
      TopicName
   -> GroupMember
   -> UnliftedArray ByteArray
-joinGroupRequest topic (GroupMember gid mid) =
+joinGroupRequest topic (GroupMember (GroupName gid) mid) =
   let
-    groupIdLength = sizeofByteArray gid
+    groupIdLength = S.length gid
     reqSize = build $ int32 (fromIntegral $ sizeofByteArray req)
     req = build $
       int16 joinGroupApiKey
       <> int16 joinGroupApiVersion
       <> int32 correlationId
       <> string clientId (fromIntegral clientIdLength)
-      <> bytearray gid (fromIntegral groupIdLength)
+      <> string gid (fromIntegral groupIdLength)
       <> int32 defaultSessionTimeout
       <> int32 defaultRebalanceTimeout
       <> maybe
