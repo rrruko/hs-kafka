@@ -169,7 +169,7 @@ produceRequest ::
   -> TopicName
   -> Int32
   -> UnliftedArray ByteArray
-  -> Maybe (UnliftedArray ByteArray)
+  -> UnliftedArray ByteArray
 produceRequest timeout topic partition payloads =
   let
     payloadCount = sizeofUnliftedArray payloads
@@ -199,11 +199,9 @@ produceRequest timeout topic partition payloads =
           writeUnliftedArray arr (i * 3 + 2) zero)
         payloads
       pure arr
-  in if sizeofUnliftedArray payloads == 0
-    then Nothing
-    else Just $ runUnliftedArray $ do
-      arr <- newUnliftedArray (3 * payloadCount + 2) zero
-      writeUnliftedArray arr 0 requestMetadata
-      writeUnliftedArray arr 1 recordBatchMetadata
-      copyUnliftedArray arr 2 payloadsSectionChunks 0 (3 * payloadCount)
-      pure arr
+  in runUnliftedArray $ do
+    arr <- newUnliftedArray (3 * payloadCount + 2) zero
+    writeUnliftedArray arr 0 requestMetadata
+    writeUnliftedArray arr 1 recordBatchMetadata
+    copyUnliftedArray arr 2 payloadsSectionChunks 0 (3 * payloadCount)
+    pure arr

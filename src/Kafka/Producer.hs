@@ -15,6 +15,7 @@ import Socket.Stream.IPv4 (Peer)
 import System.IO (Handle)
 
 import qualified Data.Map.Strict as Map
+import qualified Data.Primitive.Contiguous as C
 
 import Kafka.Common
 import Kafka.Internal.Produce.Response
@@ -50,28 +51,33 @@ produce' ::
   -> Topic
   -> UnliftedArray ByteArray
   -> IO (Either KafkaException ())
-produce' (Producer k _ timeout handle) topic msgs = do
-  status <- Request.produce k (ProduceRequest topic timeout msgs) handle
-  case status of
-    Left err -> pure (Left err)
-    Right () -> do
-      interrupt <- registerDelay 30000000
-      getProduceResponse k interrupt handle >>= \case
+produce' (Producer k _ timeout handle) topic msgs =
+  if C.size msgs > 0
+    then do
+      let req = ProduceRequest topic timeout msgs
+      status <- Request.produce k req handle
+      case status of
         Left err -> pure (Left err)
-        Right (Left msg) -> pure (Left (KafkaParseException msg))
-        Right (Right resp) ->
-          let errs =
-                [ prResponseErrorCode r
-                | x <- produceResponseMessages resp
-                , r <- prPartitionResponses x
-                , prResponseErrorCode r /= 0
-                ]
-           in case errs of
-                [] -> pure (Right ())
-                err : _ -> case fromErrorCode err of
-                  -- TODO: should this be turned into `UnknownServerError`?
-                  Nothing -> pure (Right ())
-                  Just e -> pure (Left (KafkaProtocolException e))
+        Right () -> do
+          interrupt <- registerDelay 30000000
+          getProduceResponse k interrupt handle >>= \case
+            Left err -> pure (Left err)
+            Right (Left msg) -> pure (Left (KafkaParseException msg))
+            Right (Right resp) ->
+              let errs =
+                    [ prResponseErrorCode r
+                    | x <- produceResponseMessages resp
+                    , r <- prPartitionResponses x
+                    , prResponseErrorCode r /= 0
+                    ]
+               in case errs of
+                    [] -> pure (Right ())
+                    err : _ -> case fromErrorCode err of
+                      -- TODO: should this be turned into `UnknownServerError`?
+                      Nothing -> pure (Right ())
+                      Just e -> pure (Left (KafkaProtocolException e))
+    else do
+      pure (Right ())
 
 -- | Send messages to Kafka.
 produce ::

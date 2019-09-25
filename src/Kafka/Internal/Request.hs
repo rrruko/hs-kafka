@@ -65,13 +65,11 @@ produce kafka req@ProduceRequest{..} handle = do
         topicName
         p
         producePayloads
-  case message of
-    Nothing -> pure (Right ())
-    Just m -> request kafka m >>= \case
-      Left err -> pure (Left err)
-      Right a -> do
-        increment parts ctr
-        pure (Right a)
+  request kafka message >>= \case
+    Left err -> pure (Left err)
+    Right a -> do
+      increment parts ctr
+      pure (Right a)
 
 --
 -- [Note: Partitioning algorithm]
