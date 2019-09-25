@@ -169,10 +169,8 @@ produceTest = do
   payloads <- do
     payloads <- newUnliftedArray 1 payload
     freezeUnliftedArray payloads 0 1
-  let mreq = produceRequest 30000 "test" 0 payloads
-  case mreq of
-    Nothing -> pure "Empty produce request! Failure!"
-    Just req -> pure (toSpec req)
+  let req = produceRequest 30000 "test" 0 payloads
+  pure (toSpec req)
 
 unChunks :: UnliftedArray ByteArray -> ByteArray
 unChunks = foldrUnliftedArray (<>) mempty
@@ -185,10 +183,8 @@ multipleProduceTest = do
         , fromByteString "it's like a dream"
         , fromByteString "i want to dream"
         ]
-  let mreq = produceRequest 30000 "test" 0 payloads
-  case mreq of
-    Nothing -> pure "Empty produce request! Failure!"
-    Just req -> pure (toSpec req)
+  let req = produceRequest 30000 "test" 0 payloads
+  pure (toSpec req)
 
 fetchTest :: IO BL.ByteString
 fetchTest = do
