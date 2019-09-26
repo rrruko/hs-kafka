@@ -40,7 +40,9 @@ fetchResponseContents = id
 
 instance Show FetchResponse where
   show resp =
-    "Fetch ("
+    "Fetch (error_code "
+    <> show (errorCode resp)
+    <> ", "
     <> show (length (fetchResponseContents resp))
     <> " records)"
 
