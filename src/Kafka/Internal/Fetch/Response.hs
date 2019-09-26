@@ -19,7 +19,8 @@ module Kafka.Internal.Fetch.Response
   , partitionLastSeenOffset
   ) where
 
-import Data.List (find)
+import Control.Monad ((<=<))
+import Data.List (find,intercalate)
 import Data.List.NonEmpty (nonEmpty)
 import Data.Maybe (mapMaybe)
 
@@ -42,6 +43,15 @@ instance Show FetchResponse where
   show resp =
     "Fetch (error_code "
     <> show (errorCode resp)
+    <> ", partition_header errors "
+    <> intercalate ","
+       ( (
+         ( ( \x -> if x == 0 then [] else [show x]) . partitionHeaderErrorCode . partitionHeader)
+         <=< partitions
+         <=< topics
+         )
+         resp
+       )
     <> ", "
     <> show (length (fetchResponseContents resp))
     <> " records)"
