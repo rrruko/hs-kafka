@@ -12,8 +12,6 @@ module Kafka.Internal.Produce.Response
   , parseProduceResponse
   ) where
 
-import System.IO (Handle)
-
 import Kafka.Internal.Combinator
 import Kafka.Common (Kafka, KafkaException(..), TopicName(..))
 import Kafka.Internal.Response (fromKafkaResponse)
@@ -54,7 +52,7 @@ parseProduceResponseMessage = do
   tlen <- int16 "topic length"
   t <- Smith.take "topic name" (fromIntegral tlen)
   case S.fromByteArray (B.toByteArray t) of
-    Nothing -> fail "produce response message: non-ascii topic name"
+    Nothing -> Smith.fail "produce response message: non-ascii topic name"
     Just top -> do
       prc <- int32 "partition response count"
       resps <- count prc parseProducePartitionResponse

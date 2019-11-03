@@ -65,7 +65,7 @@ library
     , base-noprelude >= 4.11 && < 4.14
     , builder >= 0.2 && < 0.3
     , byteslice >= 0.1.1.0 && < 0.2.0.0
-    , bytesmith >= 0.2 && < 0.3
+    , bytesmith >= 0.3 && < 0.4
     , castagnoli
     , chronos >= 1.0.5 && < 1.1
     , containers >= 0.5 && < 0.7

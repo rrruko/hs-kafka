@@ -2,12 +2,8 @@ module Kafka.Internal.Zigzag
   ( zigzag
   ) where
 
-import Data.Bifunctor (bimap)
-import Data.Bits ((.|.))
 import Data.List.NonEmpty
-import Data.Primitive.ByteArray (ByteArray, byteArrayFromList)
 import Data.Tuple (swap)
-import Data.Word (Word8)
 
 varint :: Int -> ByteArray
 varint n =

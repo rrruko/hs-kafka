@@ -22,7 +22,6 @@ module Kafka.Internal.Fetch.Response
 import Control.Monad ((<=<))
 import Data.List (find,intercalate)
 import Data.List.NonEmpty (nonEmpty)
-import Data.Maybe (mapMaybe)
 
 import qualified Data.Foldable as F
 

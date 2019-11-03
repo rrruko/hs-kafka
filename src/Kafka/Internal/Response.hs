@@ -72,7 +72,7 @@ fromKafkaResponse parser kafka interrupt debugHandle =
       logMaybe res debugHandle
       case res of
         Smith.Failure e -> pure (Right (Left e))
-        Smith.Success a _ -> pure (Right (Right a))
+        Smith.Success (Smith.Slice _ _ a) -> pure (Right (Right a))
     Left err -> pure (Left err)
 
 tryParse :: Either KafkaException (Either String a) -> Either KafkaException a

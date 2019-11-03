@@ -19,7 +19,7 @@ module Kafka.Internal.Request
 
 import Data.Primitive.Unlifted.Array
 import Socket.Stream.Uninterruptible.Bytes
-import System.IO (Handle, hPutStr, hFlush)
+import System.IO (hPutStr, hFlush)
 
 import Kafka.Common
 import Kafka.Internal.Fetch.Request

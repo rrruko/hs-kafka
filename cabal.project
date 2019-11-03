@@ -18,12 +18,12 @@ source-repository-package
 source-repository-package
   type: git
   location: https://github.com/haskell-primitive/primitive-convenience
-  tag: fde7951620547bad3d3b90b3b56e00a99e8579bc
+  tag: 09c33eb713198de38eee57b4af370098030a9dde
 
 source-repository-package
   type: git
   location: https://github.com/andrewthad/bytesmith
-  tag: b3a9af303dca37783068590a444e6b066e7db7c5
+  tag: 065fa9fbf798d31d625a47ed85808e47c0bf3910
 
 source-repository-package
   type: git

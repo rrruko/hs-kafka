@@ -104,7 +104,7 @@ topicName :: Parser TopicName
 topicName = do
   b <- bytearray
   case S.fromByteArray b of
-    Nothing -> fail "topicName: non-ascii"
+    Nothing -> Smith.fail "topicName: non-ascii"
     Just str -> pure (TopicName str)
 
 sizedBytes :: Parser ByteArray
@@ -157,7 +157,7 @@ nullableSequence p = do
     then pure Nothing
     else case Smith.parseBytes (many p) bytes of
       Smith.Failure _ -> pure Nothing
-      Smith.Success as _ -> pure (Just as)
+      Smith.Success (Smith.Slice _ _ as) -> pure (Just as)
 
 varInt :: Parser Int
 varInt = fmap unZigZag (go 1)

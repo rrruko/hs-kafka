@@ -38,7 +38,6 @@ import Data.IntMap (IntMap)
 import qualified Data.List as List
 import Data.Maybe
 import Socket.Stream.IPv4 (Peer)
-import System.IO (Handle)
 
 import qualified Data.IntMap as IM
 

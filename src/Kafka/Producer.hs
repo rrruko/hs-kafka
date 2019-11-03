@@ -10,9 +10,7 @@ module Kafka.Producer
   ) where
 
 import Data.Primitive.Unlifted.Array
-import GHC.Conc (registerDelay)
 import Socket.Stream.IPv4 (Peer)
-import System.IO (Handle)
 
 import qualified Data.Map.Strict as Map
 import qualified Data.Primitive.Contiguous as C

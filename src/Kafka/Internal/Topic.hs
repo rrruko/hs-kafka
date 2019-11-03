@@ -8,7 +8,6 @@ module Kafka.Internal.Topic
 
 import Control.Monad.Except
 import Data.List
-import System.IO (Handle)
 
 import Kafka.Common
 import Kafka.Internal.Response

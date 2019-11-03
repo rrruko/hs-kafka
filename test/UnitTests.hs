@@ -81,25 +81,25 @@ parserTests :: TestTree
 parserTests = testGroup "Parsers"
   [ testCase
       "int32 [0, 0, 0, 255] is 255"
-      (Smith.parseByteArray (int32 "") (byteArrayFromList [0,0,0,255 :: Word8]) @?= Success 255 0)
+      (Smith.parseByteArray (int32 "") (byteArrayFromList [0,0,0,255 :: Word8]) @?= Success (Smith.Slice 4 0 255))
   , testCase
       "int32 [0x12, 0x34, 0x56, 0x78] is 305419896"
-      (Smith.parseByteArray (int32 "") (byteArrayFromList [0x12, 0x34, 0x56, 0x78 :: Int8]) @?= Success 305419896 0)
+      (Smith.parseByteArray (int32 "") (byteArrayFromList [0x12, 0x34, 0x56, 0x78 :: Int8]) @?= Success (Smith.Slice 4 0 305419896))
   , testCase
       "parseVarint (zigzag 0) is 0"
-      (Smith.parseByteArray varInt (zigzag 0) @?= Success 0 0)
+      (Smith.parseByteArray varInt (zigzag 0) @?= Success (Smith.Slice 1 0 0))
   , testCase
       "parseVarint (zigzag 10) is 10"
-      (Smith.parseByteArray varInt (zigzag 10) @?= Success 10 0)
+      (Smith.parseByteArray varInt (zigzag 10) @?= Success (Smith.Slice 1 0 10))
   , testCase
       "parseVarint (zigzag 150) is 150"
-      (Smith.parseByteArray varInt (zigzag 150) @?= Success 150 0)
+      (Smith.parseByteArray varInt (zigzag 150) @?= Success (Smith.Slice 2 0 150))
   , testCase
       "parseVarint (zigzag 1000) is 1000"
-      (Smith.parseByteArray varInt (zigzag 1000) @?= Success 1000 0)
+      (Smith.parseByteArray varInt (zigzag 1000) @?= Success (Smith.Slice 2 0 1000))
   , testCase
       "parseVarint (zigzag (-1)) is (-1)"
-      (Smith.parseByteArray varInt (zigzag (-1)) @?= Success (-1) 0)
+      (Smith.parseByteArray varInt (zigzag (-1)) @?= Success (Smith.Slice 1 0 (-1)))
   ]
 
 responseParserTests :: TestTree
@@ -207,11 +207,11 @@ produceResponseTest = testGroup "Produce"
   [ testCase
       "One message"
       (parseProduce oneMsgProduceResponseBytes @?=
-        Success oneMsgProduceResponse 0)
+        Success (Smith.Slice 58 0 oneMsgProduceResponse))
   , testCase
       "Two messages"
       (parseProduce twoMsgProduceResponseBytes @?=
-        Success twoMsgProduceResponse 0)
+        Success (Smith.Slice 88 0 twoMsgProduceResponse))
   ]
 
 parseProduce :: ByteArray -> Result String ProduceResponse
@@ -304,7 +304,7 @@ fetchResponseTest = testGroup "Fetch"
         bytes <- readFile "test/golden/fetch-response-bytes"
         case Smith.parseByteArray Fetch.parseFetchResponse (S.toByteArray bytes) of
           Failure e -> fail ("Parse failed with " <> e)
-          Success res _n -> pure (BL.fromStrict (BC8.pack (show res)))
+          Success (Smith.Slice _ _ res) -> pure (BL.fromStrict (BC8.pack (show res)))
       )
   ]
 
